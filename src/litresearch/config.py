@@ -1,0 +1,117 @@
+"""Configuration models, loaded from a YAML file."""
+
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+# value used in config files for "not set"
+NA = "n/a"
+
+
+class _Base(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _na_to_none(cls, value):
+        if isinstance(value, str) and value.strip().lower() == NA:
+            return None
+        return value
+
+
+class Paths(_Base):
+    bibtex: Path
+    database: Path = Path("data/litresearch.sqlite")
+    cache_dir: Path = Path("data/cache")
+    obsidian_vault: Path | None = None
+
+
+class Topic(_Base):
+    name: str
+    weight: float = Field(1.0, ge=0)
+    queries: list[str] = []
+    mesh_terms: list[str] = []
+    seed_dois: list[str] = []
+
+
+class Sources(_Base):
+    semanticscholar: bool = True
+    pubmed: bool = True
+    biorxiv: bool = True
+    openalex: bool = True
+
+
+class Api(_Base):
+    semanticscholar_key: str | None = None
+    contact_email: str | None = None
+
+
+class Embeddings(_Base):
+    backend: Literal["s2", "local", "hybrid"] = "hybrid"
+    local_url: str | None = None
+
+    @model_validator(mode="after")
+    def _local_needs_url(self):
+        # hybrid without a URL simply falls back to S2 only
+        if self.backend == "local" and not self.local_url:
+            raise ValueError("embeddings.local_url is required for backend 'local'")
+        return self
+
+
+class Weights(_Base):
+    relevance: float = 0.5
+    impact: float = 0.3
+    timeliness: float = 0.2
+
+
+class Selection(_Base):
+    n_detail: int = Field(2, ge=0)
+    n_skim: int = Field(3, ge=0)
+    fresh_window_months: int = Field(6, ge=1)
+    landmark_min_percentile: float = Field(95, ge=0, le=100)
+    mmr_lambda: float = Field(0.7, ge=0, le=1)
+    weights: Weights = Weights()
+
+    @model_validator(mode="after")
+    def _max_five(self):
+        if self.n_detail + self.n_skim > 5:
+            raise ValueError("selection.n_detail + selection.n_skim must be <= 5")
+        return self
+
+
+class Llm(_Base):
+    enabled: bool = False
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
+class Schedule(_Base):
+    cron: str = "0 6 * * 1"
+
+
+class Web(_Base):
+    host: str = "127.0.0.1"
+    port: int = 8080
+    password_hash: str | None = None
+
+
+class Config(_Base):
+    paths: Paths
+    topics: list[Topic] = []
+    excluded_terms: list[str] = []
+    sources: Sources = Sources()
+    api: Api = Api()
+    embeddings: Embeddings = Embeddings()
+    selection: Selection = Selection()
+    llm: Llm = Llm()
+    schedule: Schedule = Schedule()
+    web: Web = Web()
+
+
+def load_config(path: Path) -> Config:
+    with open(path, encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+    return Config.model_validate(raw)

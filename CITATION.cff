@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "litresearch"
+version: "0.1.0-dev"
+date-released: "2026-10-07"
+license-url: "https://commonsclause.com"
+authors:
+  - family-names: Horny
+    given-names: Kai

@@ -1,0 +1,73 @@
+# litresearch configuration -- copy to config/config.yaml and adapt.
+# Dates follow ISO 8601 (YYYY-MM-DD).
+
+paths:
+  # Paperpile auto-export (Google Drive), pulled locally e.g. via rclone
+  bibtex: data/paperpile/library.bib
+  database: data/litresearch.sqlite
+  cache_dir: data/cache
+  obsidian_vault: n/a
+
+topics:
+  - name: tumor-evolution
+    weight: 1.0
+    queries: ["clonal evolution cancer", "tumor heterogeneity phylogeny"]
+    mesh_terms: ["Clonal Evolution", "Genetic Heterogeneity"]
+    seed_dois: []
+  - name: liquid-biopsy
+    weight: 0.8
+    queries: ["circulating tumor DNA", "cfDNA fragmentomics"]
+    mesh_terms: ["Circulating Tumor DNA", "Liquid Biopsy"]
+    seed_dois: []
+  - name: long-read-sv
+    weight: 0.7
+    queries: ["long-read sequencing structural variants cancer"]
+    mesh_terms: []
+    seed_dois: []
+
+excluded_terms: ["veterinary"]
+
+sources:
+  semanticscholar: true
+  pubmed: true
+  biorxiv: true
+  openalex: true
+
+api:
+  # free key on request: https://www.semanticscholar.org/product/api
+  semanticscholar_key: n/a
+  # used for the OpenAlex polite pool and NCBI E-utilities
+  contact_email: n/a
+
+embeddings:
+  # s2 = precomputed SPECTER2 from Semantic Scholar;
+  # local = own SPECTER2 service; hybrid = s2 first, local for missing papers
+  backend: hybrid
+  local_url: http://embed-server:8100/v1/embeddings
+
+selection:
+  n_detail: 2
+  n_skim: 3
+  fresh_window_months: 6
+  landmark_min_percentile: 95
+  mmr_lambda: 0.7
+  weights:
+    relevance: 0.5
+    impact: 0.3
+    timeliness: 0.2
+
+llm:
+  enabled: true
+  # any OpenAI-compatible endpoint (LM Studio, Ollama, institutional server)
+  base_url: http://llm-server:1234/v1
+  model: qwen3-14b
+  api_key: n/a
+
+schedule:
+  # cron syntax: minute hour day-of-month month day-of-week
+  cron: "0 6 * * 1"
+
+web:
+  host: 0.0.0.0
+  port: 8080
+  password_hash: n/a
