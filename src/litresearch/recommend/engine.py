@@ -1,0 +1,279 @@
+"""Weekly recommendations: gather candidates, score them, store the batch."""
+
+import logging
+import re
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+
+import numpy as np
+from sqlmodel import Session, select
+
+from litresearch.config import Config
+from litresearch.db import (
+    Embedding,
+    Paper,
+    QueueItem,
+    Reading,
+    ReadStatus,
+    Recommendation,
+    RecommendationBatch,
+    load_embedding,
+    store_embedding,
+)
+from litresearch.papers import upsert_work
+from litresearch.recommend.scoring import Candidate, describe, rank_candidates
+from litresearch.sources.http import HttpClient, HttpError
+from litresearch.sources.openalex import OpenAlex, Work
+from litresearch.sources.semanticscholar import EMBEDDING_MODEL, SemanticScholar
+
+log = logging.getLogger(__name__)
+
+ALLOWED_TYPES = {None, "article", "review", "preprint"}
+# conference abstracts in journal supplements, e.g. "0865 The role of ..." or "P-123 ..."
+MEETING_ABSTRACT = re.compile(
+    r"^\s*(?:[A-Z]{1,3}[-.]\d{1,5}[A-Z]?[\s.:]"  # P-123, LB-01
+    r"|[A-Z]{1,3}\d{1,5}[.:]\s"  # LB01. / P123:  (but not "CD8 T cells")
+    r"|0\d{1,4}\s"  # zero-padded abstract numbers: 0865
+    r"|\d{1,5}[.:]\s)"  # 123. / 123:
+)
+S2_POSITIVES = 100
+S2_NEGATIVES = 50
+
+
+def week_start(day: date) -> date:
+    return day - timedelta(days=day.weekday())
+
+
+@dataclass
+class Gathered:
+    works: dict[str, Work] = field(default_factory=dict)
+    topics: dict[str, set[str]] = field(default_factory=dict)
+    sources: dict[str, set[str]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+
+    def add(self, work: Work, source: str, topic: str | None = None) -> None:
+        if not work.doi:
+            return
+        self.works.setdefault(work.doi, work)
+        self.sources.setdefault(work.doi, set()).add(source)
+        if topic:
+            self.topics.setdefault(work.doi, set()).add(topic)
+
+
+def gather_topic_candidates(cfg: Config, openalex: OpenAlex, today: date, out: Gathered) -> None:
+    sel = cfg.selection
+    fresh_from = today - timedelta(days=int(sel.fresh_window_months * 30.5))
+    landmark_years = f"{today.year - sel.landmark_max_age_years}-{today.year - 1}"
+    min_percentile = f">{sel.landmark_min_percentile / 100:.4f}"
+    for topic in cfg.topics:
+        for query in topic.queries:
+            searches = [
+                (
+                    "openalex-fresh",
+                    {
+                        "from_publication_date": fresh_from.isoformat(),
+                        "type": "article|preprint|review",
+                    },
+                ),
+                (
+                    "openalex-landmark",
+                    {
+                        "publication_year": landmark_years,
+                        "citation_normalized_percentile.value": min_percentile,
+                    },
+                ),
+            ]
+            for source, filters in searches:
+                try:
+                    works = openalex.search_works(query, filters, sel.results_per_query)
+                except HttpError as error:
+                    out.warnings.append(f"OpenAlex search '{query}': {error}")
+                    continue
+                for work in works:
+                    out.add(work, source, topic.name)
+
+
+def gather_s2_candidates(
+    session: Session, s2: SemanticScholar, openalex: OpenAlex, out: Gathered
+) -> None:
+    """Recently published papers similar to the library and to well-rated papers."""
+    library = session.exec(select(Paper).where(Paper.in_library, Paper.doi.is_not(None))).all()
+    liked = session.exec(
+        select(Paper)
+        .join(Reading, Reading.paper_id == Paper.id)
+        .where(Paper.doi.is_not(None), (Reading.rating >= 4) | (Reading.status == "thorough"))
+    ).all()
+    dismissed = session.exec(
+        select(Paper)
+        .join(Reading, Reading.paper_id == Paper.id)
+        .where(Paper.doi.is_not(None), Reading.status == ReadStatus.dismissed)
+    ).all()
+    # liked papers first, then the most recent library papers
+    recent = sorted(library, key=lambda p: p.pub_date or date(p.year or 1900, 7, 1), reverse=True)
+    positives = list(dict.fromkeys(f"DOI:{p.doi}" for p in liked + recent))[:S2_POSITIVES]
+    negatives = [f"DOI:{p.doi}" for p in dismissed][:S2_NEGATIVES]
+    if not positives:
+        return
+    try:
+        dois = s2.recommend(positives, negatives)
+        works = openalex.works_by_doi(dois)
+    except HttpError as error:
+        out.warnings.append(f"Semantic Scholar recommendations: {error}")
+        return
+    for work in works.values():
+        out.add(work, "s2-recs")
+
+
+def excluded_ids(session: Session, cfg: Config, today: date) -> set[int]:
+    """Papers that must not be recommended: read, dismissed, queued, recently shown.
+
+    Batches of the current week do not count, so ``--refresh`` can rebuild them.
+    """
+    ids = set(session.exec(select(Reading.paper_id)).all())
+    ids |= set(session.exec(select(QueueItem.paper_id)).all())
+    this_week = week_start(today)
+    since = this_week - timedelta(weeks=cfg.selection.cooldown_weeks)
+    ids |= set(
+        session.exec(
+            select(Recommendation.paper_id)
+            .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
+            .where(RecommendationBatch.week_start >= since)
+            .where(RecommendationBatch.week_start < this_week)
+        ).all()
+    )
+    return ids
+
+
+def has_excluded_term(paper: Paper, terms: list[str]) -> bool:
+    text = f"{paper.title} {paper.abstract or ''}".lower()
+    return any(term.lower() in text for term in terms)
+
+
+def fetch_embeddings(
+    session: Session, papers: list[Paper], s2: SemanticScholar, warnings: list[str]
+) -> None:
+    have = set(
+        session.exec(select(Embedding.paper_id).where(Embedding.model == EMBEDDING_MODEL)).all()
+    )
+    missing = {f"DOI:{p.doi}": p for p in papers if p.id not in have and p.doi}
+    if not missing:
+        return
+    try:
+        found = s2.papers(list(missing))
+    except HttpError as error:
+        warnings.append(f"Semantic Scholar embeddings: {error} (falling back to text similarity)")
+        return
+    for requested, info in found.items():
+        paper = missing[requested]
+        paper.s2_id, paper.tldr = info.s2_id, info.tldr or paper.tldr
+        paper.influential_citation_count = info.influential_citation_count
+        if info.embedding:
+            store_embedding(session, paper.id, EMBEDDING_MODEL, info.embedding)
+
+
+def vectors_for(session: Session, paper_ids: list[int]) -> dict[int, np.ndarray]:
+    rows = session.exec(
+        select(Embedding).where(
+            Embedding.model == EMBEDDING_MODEL, Embedding.paper_id.in_(paper_ids)
+        )
+    ).all()
+    return {row.paper_id: load_embedding(row) for row in rows}
+
+
+def build_recommendations(
+    cfg: Config,
+    session: Session,
+    http: HttpClient,
+    today: date | None = None,
+    use_s2: bool = True,
+) -> RecommendationBatch:
+    today = today or date.today()
+    openalex = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email)
+    s2 = SemanticScholar(http, cfg.api.semanticscholar_key)
+    gathered = Gathered()
+
+    if cfg.sources.openalex:
+        gather_topic_candidates(cfg, openalex, today, gathered)
+    if use_s2 and cfg.sources.semanticscholar:
+        gather_s2_candidates(session, s2, openalex, gathered)
+
+    excluded = excluded_ids(session, cfg, today)
+    candidates: list[Candidate] = []
+    for doi, work in gathered.works.items():
+        if work.type not in ALLOWED_TYPES or MEETING_ABSTRACT.match(work.title or ""):
+            continue
+        paper = upsert_work(session, work)
+        session.flush()
+        if paper.in_library or paper.id in excluded or has_excluded_term(paper, cfg.excluded_terms):
+            continue
+        candidates.append(
+            Candidate(paper, gathered.topics.get(doi, set()), gathered.sources.get(doi, set()))
+        )
+
+    venues = {c.paper.venue_openalex_id for c in candidates if c.paper.venue_openalex_id}
+    if venues:
+        try:
+            citedness = openalex.venue_mean_citedness(sorted(venues))
+            for c in candidates:
+                c.paper.venue_mean_citedness = citedness.get(c.paper.venue_openalex_id or "")
+        except HttpError as error:
+            gathered.warnings.append(f"OpenAlex venues: {error}")
+
+    if use_s2 and cfg.sources.semanticscholar:
+        fetch_embeddings(session, [c.paper for c in candidates], s2, gathered.warnings)
+    session.flush()
+
+    library = session.exec(select(Paper).where(Paper.in_library)).all()
+    lib_vectors = vectors_for(session, [p.id for p in library])
+    cand_vectors = vectors_for(session, [c.paper.id for c in candidates])
+    for c in candidates:
+        c.vector = cand_vectors.get(c.paper.id)
+
+    ranked = rank_candidates(
+        candidates,
+        np.stack(list(lib_vectors.values())) if lib_vectors else np.zeros((0, 0)),
+        [f"{p.title} {p.abstract or ''}" for p in library],
+        {t.name: t.weight for t in cfg.topics},
+        cfg.selection,
+        today,
+    )
+
+    batch = RecommendationBatch(
+        week_start=week_start(today), n_candidates=len(candidates), warnings=gathered.warnings
+    )
+    session.add(batch)
+    session.flush()
+    for rank, item in enumerate(ranked, start=1):
+        session.add(
+            Recommendation(
+                batch_id=batch.id,
+                paper_id=item.paper.id,
+                rank=rank,
+                category=item.category,
+                score=item.score,
+                breakdown=item.breakdown(),
+                reason=describe(item),
+            )
+        )
+    session.commit()
+    session.refresh(batch)
+    return batch
+
+
+def latest_batch(session: Session, today: date | None = None) -> RecommendationBatch | None:
+    """The newest batch of the current week (or of any week if ``today`` is None)."""
+    query = select(RecommendationBatch).order_by(RecommendationBatch.id.desc())
+    if today is not None:
+        query = query.where(RecommendationBatch.week_start == week_start(today))
+    return session.exec(query).first()
+
+
+def batch_items(session: Session, batch: RecommendationBatch) -> list[tuple[Recommendation, Paper]]:
+    return list(
+        session.exec(
+            select(Recommendation, Paper)
+            .join(Paper, Paper.id == Recommendation.paper_id)
+            .where(Recommendation.batch_id == batch.id)
+            .order_by(Recommendation.rank)
+        ).all()
+    )

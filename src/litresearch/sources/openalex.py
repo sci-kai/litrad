@@ -4,6 +4,7 @@ Look-ups are batched (50 ids per request), which costs one credit per request
 in the metered OpenAlex API, instead of ten for a search.
 """
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -49,6 +50,7 @@ class Work:
     # 0-100, field- and year-normalised citation percentile
     citation_percentile: float | None = None
     topics: list[str] = field(default_factory=list)
+    type: str | None = None
 
 
 def short_id(url: str | None) -> str | None:
@@ -93,6 +95,7 @@ def parse_work(raw: dict) -> Work:
         fwci=raw.get("fwci"),
         citation_percentile=round(percentile * 100, 2) if percentile is not None else None,
         topics=[t["display_name"] for t in raw.get("topics") or [] if t.get("display_name")],
+        type=raw.get("type"),
     )
 
 
@@ -138,3 +141,24 @@ class OpenAlex:
             if value is not None:
                 result[short_id(raw["id"])] = value
         return result
+
+    def search_works(self, query: str, filters: dict[str, str], per_page: int = 25) -> list[Work]:
+        """Title/abstract search, sorted by relevance.
+
+        A search costs ten times a look-up in the metered API, so callers keep
+        the number of queries small; results are cached for a day.
+        """
+        # commas and colons separate filters in the OpenAlex syntax
+        cleaned = re.sub(r"[,:|]", " ", query).strip()
+        filter_text = ",".join(
+            [f"title_and_abstract.search:{cleaned}"] + [f"{k}:{v}" for k, v in filters.items()]
+        )
+        params = {
+            **self.params,
+            "filter": filter_text,
+            "sort": "relevance_score:desc",
+            "per-page": per_page,
+            "select": WORK_FIELDS,
+        }
+        body = self.http.get(f"{API}/works", params=params, max_age=timedelta(days=1))
+        return [parse_work(raw) for raw in body.get("results", [])]

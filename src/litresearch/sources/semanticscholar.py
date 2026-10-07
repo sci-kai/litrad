@@ -6,6 +6,7 @@ from datetime import timedelta
 from litresearch.sources.http import HttpClient, HttpError
 
 API = "https://api.semanticscholar.org/graph/v1"
+RECOMMEND_API = "https://api.semanticscholar.org/recommendations/v1/papers"
 # the batch endpoint accepts 500 ids, but responses with embeddings get large
 BATCH = 100
 FIELDS = "paperId,externalIds,tldr,citationCount,influentialCitationCount,embedding.specter_v2"
@@ -63,3 +64,25 @@ class SemanticScholar:
                 if raw and raw.get("paperId"):
                     result[requested] = parse_paper(raw)
         return result
+
+    def recommend(
+        self, positive: list[str], negative: list[str] = (), limit: int = 100
+    ) -> list[str]:
+        """Recently published papers similar to ``positive`` (S2 ids or ``DOI:...``).
+
+        Returns the DOIs of the recommended papers; papers without DOI are
+        skipped because the rest of the pipeline is keyed on DOIs.
+        """
+        body = self.http.post(
+            RECOMMEND_API,
+            {"positivePaperIds": list(positive), "negativePaperIds": list(negative)},
+            params={"fields": "externalIds", "limit": limit},
+            headers=self.headers,
+            max_age=timedelta(days=1),
+        )
+        dois = []
+        for raw in body.get("recommendedPapers", []):
+            doi = (raw.get("externalIds") or {}).get("DOI")
+            if doi:
+                dois.append(doi.lower())
+        return dois

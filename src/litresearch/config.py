@@ -79,12 +79,29 @@ class Selection(_Base):
     landmark_min_percentile: float = Field(95, ge=0, le=100)
     mmr_lambda: float = Field(0.7, ge=0, le=1)
     weights: Weights = Weights()
+    # landmark papers: published within this many years
+    landmark_max_age_years: int = Field(15, ge=1)
+    # results per topic query and kind (fresh / landmark); each query costs API budget
+    results_per_query: int = Field(25, ge=1, le=100)
+    # an unread recommendation may come back after this many weeks
+    cooldown_weeks: int = Field(8, ge=0)
 
     @model_validator(mode="after")
     def _max_five(self):
         if self.n_detail + self.n_skim > 5:
             raise ValueError("selection.n_detail + selection.n_skim must be <= 5")
         return self
+
+
+class Queue(_Base):
+    # deliberately small: finish or drop papers before adding new ones
+    max_size: int = Field(5, ge=1, le=20)
+
+
+class Game(_Base):
+    # weekly quest: papers read at least "read" depth / at least "skimmed" depth
+    weekly_detail_goal: int = Field(1, ge=0)
+    weekly_skim_goal: int = Field(2, ge=0)
 
 
 class Llm(_Base):
@@ -113,6 +130,8 @@ class Config(_Base):
     api: Api = Api()
     embeddings: Embeddings = Embeddings()
     selection: Selection = Selection()
+    queue: Queue = Queue()
+    game: Game = Game()
     llm: Llm = Llm()
     schedule: Schedule = Schedule()
     web: Web = Web()

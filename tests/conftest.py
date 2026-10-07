@@ -41,6 +41,10 @@ class FakeApis:
         self.crossref_johnson = json.loads((DATA / "crossref_johnson.json").read_text("utf-8"))
         self.s2_status = s2_status
         self.down = down
+        # OpenAlex search results, keyed by "fresh" / "landmark"
+        self.search_results: dict[str, list[dict]] = {"fresh": [], "landmark": []}
+        # DOIs returned by the S2 recommendations endpoint
+        self.s2_recommendations: list[str] = []
         self.requests: list[httpx.Request] = []
 
     def count(self, host: str) -> int:
@@ -60,12 +64,19 @@ class FakeApis:
         if host == "api.semanticscholar.org":
             if self.s2_status != 200:
                 return httpx.Response(self.s2_status, text="rate limited")
+            if request.url.path.startswith("/recommendations/"):
+                papers = [{"externalIds": {"DOI": doi}} for doi in self.s2_recommendations]
+                return httpx.Response(200, json={"recommendedPapers": papers})
             ids = json.loads(request.content)["ids"]
             return httpx.Response(200, json=[self._s2(i) for i in ids])
         return httpx.Response(404)
 
     def _openalex(self, request):
-        name, values = request.url.params["filter"].split(":", 1)
+        filters = request.url.params["filter"]
+        if filters.startswith("title_and_abstract.search:"):
+            kind = "fresh" if "from_publication_date" in filters else "landmark"
+            return self.search_results[kind]
+        name, values = filters.split(":", 1)
         values = set(values.split("|"))
         if name == "doi":
             return [w for w in self.works if _bare_doi(w.get("doi")) in values]
@@ -128,3 +139,37 @@ def cfg(tmp_path):
             }
         }
     )
+
+
+def make_work(
+    doi: str,
+    title: str,
+    pub_date: str,
+    percentile: float | None = None,
+    cites: int = 0,
+    venue: str | None = "S1",
+    abstract: str = "",
+    kind: str = "article",
+) -> dict:
+    """An OpenAlex work record as returned by the API."""
+    words = abstract.split()
+    return {
+        "id": f"https://openalex.org/W{abs(hash(doi)) % 10**8}",
+        "doi": f"https://doi.org/{doi}",
+        "ids": {},
+        "title": title,
+        "publication_year": int(pub_date[:4]),
+        "publication_date": pub_date,
+        "type": kind,
+        "authorships": [{"author": {"display_name": "Ada Example"}}],
+        "primary_location": {
+            "source": {"id": f"https://openalex.org/{venue}", "display_name": f"Journal {venue}"}
+        }
+        if venue
+        else None,
+        "cited_by_count": cites,
+        "fwci": None,
+        "citation_normalized_percentile": {"value": percentile / 100} if percentile else None,
+        "abstract_inverted_index": {w: [i] for i, w in enumerate(words)} or None,
+        "topics": [],
+    }

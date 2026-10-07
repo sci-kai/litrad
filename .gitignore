@@ -9,3 +9,4 @@ config/config.yaml
 # private Paperpile exports (a small anonymised sample lives in tests/data/)
 /*.bib
 .coverage
+*.swp

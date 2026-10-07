@@ -16,13 +16,22 @@ def now() -> datetime:
 
 
 class ReadStatus(StrEnum):
-    new = "new"
+    """How far a paper has been read; ``dismissed`` = not relevant."""
+
     abstract = "abstract"
     skimmed = "skimmed"
     read = "read"
     thorough = "thorough"
-    later = "later"
     dismissed = "dismissed"
+
+
+# reading depth in increasing order
+READ_LEVELS = [ReadStatus.abstract, ReadStatus.skimmed, ReadStatus.read, ReadStatus.thorough]
+
+
+def depth(status: ReadStatus | None) -> int:
+    """0 = unread/dismissed, 1 = abstract ... 4 = thorough."""
+    return READ_LEVELS.index(status) + 1 if status in READ_LEVELS else 0
 
 
 class Category(StrEnum):
@@ -76,28 +85,30 @@ class Embedding(SQLModel, table=True):
     vector: bytes = Field(sa_column=Column(LargeBinary))
 
 
-class ReadingList(SQLModel, table=True):
+class RecommendationBatch(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     created_at: NaiveDatetime = Field(default_factory=now)
+    # Monday of the ISO week the batch belongs to
+    week_start: date = Field(index=True)
+    n_candidates: int = 0
+    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
 
 
-class ListItem(SQLModel, table=True):
+class Recommendation(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    list_id: int = Field(foreign_key="readinglist.id", index=True)
-    paper_id: int = Field(foreign_key="paper.id")
+    batch_id: int = Field(foreign_key="recommendationbatch.id", index=True)
+    paper_id: int = Field(foreign_key="paper.id", index=True)
     rank: int
     category: Category
     score: float
     breakdown: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    why: str | None = None
-    summary: str | None = None
+    reason: str = ""
 
 
 class Reading(SQLModel, table=True):
     paper_id: int = Field(foreign_key="paper.id", primary_key=True)
-    status: ReadStatus = ReadStatus.new
+    status: ReadStatus
     rating: int | None = Field(default=None, ge=1, le=5)
-    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     notes: str = ""
     updated_at: NaiveDatetime = Field(default_factory=now)
 
@@ -106,7 +117,34 @@ class StatusEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     paper_id: int = Field(foreign_key="paper.id", index=True)
     status: ReadStatus
+    # True if the paper was at the top of the reading queue at that moment
+    was_queue_top: bool = False
     at: NaiveDatetime = Field(default_factory=now)
+
+
+class QueueItem(SQLModel, table=True):
+    paper_id: int = Field(foreign_key="paper.id", primary_key=True)
+    # 1 = read next
+    position: int
+    # recommendation | manual | library
+    source: str = "manual"
+    added_at: NaiveDatetime = Field(default_factory=now)
+
+
+class XpEvent(SQLModel, table=True):
+    """Every point earned, with its reason; the score is the sum."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    paper_id: int | None = Field(default=None, foreign_key="paper.id", index=True)
+    points: int
+    kind: str
+    reason: str
+    at: NaiveDatetime = Field(default_factory=now)
+
+
+class Achievement(SQLModel, table=True):
+    code: str = Field(primary_key=True)
+    unlocked_at: NaiveDatetime = Field(default_factory=now)
 
 
 def store_embedding(session: Session, paper_id: int, model: str, vector) -> None:
@@ -134,15 +172,3 @@ def init_db(path: Path):
     engine = get_engine(path)
     SQLModel.metadata.create_all(engine)
     return engine
-
-
-def set_status(session: Session, paper_id: int, status: ReadStatus) -> Reading:
-    """Set the reading status of a paper and record the change."""
-    reading = session.get(Reading, paper_id) or Reading(paper_id=paper_id)
-    reading.status = status
-    reading.updated_at = now()
-    session.add(reading)
-    session.add(StatusEvent(paper_id=paper_id, status=status))
-    session.commit()
-    session.refresh(reading)
-    return reading
