@@ -8,6 +8,10 @@ paths:
   cache_dir: data/cache
   obsidian_vault: n/a
 
+library:
+  # Paperpile labels without topical meaning (case-insensitive)
+  ignore_labels: ["Import Mendeley"]
+
 topics:
   - name: tumor-evolution
     weight: 1.0
@@ -36,6 +40,8 @@ sources:
 api:
   # free key on request: https://www.semanticscholar.org/product/api
   semanticscholar_key: n/a
+  # optional; without a key OpenAlex allows a small daily budget
+  openalex_key: n/a
   # used for the OpenAlex polite pool and NCBI E-utilities
   contact_email: n/a
 

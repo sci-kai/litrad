@@ -43,8 +43,14 @@ class Sources(_Base):
     openalex: bool = True
 
 
+class Library(_Base):
+    # Paperpile labels that carry no topical information
+    ignore_labels: list[str] = ["Import Mendeley"]
+
+
 class Api(_Base):
     semanticscholar_key: str | None = None
+    openalex_key: str | None = None
     contact_email: str | None = None
 
 
@@ -100,6 +106,7 @@ class Web(_Base):
 
 class Config(_Base):
     paths: Paths
+    library: Library = Library()
     topics: list[Topic] = []
     excluded_terms: list[str] = []
     sources: Sources = Sources()
