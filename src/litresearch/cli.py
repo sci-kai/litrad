@@ -199,5 +199,9 @@ def export_paperpile(config: Path = ConfigOpt):
     _not_yet(6)
 
 
+# reading queue, reading log and score commands register themselves on ``app``
+from litresearch import cli_reading  # noqa: E402, F401, I001
+
+
 if __name__ == "__main__":
     app()

@@ -42,3 +42,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.flake8-bugbear]
+# typer declares CLI parameters through default values
+extend-immutable-calls = ["typer.Argument", "typer.Option"]

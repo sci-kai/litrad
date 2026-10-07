@@ -1,0 +1,399 @@
+"""CLI commands for the reading queue, reading log and score."""
+
+from contextlib import contextmanager
+from datetime import date, datetime
+from enum import StrEnum
+from pathlib import Path
+
+import typer
+from sqlmodel import Session, select
+
+from litresearch.cli import ConfigOpt, app, console, make_http, paper_line, paper_link
+from litresearch.config import load_config
+from litresearch.db import Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
+from litresearch.game import (
+    Award,
+    badge_progress,
+    grade,
+    level_for,
+    queue_top_waiting_days,
+    reading_impact_factor,
+    stats,
+    streak_multiplier,
+    week_progress,
+)
+from litresearch.ingest.bibtex import normalize_doi
+from litresearch.papers import upsert_work
+from litresearch.reading import (
+    REF_HELP,
+    ReadingError,
+    add_note,
+    find_paper,
+    queue_add,
+    queue_items,
+    queue_move,
+    queue_remove,
+    record_reading,
+    source_of,
+)
+from litresearch.sources.http import HttpError
+from litresearch.sources.openalex import OpenAlex
+
+queue_app = typer.Typer(help="Your short, ordered reading queue.", invoke_without_command=True)
+app.add_typer(queue_app, name="queue")
+
+QUEUE_NUDGE_DAYS = 14
+
+
+class Level(StrEnum):
+    abstract = "abstract"
+    skimmed = "skimmed"
+    read = "read"
+    thorough = "thorough"
+
+
+@contextmanager
+def open_db(config: Path):
+    cfg = load_config(config)
+    engine = init_db(cfg.paths.database)
+    try:
+        with Session(engine) as session:
+            yield cfg, session
+    except ReadingError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from None
+    finally:
+        engine.dispose()
+
+
+def bar(fraction: float, width: int = 20) -> str:
+    filled = round(max(0.0, min(1.0, fraction)) * width)
+    return "█" * filled + "░" * (width - filled)
+
+
+def show_award(session: Session, award: Award) -> None:
+    for event in award.events:
+        if event.kind != "badge":
+            console.print(f"  [green]+{event.points:>3}[/green]  {event.reason}")
+    if award.points:
+        level = award.level_after
+        xp = stats(session, date.today())["xp"]
+        to_go = f"{level.next_floor - xp} XP to next level" if level.next_floor else "max level"
+        console.print(
+            f"  [bold green]+{award.points} XP[/bold green]  ·  total {xp} XP  ·  "
+            f"Level {level.number} {level.title} [{bar(level.progress(xp), 10)}] {to_go}"
+        )
+    for badge in award.badges:
+        console.print(
+            f"  [bold yellow]🏅 Badge unlocked: {badge.name}[/bold yellow] ({badge.description})"
+        )
+    if award.level_before and award.level_after.number > award.level_before.number:
+        console.print(
+            f"  [bold magenta]⬆ LEVEL UP! You are now a {award.level_after.title}.[/bold magenta]"
+        )
+
+
+def show_next(session: Session) -> None:
+    items = queue_items(session)
+    if items:
+        _, paper = items[0]
+        console.print(f"Up next: [bold]q1[/bold] {paper.title}")
+    else:
+        console.print("Your queue is empty. Pick something: [bold]litresearch recommend[/bold]")
+
+
+# --- queue -------------------------------------------------------------------
+
+
+@queue_app.callback()
+def queue_show(ctx: typer.Context, config: Path = ConfigOpt):
+    """Show the queue (default when no subcommand is given)."""
+    if ctx.invoked_subcommand:
+        return
+    with open_db(config) as (cfg, session):
+        items = queue_items(session)
+        console.print(f"[bold]Reading queue[/bold] ({len(items)}/{cfg.queue.max_size})")
+        if not items:
+            console.print("  empty. Pick papers from [bold]litresearch recommend[/bold].")
+        for item, paper in items:
+            marker = "[bold green]▶ UP NEXT[/bold green] " if item.position == 1 else ""
+            waiting = (date.today() - item.added_at.date()).days
+            console.print(
+                f"[bold cyan]q{item.position}[/bold cyan]  {marker}[bold]{paper.title}[/bold]"
+            )
+            console.print(
+                f"     {paper_line(paper)}  [dim]· {item.source}, waiting {waiting} d[/dim]"
+            )
+        days = queue_top_waiting_days(session, date.today())
+        if days is not None and days >= QUEUE_NUDGE_DAYS:
+            console.print(
+                f"[yellow]Your top paper has waited {days} days. Read it, or drop it "
+                "if it no longer matters.[/yellow]"
+            )
+
+
+def fetch_by_doi(cfg, session: Session, doi: str) -> Paper:
+    """Store a paper that is not in the database yet, using OpenAlex metadata."""
+    http = make_http(cfg)
+    try:
+        works = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email).works_by_doi([doi])
+    except HttpError as error:
+        raise ReadingError(f"Could not fetch {doi}: {error}") from error
+    finally:
+        http.close()
+    if doi not in works:
+        raise ReadingError(f"OpenAlex does not know {doi}; add it with --title instead")
+    paper = upsert_work(session, works[doi])
+    session.commit()
+    return paper
+
+
+@queue_app.command("add")
+def queue_add_cmd(
+    ref: str = typer.Argument(None, help=REF_HELP),
+    title: str = typer.Option(None, help="Add a paper by title only (no DOI)"),
+    url: str = typer.Option(None, help="Link for a paper added by title"),
+    top: bool = typer.Option(False, "--top", help="Put it at position 1"),
+    at: int = typer.Option(None, "--at", help="Insert at this position"),
+    config: Path = ConfigOpt,
+):
+    """Add a paper: a recommendation (r1), library paper, DOI or a title."""
+    with open_db(config) as (cfg, session):
+        if title:
+            paper = Paper(title=title, url=url)
+            session.add(paper)
+            session.flush()
+        elif ref:
+            paper = find_paper(session, ref)
+            if paper is None:  # an unknown DOI
+                paper = fetch_by_doi(cfg, session, normalize_doi(ref))
+        else:
+            raise ReadingError("Give a reference or --title")
+        item = queue_add(session, cfg, paper, source_of(session, paper), 1 if top else at)
+        console.print(f"Added to the queue at q{item.position}: [bold]{paper.title}[/bold]")
+        show_next(session)
+
+
+@queue_app.command("drop")
+def queue_drop_cmd(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
+    """Remove a paper from the queue (no points, no judgement)."""
+    with open_db(config) as (_, session):
+        paper = find_paper(session, ref)
+        if paper is None or not queue_remove(session, paper):
+            raise ReadingError("Not on the queue")
+        console.print(f"Dropped: {paper.title}")
+        show_next(session)
+
+
+@queue_app.command("move")
+def queue_move_cmd(
+    ref: str = typer.Argument(..., help=REF_HELP),
+    position: int = typer.Argument(..., help="New position (1 = up next)"),
+    config: Path = ConfigOpt,
+):
+    """Change the order of the queue."""
+    with open_db(config) as (_, session):
+        paper = find_paper(session, ref)
+        if paper is None:
+            raise ReadingError("Unknown paper")
+        queue_move(session, paper, position)
+        show_next(session)
+
+
+# --- reading ------------------------------------------------------------------
+
+
+@app.command("next")
+def next_cmd(config: Path = ConfigOpt):
+    """Show the paper at the top of your queue."""
+    with open_db(config) as (_, session):
+        items = queue_items(session)
+        if not items:
+            show_next(session)
+            return
+        show_paper(session, items[0][1])
+        console.print(
+            "\nWhen done: [bold]litresearch read q1 skimmed|read|thorough "
+            "[--rating 1-5] [--note TEXT][/bold]"
+        )
+
+
+def show_paper(session: Session, paper: Paper) -> None:
+    console.print(f"[bold]{paper.title}[/bold]  [dim]#{paper.id}[/dim]")
+    console.print(paper_line(paper))
+    if paper.citation_count is not None:
+        pct = (
+            f", top {100 - paper.citation_percentile:.2g}% cited"
+            if paper.citation_percentile
+            else ""
+        )
+        console.print(f"[dim]{paper.citation_count:,} citations{pct}[/dim]")
+    console.print(f"[blue]{paper_link(paper)}[/blue]")
+    if paper.tldr:
+        console.print(f"\n[italic]TL;DR: {paper.tldr}[/italic]")
+    if paper.abstract:
+        console.print(f"\n{paper.abstract}")
+    reading = session.get(Reading, paper.id)
+    if reading:
+        rating = f", rated {'★' * reading.rating}" if reading.rating else ""
+        console.print(f"\n[bold]Status:[/bold] {reading.status.value}{rating}")
+        if reading.notes:
+            console.print(f"[bold]Notes:[/bold]\n{reading.notes}")
+
+
+@app.command()
+def show(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
+    """Show details, status and notes of a paper."""
+    with open_db(config) as (_, session):
+        paper = find_paper(session, ref)
+        if paper is None:
+            raise ReadingError("Unknown paper")
+        show_paper(session, paper)
+
+
+@app.command()
+def read(
+    ref: str = typer.Argument(..., help=REF_HELP),
+    level: Level = typer.Argument(..., help="How deeply you read it"),
+    rating: int = typer.Option(None, "--rating", "-r", min=1, max=5, help="1-5 stars"),
+    note: str = typer.Option(None, "--note", "-n", help="A note to keep"),
+    config: Path = ConfigOpt,
+):
+    """Log that you read a paper and earn points."""
+    with open_db(config) as (cfg, session):
+        paper = find_paper(session, ref)
+        if paper is None:
+            raise ReadingError("Unknown paper; add it to the queue first")
+        outcome = record_reading(session, cfg, paper, ReadStatus(level.value), rating, note)
+        left = " (left the queue)" if outcome.left_queue else ""
+        console.print(f"[bold]✔ {level.value}[/bold]: {paper.title}{left}")
+        show_award(session, outcome.award)
+        show_next(session)
+
+
+@app.command()
+def dismiss(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
+    """Mark a paper as not relevant; it also teaches the recommender."""
+    with open_db(config) as (cfg, session):
+        paper = find_paper(session, ref)
+        if paper is None:
+            raise ReadingError("Unknown paper")
+        record_reading(session, cfg, paper, ReadStatus.dismissed)
+        console.print(f"Dismissed: {paper.title}")
+
+
+@app.command()
+def note(
+    ref: str = typer.Argument(..., help=REF_HELP),
+    text: str = typer.Argument(..., help="Note text"),
+    config: Path = ConfigOpt,
+):
+    """Add a timestamped note to a paper you have marked."""
+    with open_db(config) as (cfg, session):
+        paper = find_paper(session, ref)
+        if paper is None:
+            raise ReadingError("Unknown paper")
+        award = add_note(session, cfg, paper, text)
+        console.print(f"Note saved for: {paper.title}")
+        show_award(session, award)
+
+
+# --- score ----------------------------------------------------------------------
+
+
+@app.command()
+def score(config: Path = ConfigOpt):
+    """Your reading dashboard: level, streak, weekly report card, badges."""
+    today = date.today()
+    with open_db(config) as (cfg, session):
+        s = stats(session, today)
+        level = level_for(s["xp"])
+        to_go = (
+            f"{level.next_floor - s['xp']} XP to next level" if level.next_floor else "max level"
+        )
+        console.print(
+            f"[bold]Level {level.number} · {level.title}[/bold]   {s['xp']} XP  "
+            f"[{bar(level.progress(s['xp']))}] {to_go}"
+        )
+        flame = " 🔥" if s["streak"] >= 2 else ""
+        console.print(
+            f"Streak: {s['streak']} week(s){flame} (best {s['best_streak']}) · "
+            f"next reads earn x{streak_multiplier(max(s['streak'], 1)):.2f}"
+        )
+
+        week = week_progress(session, cfg, today)
+        letter, comment = grade(week, week_over=False)
+        console.print(
+            f"\n[bold]This week[/bold] (from {week['week_start'].isoformat()}): "
+            f"grade [bold]{letter}[/bold], {comment}"
+        )
+        deep = min(week["detail"], week["goal_detail"])
+        goal_total = week["goal_detail"] + week["goal_skim"]
+        console.print(
+            f"  Quest [{bar(week['fraction'], 10)}]  deep reads {deep}/{week['goal_detail']}, "
+            f"papers {week['total']}/{goal_total}  ·  {week['xp']} XP this week"
+        )
+        last_week = week_progress(session, cfg, date.fromordinal(today.toordinal() - 7))
+        console.print(
+            f"  Last week: grade {grade(last_week, week_over=True)[0]}, {last_week['xp']} XP"
+        )
+
+        rif = reading_impact_factor(session, today)
+        console.print(
+            f"\nReading Impact Factor (avg XP/week, last 4 weeks): [bold]{rif:.1f}[/bold]"
+        )
+        if s["papers_read"]:
+            discipline = s["frogs"] / s["papers_read"]
+            depth_share = s["deep_reads"] / s["papers_read"]
+            console.print(
+                f"Discipline (top paper read first): {discipline:.0%} · "
+                f"Depth (read or deeper): {depth_share:.0%} · papers read: {s['papers_read']}"
+            )
+
+        progress = badge_progress(session, today)
+        owned = [b for b, _, unlocked in progress if unlocked]
+        console.print(
+            f"\n[bold]Badges {len(owned)}/{len(progress)}[/bold]: "
+            + (", ".join(f"🏅 {b.name}" for b in owned) or "none yet")
+        )
+        upcoming = sorted(
+            ((b, v) for b, v, unlocked in progress if not unlocked),
+            key=lambda bv: bv[1] / bv[0].target,
+            reverse=True,
+        )[:3]
+        for badge, value in upcoming:
+            console.print(
+                f"  next: {badge.name} [{bar(value / badge.target, 10)}] {value}/{badge.target}"
+                f" [dim]· {badge.description}[/dim]"
+            )
+        days = queue_top_waiting_days(session, today)
+        if days is not None and days >= QUEUE_NUDGE_DAYS:
+            console.print(f"\n[yellow]Your top paper has waited {days} days.[/yellow]")
+
+
+@app.command()
+def history(
+    limit: int = typer.Option(15, help="Number of entries"),
+    config: Path = ConfigOpt,
+):
+    """Recently logged papers and the points they earned."""
+    with open_db(config) as (_, session):
+        events = session.exec(
+            select(StatusEvent, Paper)
+            .join(Paper, Paper.id == StatusEvent.paper_id)
+            .order_by(StatusEvent.at.desc())
+            .limit(limit)
+        ).all()
+        if not events:
+            console.print("Nothing logged yet.")
+        for event, paper in events:
+            points = sum(
+                e.points
+                for e in session.exec(
+                    select(XpEvent).where(XpEvent.paper_id == paper.id, XpEvent.at == event.at)
+                ).all()
+            )
+            when = datetime.isoformat(event.at)
+            console.print(
+                f"{when}  {event.status.value:<9} [green]+{points:>3}[/green]  {paper.title[:70]}"
+            )
