@@ -1,0 +1,74 @@
+[
+ {
+  "DOI": "10.1038/d41586-019-01709-2",
+  "title": [
+   "Watching cancer cells evolve through chromosomal instability"
+  ],
+  "author": [
+   {
+    "given": "Sarah C.",
+    "family": "Johnson",
+    "sequence": "first",
+    "affiliation": [],
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   },
+   {
+    "given": "Sarah E.",
+    "family": "McClelland",
+    "sequence": "additional",
+    "affiliation": [],
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   }
+  ],
+  "issued": {
+   "date-parts": [
+    [
+     2019,
+     6,
+     3
+    ]
+   ]
+  },
+  "type": "journal-article"
+ },
+ {
+  "DOI": "10.5194/egusphere-egu26-22092",
+  "title": [
+   "Time-Lapse of Exoplanets: Watching Sub-Neptunes Evolve with JWST"
+  ],
+  "author": [
+   {
+    "given": "Saugata",
+    "family": "Barat",
+    "sequence": "first",
+    "affiliation": [],
+    "role": [
+     {
+      "role": "author",
+      "vocabulary": "crossref"
+     }
+    ]
+   }
+  ],
+  "issued": {
+   "date-parts": [
+    [
+     2026,
+     3,
+     14
+    ]
+   ]
+  },
+  "type": "posted-content"
+ }
+]

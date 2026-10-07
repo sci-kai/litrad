@@ -1,11 +1,11 @@
 """SQLite schema and session helpers."""
 
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
-from pydantic import NaiveDatetime
 import numpy as np
+from pydantic import NaiveDatetime
 from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -15,7 +15,7 @@ def now() -> datetime:
     return datetime.now().replace(microsecond=0)
 
 
-class ReadStatus(str, Enum):
+class ReadStatus(StrEnum):
     new = "new"
     abstract = "abstract"
     skimmed = "skimmed"
@@ -25,7 +25,7 @@ class ReadStatus(str, Enum):
     dismissed = "dismissed"
 
 
-class Category(str, Enum):
+class Category(StrEnum):
     detail = "detail"
     skim = "skim"
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import bibtexparser
 from bibtexparser import middlewares as mw
+from bibtexparser.model import DuplicateBlockKeyBlock
 
 MONTHS = {
     name: number
@@ -124,8 +125,15 @@ def _field(entry, name: str) -> str | None:
     return None if item is None else item.value
 
 
-def parse_bibtex(path: Path, ignore_labels: list[str] = ()) -> list[BibEntry]:
-    """Parse a BibTeX file; raises ValueError if blocks fail to parse."""
+def parse_bibtex(
+    path: Path, ignore_labels: list[str] = (), duplicate_keys: list[str] | None = None
+) -> list[BibEntry]:
+    """Parse a BibTeX file.
+
+    Repeated citation keys keep their first entry and are appended to
+    ``duplicate_keys``. Any other unparsable block raises ValueError, so that a
+    broken export never makes papers look as if they had left the library.
+    """
     library = bibtexparser.parse_file(
         str(path),
         append_middleware=[
@@ -134,9 +142,15 @@ def parse_bibtex(path: Path, ignore_labels: list[str] = ()) -> list[BibEntry]:
             mw.SplitNameParts(),
         ],
     )
-    if library.failed_blocks:
-        details = "; ".join(str(block.raw)[:80] for block in library.failed_blocks)
-        raise ValueError(f"{len(library.failed_blocks)} BibTeX block(s) failed to parse: {details}")
+    failed = []
+    for block in library.failed_blocks:
+        if isinstance(block, DuplicateBlockKeyBlock) and duplicate_keys is not None:
+            duplicate_keys.append(block.key)
+        else:
+            failed.append(block)
+    if failed:
+        details = "; ".join(str(block.raw)[:80] for block in failed)
+        raise ValueError(f"{len(failed)} BibTeX block(s) failed to parse: {details}")
 
     ignore = {label.lower() for label in ignore_labels}
     entries = []

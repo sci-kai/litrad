@@ -14,3 +14,4 @@ def test_status_change_is_logged(tmp_path):
         assert reading.status == ReadStatus.thorough
         events = session.exec(select(StatusEvent)).all()
         assert [e.status for e in events] == [ReadStatus.abstract, ReadStatus.thorough]
+    engine.dispose()

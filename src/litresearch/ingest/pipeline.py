@@ -74,12 +74,11 @@ def sync_library(session: Session, entries: list[BibEntry], report: IngestReport
         paper.bibtex_key: paper
         for paper in session.exec(select(Paper).where(Paper.bibtex_key.is_not(None)))
     }
-    by_doi = {paper.doi: paper for paper in session.exec(select(Paper).where(Paper.doi.is_not(None)))}
+    by_doi = {
+        paper.doi: paper for paper in session.exec(select(Paper).where(Paper.doi.is_not(None)))
+    }
     seen_keys, library = set(), []
     for entry in entries:
-        if entry.key in seen_keys:
-            report.errors.append(f"duplicate BibTeX key {entry.key} skipped")
-            continue
         seen_keys.add(entry.key)
         paper = by_key.get(entry.key)
         if paper is None and entry.doi and entry.doi in by_doi:
@@ -123,7 +122,9 @@ def resolve_missing_dois(
             continue  # PMID-only papers are resolved through OpenAlex
         first_author = paper.authors[0] if paper.authors else None
         try:
-            doi = crossref.resolve_doi(http, paper.title, first_author, paper.year, cfg.api.contact_email)
+            doi = crossref.resolve_doi(
+                http, paper.title, first_author, paper.year, cfg.api.contact_email
+            )
         except HttpError as error:
             report.errors.append(f"Crossref: {error}")
             return
@@ -220,7 +221,11 @@ def ingest_library(
     cfg: Config, session: Session, http: HttpClient, use_s2: bool = True
 ) -> IngestReport:
     report = IngestReport()
-    entries = parse_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels)
+    duplicate_keys = []
+    entries = parse_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels, duplicate_keys)
+    report.errors += [
+        f"duplicate BibTeX key {key}: only the first entry is used" for key in duplicate_keys
+    ]
     report.entries = len(entries)
     papers = sync_library(session, entries, report)
     resolve_missing_dois(session, papers, http, cfg, report)

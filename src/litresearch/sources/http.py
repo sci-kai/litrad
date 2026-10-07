@@ -71,7 +71,9 @@ class HttpClient:
         if contact_email:
             agent += f" (mailto:{contact_email})"
         self._client = httpx.Client(
-            headers={"User-Agent": agent}, timeout=timeout, transport=transport,
+            headers={"User-Agent": agent},
+            timeout=timeout,
+            transport=transport,
             follow_redirects=True,
         )
         self.cache = cache
@@ -124,13 +126,17 @@ class HttpClient:
                 continue
             if response.status_code in RETRY_STATUS and attempt < self.max_retries:
                 delay = _retry_after(response) or min(2**attempt, 60)
-                log.info("%s %s -> %s, retrying in %.0f s", method, host, response.status_code, delay)
+                log.info(
+                    "%s %s -> %s, retrying in %.0f s", method, host, response.status_code, delay
+                )
                 self._sleep(delay)
                 continue
             if response.status_code == 404 and allow_404:
                 return None
             if response.status_code >= 400:
-                raise HttpError(f"{method} {url}: HTTP {response.status_code} {response.text[:200]}")
+                raise HttpError(
+                    f"{method} {url}: HTTP {response.status_code} {response.text[:200]}"
+                )
             body = response.json()
             if use_cache and self.cache is not None:
                 self.cache.put(key, body)

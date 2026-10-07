@@ -1,0 +1,631 @@
+{
+ "works": [
+  {
+   "id": "https://openalex.org/W3157384750",
+   "doi": "https://doi.org/10.1038/s41591-021-01323-8",
+   "ids": {
+    "openalex": "https://openalex.org/W3157384750",
+    "doi": "https://doi.org/10.1038/s41591-021-01323-8",
+    "mag": "3157384750",
+    "pmid": "https://pubmed.ncbi.nlm.nih.gov/33958794"
+   },
+   "title": "A single-cell map of intratumoral changes during anti-PD1 treatment of patients with breast cancer",
+   "publication_year": 2021,
+   "publication_date": "2021-05-01",
+   "type": "article",
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5089367414",
+      "display_name": "Ayse Bassez",
+      "orcid": "https://orcid.org/0000-0002-0432-1536",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-0432-1536"
+      ]
+     },
+     "countries": [
+      "BE"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Ayse Bassez",
+     "raw_orcid": "https://orcid.org/0000-0002-0432-1536"
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5071016177",
+      "display_name": "Hanne Vos",
+      "orcid": "https://orcid.org/0000-0002-4629-4812",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-4629-4812"
+      ]
+     },
+     "countries": [
+      "BE"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Hanne Vos",
+     "raw_orcid": null
+    }
+   ],
+   "primary_location": {
+    "source": {
+     "id": "https://openalex.org/S203256638",
+     "display_name": "Nature Medicine"
+    }
+   },
+   "cited_by_count": 965,
+   "fwci": 57.3681,
+   "citation_normalized_percentile": {
+    "value": 0.99941863,
+    "is_in_top_1_percent": true,
+    "is_in_top_10_percent": true
+   },
+   "abstract_inverted_index": null,
+   "topics": [
+    {
+     "display_name": "Cancer Immunotherapy and Biomarkers"
+    },
+    {
+     "display_name": "Breast Cancer Treatment Studies"
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W4290188763",
+   "doi": "https://doi.org/10.1038/s41588-022-01141-9",
+   "ids": {
+    "openalex": "https://openalex.org/W4290188763",
+    "doi": "https://doi.org/10.1038/s41588-022-01141-9",
+    "pmid": "https://pubmed.ncbi.nlm.nih.gov/35931863"
+   },
+   "title": "Cancer cell states recur across tumor types and form specific interactions with the tumor microenvironment",
+   "publication_year": 2022,
+   "publication_date": "2022-08-01",
+   "type": "article",
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5066914558",
+      "display_name": "Dalia Barkley",
+      "orcid": "https://orcid.org/0000-0001-6537-5557",
+      "observed_orcids": [
+       "https://orcid.org/0000-0001-6537-5557"
+      ]
+     },
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Dalia Barkley",
+     "raw_orcid": "https://orcid.org/0000-0001-6537-5557"
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5086627396",
+      "display_name": "Reuben M. Moncada",
+      "orcid": "https://orcid.org/0000-0002-8376-8095",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-8376-8095"
+      ]
+     },
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Reuben Moncada",
+     "raw_orcid": null
+    }
+   ],
+   "primary_location": {
+    "source": {
+     "id": "https://openalex.org/S137905309",
+     "display_name": "Nature Genetics"
+    }
+   },
+   "cited_by_count": 570,
+   "fwci": 33.8642,
+   "citation_normalized_percentile": {
+    "value": 0.99907462,
+    "is_in_top_1_percent": true,
+    "is_in_top_10_percent": true
+   },
+   "abstract_inverted_index": null,
+   "topics": [
+    {
+     "display_name": "Single-cell and spatial transcriptomics"
+    },
+    {
+     "display_name": "Cancer Genomics and Diagnostics"
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W2334059699",
+   "doi": "https://doi.org/10.1126/science.aaf6546",
+   "ids": {
+    "openalex": "https://openalex.org/W2334059699",
+    "doi": "https://doi.org/10.1126/science.aaf6546",
+    "mag": "2334059699",
+    "pmid": "https://pubmed.ncbi.nlm.nih.gov/27124449"
+   },
+   "title": "A collective route to metastasis: Seeding by tumor cell clusters",
+   "publication_year": 2016,
+   "publication_date": "2016-04-07",
+   "type": "article",
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5103225612",
+      "display_name": "Kevin J. Cheung",
+      "orcid": "https://orcid.org/0000-0002-6219-933X",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-6219-933X"
+      ]
+     },
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Kevin J. Cheung",
+     "raw_orcid": null
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "id": "https://openalex.org/A5084041667",
+      "display_name": "Andrew J. Ewald",
+      "orcid": "https://orcid.org/0000-0002-1964-0740",
+      "observed_orcids": [
+       "https://orcid.org/0000-0002-1964-0740"
+      ]
+     },
+     "countries": [
+      "US"
+     ],
+     "is_corresponding": true,
+     "raw_author_name": "Andrew J. Ewald",
+     "raw_orcid": null
+    }
+   ],
+   "primary_location": {
+    "source": {
+     "id": "https://openalex.org/S3880285",
+     "display_name": "Science"
+    }
+   },
+   "cited_by_count": 599,
+   "fwci": 29.1058,
+   "citation_normalized_percentile": {
+    "value": 0.99748079,
+    "is_in_top_1_percent": true,
+    "is_in_top_10_percent": true
+   },
+   "abstract_inverted_index": {
+    "Despite": [
+     0
+    ],
+    "decades": [
+     1
+    ],
+    "of": [
+     2
+    ],
+    "study,": [
+     3
+    ],
+    "there": [
+     4
+    ],
+    "are": [
+     5
+    ],
+    "still": [
+     6
+    ],
+    "many": [
+     7
+    ],
+    "unanswered": [
+     8
+    ],
+    "questions": [
+     9
+    ],
+    "about": [
+     10
+    ],
+    "metastasis,": [
+     11
+    ]
+   },
+   "topics": [
+    {
+     "display_name": "Cancer Cells and Metastasis"
+    },
+    {
+     "display_name": "Mechanisms of cancer metastasis"
+    }
+   ]
+  },
+  {
+   "id": "https://openalex.org/W1544683726",
+   "doi": null,
+   "ids": {
+    "openalex": "https://openalex.org/W1544683726",
+    "mag": "1544683726",
+    "pmid": "https://pubmed.ncbi.nlm.nih.gov/14678978"
+   },
+   "title": "Expression of matrix metalloproteinases in the microenvironment of spontaneous and experimental melanoma metastases reflects the requirements for tumor formation.",
+   "publication_year": 2003,
+   "publication_date": "2003-12-01",
+   "type": "article",
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "id": "https://openalex.org/A5111698456",
+      "display_name": "Uta B. Hofmann",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "countries": [
+      "DE"
+     ],
+     "is_corresponding": false,
+     "raw_author_name": "Uta B Hofmann",
+     "raw_orcid": null
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "id": "https://openalex.org/A5106546958",
+      "display_name": "Andreas A. O. Eggert",
+      "orcid": null,
+      "observed_orcids": []
+     },
+     "countries": [],
+     "is_corresponding": false,
+     "raw_author_name": "Andreas A O Eggert",
+     "raw_orcid": null
+    }
+   ],
+   "primary_location": {
+    "source": {
+     "id": "https://openalex.org/S4306525036",
+     "display_name": "PubMed"
+    }
+   },
+   "cited_by_count": 112,
+   "fwci": 2.7866,
+   "citation_normalized_percentile": {
+    "value": 0.910098,
+    "is_in_top_1_percent": false,
+    "is_in_top_10_percent": true
+   },
+   "abstract_inverted_index": {
+    "Expression": [
+     0
+    ],
+    "of": [
+     1
+    ],
+    "matrix": [
+     2
+    ],
+    "metalloproteinases": [
+     3
+    ],
+    "(MMPs)": [
+     4
+    ],
+    "and": [
+     5
+    ],
+    "their": [
+     6
+    ],
+    "activation": [
+     7
+    ],
+    "in": [
+     8
+    ],
+    "tumor": [
+     9
+    ],
+    "cells,": [
+     10
+    ],
+    "as": [
+     11
+    ]
+   },
+   "topics": [
+    {
+     "display_name": "Protease and Inhibitor Mechanisms"
+    },
+    {
+     "display_name": "Mechanisms of cancer metastasis"
+    }
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "https://openalex.org/S3880285",
+   "summary_stats": {
+    "2yr_mean_citedness": 21.457609268035807,
+    "h_index": 1771,
+    "i10_index": 85223
+   }
+  },
+  {
+   "id": "https://openalex.org/S203256638",
+   "summary_stats": {
+    "2yr_mean_citedness": 32.71503330161751,
+    "h_index": 774,
+    "i10_index": 8804
+   }
+  },
+  {
+   "id": "https://openalex.org/S137905309",
+   "summary_stats": {
+    "2yr_mean_citedness": 18.667250437828372,
+    "h_index": 796,
+    "i10_index": 8433
+   }
+  },
+  {
+   "id": "https://openalex.org/S4306525036",
+   "summary_stats": {
+    "2yr_mean_citedness": 0.662970013670802,
+    "h_index": 925,
+    "i10_index": 940125
+   }
+  }
+ ],
+ "s2": [
+  {
+   "paperId": "b58446c91f3ace44946a9a099539300cb124a1db",
+   "externalIds": {
+    "DOI": "10.1126/science.aaf6546",
+    "PubMed": "27124449"
+   },
+   "title": "A collective route to metastasis: Seeding by tumor cell clusters",
+   "citationCount": 515,
+   "influentialCitationCount": 11,
+   "openAccessPdf": {
+    "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/8183671",
+    "status": "GREEN",
+    "license": null,
+    "disclaimer": "Notice: Paper or abstract available at https://pmc.ncbi.nlm.nih.gov/articles/PMC8183671, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+   },
+   "tldr": {
+    "model": "tldr@v2.0.0",
+    "text": "A model of metastatic dissemination is presented that highlights the activities of clusters of tumor cells that retain and require their epithelial properties."
+   },
+   "embedding": {
+    "model": "specter_v2",
+    "vector": [
+     0.36759185791015625,
+     0.20469236373901367,
+     -1.191321849822998,
+     0.41296106576919556
+    ]
+   },
+   "authors": [
+    {
+     "authorId": "32898117",
+     "name": "Kevin J. Cheung"
+    },
+    {
+     "authorId": "1851633",
+     "name": "A. Ewald"
+    }
+   ]
+  },
+  {
+   "paperId": "24c87e7e931d7da79b15a3bd28b2f15fb15d9a95",
+   "externalIds": {
+    "DOI": "10.1038/s41588-022-01141-9",
+    "PubMed": "35931863"
+   },
+   "title": "Cancer cell states recur across tumor types and form specific interactions with the tumor microenvironment",
+   "citationCount": 447,
+   "influentialCitationCount": 19,
+   "openAccessPdf": {
+    "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9886402",
+    "status": "GREEN",
+    "license": null,
+    "disclaimer": "Notice: Paper or abstract available at https://pmc.ncbi.nlm.nih.gov/articles/PMC9886402, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+   },
+   "tldr": {
+    "model": "tldr@v2.0.0",
+    "text": "A pan-cancer single-cell RNA-sequencing analysis across 15 cancer types identifies recurrent gene modules that underlie a continuum of cancer cell states and finds that induction of the interferon response module varies by tumor location and is diminished upon elimination of lymphocytes."
+   },
+   "embedding": {
+    "model": "specter_v2",
+    "vector": [
+     0.5241273641586304,
+     0.2236894965171814,
+     -1.0107511281967163,
+     0.1033114641904831
+    ]
+   },
+   "authors": [
+    {
+     "authorId": "1389827483",
+     "name": "Dalia Barkley"
+    },
+    {
+     "authorId": "1482593616",
+     "name": "Reuben Moncada"
+    },
+    {
+     "authorId": "120911442",
+     "name": "M. Pour"
+    },
+    {
+     "authorId": "1620446112",
+     "name": "D. A. Liberman"
+    },
+    {
+     "authorId": "31149975",
+     "name": "I. Dryg"
+    },
+    {
+     "authorId": "3883624",
+     "name": "G. Werba"
+    },
+    {
+     "authorId": "2158628417",
+     "name": "Wei Wang"
+    },
+    {
+     "authorId": "39107775",
+     "name": "Maayan Baron"
+    },
+    {
+     "authorId": "2113654828",
+     "name": "A. Rao"
+    },
+    {
+     "authorId": "2143387423",
+     "name": "Bo Xia"
+    },
+    {
+     "authorId": "143908217",
+     "name": "Gustavo S. França"
+    },
+    {
+     "authorId": "150928079",
+     "name": "A. Weil"
+    },
+    {
+     "authorId": "5254112",
+     "name": "D. DeLair"
+    },
+    {
+     "authorId": "50550823",
+     "name": "C. Hajdu"
+    },
+    {
+     "authorId": "40011185",
+     "name": "A. Lund"
+    },
+    {
+     "authorId": "4847895",
+     "name": "I. Osman"
+    },
+    {
+     "authorId": "2805713",
+     "name": "I. Yanai"
+    }
+   ]
+  },
+  {
+   "paperId": "17bda6d5b9cbc92818ce67b2a985b8f74b7e9827",
+   "externalIds": {
+    "DOI": "10.1038/s41591-021-01323-8",
+    "PubMed": "33958794"
+   },
+   "title": "A single-cell map of intratumoral changes during anti-PD1 treatment of patients with breast cancer",
+   "citationCount": 702,
+   "influentialCitationCount": 50,
+   "openAccessPdf": {
+    "url": "https://lirias.kuleuven.be/retrieve/3ab7ca1a-7b12-4edd-a961-78901b83a780",
+    "status": "GREEN",
+    "license": "other-oa",
+    "disclaimer": "Notice: Paper or abstract available at https://api.unpaywall.org/v2/10.1038/s41591-021-01323-8?email=<INSERT_YOUR_EMAIL> or https://doi.org/10.1038/s41591-021-01323-8, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+   },
+   "tldr": {
+    "model": "tldr@v2.0.0",
+    "text": null
+   },
+   "embedding": {
+    "model": "specter_v2",
+    "vector": [
+     0.9480651021003723,
+     0.41551440954208374,
+     -1.5296646356582642,
+     0.1850568801164627
+    ]
+   },
+   "authors": [
+    {
+     "authorId": "118038722",
+     "name": "A. Bassez"
+    },
+    {
+     "authorId": "144684959",
+     "name": "H. Vos"
+    },
+    {
+     "authorId": "38307721",
+     "name": "Laurien Van Dyck"
+    },
+    {
+     "authorId": "4808494",
+     "name": "G. Floris"
+    },
+    {
+     "authorId": "5191727",
+     "name": "I. Arijs"
+    },
+    {
+     "authorId": "2673325",
+     "name": "C. Desmedt"
+    },
+    {
+     "authorId": "6388556",
+     "name": "B. Boeckx"
+    },
+    {
+     "authorId": "30173963",
+     "name": "Marlies Vanden Bempt"
+    },
+    {
+     "authorId": "4049075",
+     "name": "I. Nevelsteen"
+    },
+    {
+     "authorId": "4024232",
+     "name": "K. Lambein"
+    },
+    {
+     "authorId": "13808339",
+     "name": "K. Punie"
+    },
+    {
+     "authorId": "2264848",
+     "name": "P. Neven"
+    },
+    {
+     "authorId": "2837717",
+     "name": "Abhishek D Garg"
+    },
+    {
+     "authorId": "5191030",
+     "name": "H. Wildiers"
+    },
+    {
+     "authorId": "5503231",
+     "name": "J. Qian"
+    },
+    {
+     "authorId": "3669668",
+     "name": "A. Smeets"
+    },
+    {
+     "authorId": "145415933",
+     "name": "D. Lambrechts"
+    }
+   ]
+  }
+ ]
+}

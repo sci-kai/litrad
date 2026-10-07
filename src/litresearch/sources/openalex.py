@@ -14,9 +14,20 @@ BATCH = 50
 
 WORK_FIELDS = ",".join(
     [
-        "id", "doi", "ids", "title", "publication_year", "publication_date", "type",
-        "authorships", "primary_location", "cited_by_count", "fwci",
-        "citation_normalized_percentile", "abstract_inverted_index", "topics",
+        "id",
+        "doi",
+        "ids",
+        "title",
+        "publication_year",
+        "publication_date",
+        "type",
+        "authorships",
+        "primary_location",
+        "cited_by_count",
+        "fwci",
+        "citation_normalized_percentile",
+        "abstract_inverted_index",
+        "topics",
     ]
 )
 
@@ -86,7 +97,9 @@ def parse_work(raw: dict) -> Work:
 
 
 class OpenAlex:
-    def __init__(self, http: HttpClient, api_key: str | None = None, contact_email: str | None = None):
+    def __init__(
+        self, http: HttpClient, api_key: str | None = None, contact_email: str | None = None
+    ):
         self.http = http
         self.params = {}
         if api_key:
@@ -112,7 +125,9 @@ class OpenAlex:
         return {work.doi: work for work in works if work.doi}
 
     def works_by_pmid(self, pmids: list[str]) -> dict[str, Work]:
-        works = (parse_work(raw) for raw in self._filter_batches("works", "pmid", pmids, WORK_FIELDS))
+        works = (
+            parse_work(raw) for raw in self._filter_batches("works", "pmid", pmids, WORK_FIELDS)
+        )
         return {work.pmid: work for work in works if work.pmid}
 
     def venue_mean_citedness(self, source_ids: list[str]) -> dict[str, float]:

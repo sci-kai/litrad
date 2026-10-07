@@ -4,7 +4,8 @@ __pycache__/
 .pytest_cache/
 # local runtime data and private config
 config/config.yaml
-data/
+/data/
 *.sqlite
 # private Paperpile exports (a small anonymised sample lives in tests/data/)
 /*.bib
+.coverage

@@ -24,6 +24,4 @@ def test_more_than_five_papers_rejected():
 
 def test_local_embeddings_need_url():
     with pytest.raises(ValidationError):
-        Config.model_validate(
-            {"paths": {"bibtex": "x.bib"}, "embeddings": {"backend": "local"}}
-        )
+        Config.model_validate({"paths": {"bibtex": "x.bib"}, "embeddings": {"backend": "local"}})

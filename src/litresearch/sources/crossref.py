@@ -56,7 +56,9 @@ def resolve_doi(
     contact_email: str | None = None,
 ) -> str | None:
     """Return the DOI of the best verified Crossref match, or None."""
-    query = " ".join(filter(None, [title, first_author and _surname(first_author), year and str(year)]))
+    query = " ".join(
+        filter(None, [title, first_author and _surname(first_author), year and str(year)])
+    )
     params = {
         "query.bibliographic": query,
         "rows": 5,

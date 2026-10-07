@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
-from litresearch.sources.http import HttpClient
+from litresearch.sources.http import HttpClient, HttpError
 
 API = "https://api.semanticscholar.org/graph/v1"
 # the batch endpoint accepts 500 ids, but responses with embeddings get large
@@ -28,7 +28,9 @@ def parse_paper(raw: dict) -> S2Paper:
         tldr=(raw.get("tldr") or {}).get("text"),
         citation_count=raw.get("citationCount"),
         influential_citation_count=raw.get("influentialCitationCount"),
-        embedding=embedding.get("vector") if embedding.get("model", "").startswith("specter") else None,
+        embedding=embedding.get("vector")
+        if embedding.get("model", "").startswith("specter")
+        else None,
     )
 
 
@@ -54,7 +56,10 @@ class SemanticScholar:
                 headers=self.headers,
                 max_age=timedelta(days=30),
             )
-            for requested, raw in zip(chunk, body):
+            if not isinstance(body, list) or len(body) != len(chunk):
+                # results are matched to ids by position, so never guess
+                raise HttpError(f"S2 batch: expected {len(chunk)} results, got {len(body)}")
+            for requested, raw in zip(chunk, body, strict=True):
                 if raw and raw.get("paperId"):
                     result[requested] = parse_paper(raw)
         return result

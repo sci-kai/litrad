@@ -51,7 +51,7 @@ def version():
 def db_init(config: Path = ConfigOpt):
     """Create the SQLite database and tables."""
     cfg = load_config(config)
-    init_db(cfg.paths.database)
+    init_db(cfg.paths.database).dispose()
     typer.echo(f"Database ready: {cfg.paths.database}")
 
 
@@ -71,6 +71,7 @@ def ingest(
             report = ingest_library(cfg, session, http, use_s2=s2)
     finally:
         http.close()
+        engine.dispose()
     typer.echo("\n".join(report.lines()))
 
 
@@ -86,6 +87,7 @@ def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of
             .join(Paper, Paper.id == Embedding.paper_id)
             .where(Paper.in_library)
         ).one()
+    engine.dispose()
     folders = Counter(folder for paper in papers for folder in paper.folders)
     typer.echo(f"Library papers:  {len(papers)}")
     typer.echo(f"  with DOI:      {sum(bool(p.doi) for p in papers)}")
