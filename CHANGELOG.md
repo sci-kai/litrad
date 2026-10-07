@@ -14,6 +14,13 @@
   - caches HTTP responses, rate-limits requests and retries on 429/5xx;
   - continues when a single source fails.
 - `status` command: library summary.
+- `recommend`: weekly top papers from OpenAlex topic searches and Semantic
+  Scholar recommendations; relevance (SPECTER2 / TF-IDF), impact and
+  timeliness scoring; diversity via MMR; detail/skim split.
+- Reading queue (`queue add|drop|move`, `next`), limited and ordered.
+- Reading log (`read`, `note`, `dismiss`, `show`, `history`).
+- Gamification (`score`): XP, bonuses, weekly streaks, weekly quest, levels,
+  badges, weekly grade, reading impact factor.
 - Offline test suite with recorded API responses; live smoke test behind
   `--network`.
 - Documentation in `docs/`.

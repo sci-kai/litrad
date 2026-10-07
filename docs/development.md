@@ -46,7 +46,11 @@ git branch -d feat-scoring
 | `test_http.py` | cache, retries, `Retry-After`, throttling, error handling |
 | `test_sources.py` | Crossref match rules, OpenAlex/S2 parsing and batching |
 | `test_pipeline.py` | end-to-end ingest, idempotency, removal, adoption, duplicates, source outages |
-| `test_cli.py` | CLI commands |
+| `test_scoring.py` | classification, impact/timeliness, kNN, MMR, ranking, TF-IDF fallback |
+| `test_recommend.py` | candidate gathering, filters, cooldown, weekly batches, S2 negatives, outages |
+| `test_reading.py` | references, queue order/limits, reading log, notes, ratings |
+| `test_game.py` | XP rules, anti-farming, bonuses, streaks, quests, badges, levels, statistics |
+| `test_cli.py` | all CLI commands (plain console, fake APIs) |
 | `test_config.py`, `test_db.py` | config validation, status history |
 | `test_live.py` | smoke test against the real APIs (`--network`) |
 

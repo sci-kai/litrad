@@ -13,8 +13,15 @@ Paperpile ──auto-export──> Google Drive ──rclone──> library.bib
                                    (DOIs)   (metrics)  (SPECTER2, TLDR)
 ```
 
-Planned stages (see the roadmap in the README): candidate search, scoring and
-the ≤ 5-paper list, the web app, LLM summaries, Obsidian export.
+```
+topics ──> OpenAlex search (fresh, landmark) ─┐
+library ─> S2 recommendations ────────────────┼─> candidates ─> filter ─> score ─> MMR ─> ≤ 5 (detail/skim)
+                                              │                                       │
+                                  S2 SPECTER2 / TF-IDF                        you pick ─> queue ─> read ─> XP
+```
+
+Planned stages (see the roadmap in the README): web app, LLM summaries,
+Obsidian export.
 
 ## Code layout
 
@@ -28,7 +35,14 @@ the ≤ 5-paper list, the web app, LLM summaries, Obsidian export.
 | `sources/http.py` | Shared JSON client: SQLite response cache, per-host throttling, retries |
 | `sources/crossref.py` | Title/author/year → DOI, with verification |
 | `sources/openalex.py` | Batched lookups by DOI/PMID, venue statistics |
-| `sources/semanticscholar.py` | Batched lookups: SPECTER2 embeddings, TLDRs, influential citations |
+| `sources/semanticscholar.py` | Batched lookups: SPECTER2 embeddings, TLDRs, influential citations; recommendations |
+| `papers.py` | Store OpenAlex works as papers (candidates, manual adds) |
+| `recommend/engine.py` | Candidate gathering, filtering, persistence of weekly batches |
+| `recommend/scoring.py` | Pure scoring: relevance, impact, timeliness, MMR, detail/skim split |
+| `recommend/text.py` | TF-IDF fallback similarity |
+| `reading.py` | Paper references, queue operations, reading log, notes |
+| `game.py` | XP rules, streaks, quests, levels, badges, statistics |
+| `cli_reading.py` | Queue/reading/score commands |
 
 ## Ingest pipeline
 
@@ -64,30 +78,69 @@ the ≤ 5-paper list, the web app, LLM summaries, Obsidian export.
 Each source fails on its own: an outage or rate limit is recorded as a warning
 in the report and the remaining steps still run.
 
+## Recommendation pipeline
+
+1. **Candidates**:
+   - per topic query, two OpenAlex title/abstract searches sorted by relevance:
+     *fresh* (published within the fresh window; articles, reviews, preprints)
+     and *landmark* (citation percentile above the threshold, published within
+     `landmark_max_age_years`). A full-text search sorted by citations returned
+     off-topic hits (e.g. `fastp` for "ctDNA"), so the tool does not use it;
+   - Semantic Scholar recommendations for the library: positives are well-rated
+     papers plus the most recent library papers, negatives are dismissed papers.
+2. **Filter**: drop papers in the library, read, dismissed, queued, recommended
+   in earlier weeks within the cooldown, matching `excluded_terms`, editorials
+   and other non-research types, and conference abstracts from journal
+   supplements (titles like `0865 …`, `P-123: …`).
+3. **Score** (`recommend/scoring.py`):
+   - *relevance* = 0.7 × percentile rank of the mean cosine similarity to the 5
+     nearest library papers (SPECTER2; TF-IDF for papers without an embedding)
+     + 0.3 × topic bonus (topic weight / maximum weight; 0.5 for papers found
+     only by S2 recommendations);
+   - *impact*: landmark papers use the citation percentile. Fresh papers cannot
+     have citations yet, so they use the journal's log-scaled 2-year mean
+     citedness, plus a small bonus for early citations. A missing venue scores
+     0.05: preprint servers count as venues, so a missing one is a warning sign;
+   - *timeliness*: fresh = 0.5–1.0, decaying over the fresh window;
+     landmark = 0.4;
+   - score = weighted sum (`selection.weights`).
+4. **Select**: only candidates with at least 60 % of the best score; then MMR
+   (λ = `mmr_lambda`) picks `n_detail + n_skim` diverse papers. The
+   `n_detail` papers with the highest relevance + impact become "read in
+   detail", the rest "skim".
+5. **Persist**: one `RecommendationBatch` per week (keyed by its Monday) and
+   its `Recommendation` rows, with the score breakdown and a one-line reason.
+
 ## Data model
 
 | Table | Content |
 |---|---|
 | `paper` | one row per paper, from the library or (later) a candidate; identifiers, metadata, metrics, folders/tags |
 | `embedding` | `(paper_id, model)` → float32 vector. Vectors from different models are never compared. |
-| `readinglist`, `listitem` | generated lists with category (detail/skim), score and score breakdown |
-| `reading` | current status (`new`, `abstract`, `skimmed`, `read`, `thorough`, `later`, `dismissed`), rating, tags, notes |
-| `statusevent` | history of every status change |
+| `recommendationbatch`, `recommendation` | weekly batches; rank, category (detail/skim), score, breakdown, reason |
+| `queueitem` | the reading queue: paper, position (1 = up next), source, added time |
+| `reading` | current status (`abstract`, `skimmed`, `read`, `thorough`, `dismissed`), rating, notes |
+| `statusevent` | every status change, including whether the paper was at the top of the queue |
+| `xpevent` | every point earned, with kind and reason |
+| `achievement` | unlocked badges |
 
 Timestamps are local ISO 8601 without a UTC offset (CUBI convention). There
-are no schema migrations yet: before v1.0 the database can be rebuilt with
-`ingest`, apart from reading history.
+are no schema migrations yet. **Reading history, notes and points live only in
+the database**, so back up `data/litresearch.sqlite`. Library data can always
+be rebuilt with `ingest`.
 
 ## External services
 
 | Service | Use | Limits without a key |
 |---|---|---|
 | Crossref | DOI by title | free; polite pool with `mailto` |
-| OpenAlex | metrics, IDs, venues | metered (~1000 credits/day); batch lookups cost 1 credit per 50 papers |
+| OpenAlex | metrics, IDs, venues, topic search | metered (~1000 credits/day); batch lookups cost 1 credit per 50 papers, a search 10 credits |
 | Semantic Scholar | SPECTER2, TLDR | one rate limit shared by all anonymous users → HTTP 429 is common; free key = 1 request/s |
 
 All responses are cached in `data/cache/http_cache.sqlite`: Crossref for
-1 year, OpenAlex for 14 days, Semantic Scholar for 30 days.
+1 year, OpenAlex look-ups for 14 days, searches and S2 recommendations for
+1 day, Semantic Scholar papers for 30 days. The tool accepts the free limits:
+when a service refuses, the affected step is skipped with a warning.
 
 ## Known data caveats
 

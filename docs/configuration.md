@@ -27,8 +27,9 @@ Sections marked *(planned)* are already validated but not used yet.
 
 ## `topics`
 
-A list of your areas of interest. Topics will steer candidate search and
-ranking *(planned, milestone 3)*.
+A list of your areas of interest. Each query runs two OpenAlex title/abstract
+searches per recommendation batch (fresh and landmark papers). Papers found by
+a topic get a relevance bonus proportional to the topic's `weight`.
 
 ```yaml
 topics:
@@ -41,22 +42,30 @@ topics:
 
 ## `excluded_terms`
 
-Papers whose title or abstract contains one of these terms are never
-recommended *(planned)*.
+Papers whose title or abstract contains one of these terms
+(case-insensitive) are never recommended.
 
 ## `sources`
 
 Switch individual data sources on or off (`true`/`false`): `semanticscholar`,
-`openalex`, and *(planned)* `pubmed`, `biorxiv`. `litresearch ingest --no-s2`
-skips Semantic Scholar for a single run.
+`openalex`, and *(planned)* `pubmed`, `biorxiv` (OpenAlex already indexes
+PubMed and bioRxiv). `--no-s2` skips Semantic Scholar for a single `ingest`
+or `recommend` run.
 
 ## `api`
 
 | Key | Meaning |
 |---|---|
-| `semanticscholar_key` | Free key; gives the tool its own rate limit (1 request/s) |
-| `openalex_key` | Optional. Without a key OpenAlex grants a small daily budget, which a normal ingest stays well inside. |
-| `contact_email` | Sent as `mailto` to Crossref and OpenAlex (polite pool) |
+| `semanticscholar_key` | Optional free key, which gives the tool its own rate limit (1 request/s). Without one, requests may hit HTTP 429; affected steps are skipped with a warning. |
+| `openalex_key` | Optional. Without a key OpenAlex grants a small daily budget (≈ 1000 credits). An ingest uses ≈ 6 credits; a recommendation batch ≈ 20 per topic query (two searches) plus a few look-ups, i.e. ≈ 110 with the example config. |
+| `contact_email` | Optional; sent as `mailto` to Crossref and OpenAlex (polite pool). Leave it `n/a` to send no personal data. |
+
+**Privacy.** The tool sends no personal data unless you set `contact_email`.
+What leaves your machine: titles/authors of library papers without a DOI
+(to Crossref), DOIs/PMIDs (to OpenAlex and Semantic Scholar), your topic
+queries (to OpenAlex), and the DOIs of library, well-rated and dismissed
+papers (to the Semantic Scholar recommendations service). Disable
+`sources.semanticscholar` to keep the latter local.
 
 ## `embeddings`
 
@@ -65,16 +74,32 @@ skips Semantic Scholar for a single run.
 | `backend` | `hybrid` | `s2`: SPECTER2 vectors from Semantic Scholar; `local`: own SPECTER2 service; `hybrid`: S2 first, local service for papers S2 has not embedded |
 | `local_url` | `n/a` | OpenAI-style `/v1/embeddings` URL of the local service; required for `local` *(local service planned)* |
 
-## `selection` *(planned, milestone 3)*
+## `selection`
 
 | Key | Default | Meaning |
 |---|---|---|
 | `n_detail` | 2 | papers to read in detail |
 | `n_skim` | 3 | papers to skim; `n_detail + n_skim` must be ≤ 5 |
 | `fresh_window_months` | 6 | how recent a paper must be to count as "current" |
-| `landmark_min_percentile` | 95 | citation percentile for "important" older papers |
+| `landmark_min_percentile` | 95 | field/year-normalised citation percentile for "important" papers |
+| `landmark_max_age_years` | 15 | landmark papers must be younger than this |
 | `mmr_lambda` | 0.7 | relevance vs. diversity trade-off (1 = only relevance) |
 | `weights` | 0.5 / 0.3 / 0.2 | weights of relevance / impact / timeliness |
+| `results_per_query` | 25 | OpenAlex results per topic query and kind |
+| `cooldown_weeks` | 8 | an unpicked recommendation may come back after this many weeks |
+
+## `queue`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `max_size` | 5 | maximum queue length (1–20). Keep it small. |
+
+## `game`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `weekly_detail_goal` | 1 | weekly quest: papers read at least at `read` depth |
+| `weekly_skim_goal` | 2 | weekly quest: further papers at least skimmed |
 
 ## `llm` *(planned, milestone 5)*
 
