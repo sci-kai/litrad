@@ -242,6 +242,14 @@ def serve(
     console.print("Stop with Ctrl+C.")
     if browser:
         threading.Timer(1.2, webbrowser.open, args=(url,)).start()
+    if cfg.backup.interval_hours > 0:
+        from litresearch.backup import start_backup_thread
+
+        console.print(
+            f"Backups every {cfg.backup.interval_hours:g} h to {cfg.backup.dir} "
+            f"(keeping {cfg.backup.keep})"
+        )
+        start_backup_thread(config.resolve(), log=lambda msg: console.print(f"[dim]{msg}[/dim]"))
     uvicorn.run(create_app(config.resolve()), host=host, port=port, log_level="warning")
 
 
@@ -290,7 +298,7 @@ def export_paperpile(config: Path = ConfigOpt):
 
 
 # reading queue, reading log and score commands register themselves on ``app``
-from litresearch import cli_reading  # noqa: E402, F401, I001
+from litresearch import cli_data, cli_reading  # noqa: E402, F401, I001
 
 
 if __name__ == "__main__":

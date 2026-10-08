@@ -7,6 +7,7 @@ rejected so that other websites cannot trigger actions in the background.
 import asyncio
 import csv
 import io
+import json
 import secrets
 from collections import OrderedDict
 from datetime import date
@@ -20,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from litresearch import __version__
+from litresearch.backup import BackupError, export_progress, latest_backup, run_backup
 from litresearch.config import load_config
 from litresearch.db import (
     Category,
@@ -257,8 +259,12 @@ def create_app(config_path: Path) -> FastAPI:
 
     def back(url: str, payload: dict | None = None) -> RedirectResponse:
         if payload:
+            # the token goes into the query, which must come before any #fragment
+            url, _, fragment = url.partition("#")
             sep = "&" if "?" in url else "?"
             url = f"{url}{sep}{urlencode({'c': celebrations.add(payload)})}"
+            if fragment:
+                url += f"#{fragment}"
         return RedirectResponse(url, status_code=303)
 
     def error(url: str, message: str) -> RedirectResponse:
@@ -593,8 +599,50 @@ def create_app(config_path: Path) -> FastAPI:
         try:
             with Session(engine) as session:
                 return render(
-                    request, "settings.html", session, cfg, groups=GROUPS, config_path=config_path
+                    request,
+                    "settings.html",
+                    session,
+                    cfg,
+                    groups=GROUPS,
+                    config_path=config_path,
+                    last_backup=latest_backup(cfg),
                 )
+        finally:
+            engine.dispose()
+
+    @app.post("/backup")
+    def backup_action():
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                try:
+                    result = run_backup(cfg, session)
+                except BackupError as exc:
+                    return error("/settings#data", f"Backup failed: {exc}")
+                return back(
+                    "/settings#data",
+                    {
+                        "kind": "success",
+                        "message": f"Backup written: {result.snapshot.name}",
+                        "events": [],
+                        "points": 0,
+                    },
+                )
+        finally:
+            engine.dispose()
+
+    @app.get("/progress.json")
+    def progress_download():
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                data = export_progress(session)
+            name = f"litresearch_progress_{date.today().strftime('%Y%m%d')}.json"
+            return Response(
+                json.dumps(data, indent=1),
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename={name}"},
+            )
         finally:
             engine.dispose()
 

@@ -4,12 +4,14 @@ Values are written back to ``config.yaml`` with ruamel.yaml so that comments
 and key order survive; the previous file is kept as ``config.yaml.bak``.
 """
 
+import io
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from ruamel.yaml import YAML
 
+from litresearch.backup import atomic_write_text
 from litresearch.config import Config
 
 
@@ -427,6 +429,14 @@ def _topics_node(topics: list[dict], existing):
     return result
 
 
+def _write_document(config_path: Path, yaml: YAML, document) -> None:
+    """Back up the old file, then replace it atomically (never half-written)."""
+    buffer = io.StringIO()
+    yaml.dump(document, buffer)
+    shutil.copy2(config_path, config_path.with_name(config_path.name + ".bak"))
+    atomic_write_text(config_path, buffer.getvalue())
+
+
 def write_values(config_path: Path, updates: dict) -> None:
     """Write plain values (no validation) keeping comments, with a backup."""
     yaml = YAML()
@@ -434,9 +444,7 @@ def write_values(config_path: Path, updates: dict) -> None:
     with open(config_path, encoding="utf-8") as handle:
         document = yaml.load(handle) or {}
     _apply(document, updates, document.get("topics"))
-    shutil.copy2(config_path, config_path.with_name(config_path.name + ".bak"))
-    with open(config_path, "w", encoding="utf-8") as handle:
-        yaml.dump(document, handle)
+    _write_document(config_path, yaml, document)
 
 
 def save_settings(config_path: Path, updates: dict) -> Config:
@@ -457,7 +465,5 @@ def save_settings(config_path: Path, updates: dict) -> Config:
     if w.relevance + w.impact + w.timeliness <= 0:
         raise SettingsError("At least one score weight must be above 0")
     _apply(document, updates, document.get("topics"))
-    shutil.copy2(config_path, config_path.with_name(config_path.name + ".bak"))
-    with open(config_path, "w", encoding="utf-8") as handle:
-        yaml.dump(document, handle)
+    _write_document(config_path, yaml, document)
     return validated

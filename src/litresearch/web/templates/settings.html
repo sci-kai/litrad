@@ -59,4 +59,18 @@
   {% endfor %}
   <div><button class="primary">💾 Save settings</button> <a class="button ghost" href="/settings">Discard changes</a></div>
 </form>
+
+<div class="card" id="data" style="margin-top:1rem">
+  <h2>🗄️ Data &amp; backups</h2>
+  <table>
+    <tr><td>Database (your progress lives here)</td><td><code>{{ cfg.paths.database.resolve() }}</code></td></tr>
+    <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · automatic every {{ cfg.backup.interval_hours | round(1) }} h while the server runs</td></tr>
+    <tr><td>Last backup</td><td>{% if last_backup %}{{ last_backup.isoformat() }}{% else %}<span class="neg">none yet</span>{% endif %}</td></tr>
+  </table>
+  <div class="row" style="margin-top:.8rem">
+    <form method="post" action="/backup"><button class="primary">🗄️ Back up now</button></form>
+    <a class="button" href="/progress.json">⬇ Download progress (JSON)</a>
+  </div>
+  <p class="muted" style="margin-top:.6rem">Tip: point <code>backup.dir</code> to a cloud-synced folder, but keep the database itself local. Restore with <code>litresearch restore</code>; merge progress into another installation with <code>litresearch import-progress</code> (see docs/data-and-backups.md).</p>
+</div>
 {% endblock %}

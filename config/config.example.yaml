@@ -74,6 +74,14 @@ game:
   weekly_detail_goal: 1
   weekly_skim_goal: 2
 
+backup:
+  # consistent database snapshots + portable progress exports (JSON);
+  # point this to a cloud-synced folder, but keep paths.database local
+  dir: data/backups
+  keep: 14
+  # `litresearch serve` backs up at start and then every N hours (0 = off)
+  interval_hours: 24
+
 llm:
   enabled: true
   # any OpenAI-compatible endpoint (LM Studio, Ollama, institutional server)

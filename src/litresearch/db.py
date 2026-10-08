@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from pydantic import NaiveDatetime
-from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint, inspect, text
+from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint, event, inspect, text
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 
@@ -167,9 +167,20 @@ def load_embedding(embedding: Embedding) -> np.ndarray:
     return np.frombuffer(embedding.vector, dtype=np.float32)
 
 
+# seconds a writer waits for another writer (e.g. CLI while the web UI runs)
+BUSY_TIMEOUT = 30
+
+
 def get_engine(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}")
+    engine = create_engine(f"sqlite:///{path}", connect_args={"timeout": BUSY_TIMEOUT})
+
+    @event.listens_for(engine, "connect")
+    def _durable(connection, _record):
+        # every commit reaches the disk before it returns, also on SD cards
+        connection.execute("PRAGMA synchronous=FULL")
+
+    return engine
 
 
 def add_missing_columns(engine) -> list[str]:

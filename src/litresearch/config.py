@@ -126,6 +126,15 @@ class Game(_Base):
     drop_penalty: int = Field(15, ge=0)
 
 
+class Backup(_Base):
+    # put this in a cloud-synced folder (Nextcloud, Dropbox, Syncthing, rclone mount ...)
+    dir: Path = Path("data/backups")
+    # number of snapshots (and progress exports) to keep
+    keep: int = Field(14, ge=1, le=1000)
+    # the web server makes a backup at start and then every this many hours (0 = off)
+    interval_hours: float = Field(24, ge=0)
+
+
 class Llm(_Base):
     enabled: bool = False
     base_url: str | None = None
@@ -154,6 +163,7 @@ class Config(_Base):
     selection: Selection = Selection()
     queue: Queue = Queue()
     game: Game = Game()
+    backup: Backup = Backup()
     llm: Llm = Llm()
     schedule: Schedule = Schedule()
     web: Web = Web()
