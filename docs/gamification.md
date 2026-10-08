@@ -33,6 +33,18 @@ planned to read first), not volume. All values are constants at the top of
 | 🗓 **Weekly quest** | +50 | once per week, see below |
 | 🏅 **Badge** | +25 | per unlocked badge |
 
+### Penalty
+
+| | XP | Condition |
+|---|---|---|
+| ⚠️ **Picked recommendation left unread** | −`game.drop_penalty` (15) | a paper you put on the queue **from the recommendations** leaves it (removed, or marked not relevant) before you at least skimmed it |
+
+Papers you added yourself or from your library can be removed for free.
+Dismissing a recommendation you never picked is free as well. The penalty
+discourages picking papers impulsively and then abandoning them. Penalties
+can push the total, and therefore the level, down; the level never drops
+below 1.
+
 Paper-specific bonuses are paid once per paper.
 
 ## Streaks
@@ -100,8 +112,23 @@ months.
   queue. High values mean you follow your own priorities.
 - **Depth**: share of papers read at least at `read` depth, as opposed to
   only skimmed.
-- **Queue nudge**: `queue` and `score` warn when the top paper has been
-  waiting 14 days or more. Read it, or drop it if it no longer matters.
+- **Queue nudge**: the dashboard, `queue` and `score` warn when the top paper
+  has been waiting 14 days or more. Read it, or drop it if it no longer
+  matters.
+
+## Overviews in the web UI
+
+- **Weekly reports**: one report card per week with grade, XP, the papers
+  you read (deepest level), points by kind and badges unlocked.
+- **XP ledger**: every transaction with running balance, filterable by kind,
+  totals earned and lost, TSV export (`litresearch_xp_ledger.tsv`).
+- **Progress**: XP per week for the last 12 weeks, a 26-week reading calendar,
+  personal bests (best week, busiest week, longest streak, quests, thorough
+  reads), badge gallery with progress bars, career ladder.
+- **Next goals** on the dashboard: what is missing for the weekly quest, XP
+  to the next level, the closest badge, and a streak reminder.
+- **Celebrations**: XP toast with count-up, confetti, level-up and badge
+  pop-ups (see [web-ui.md](web-ui.md)).
 
 Every point is stored as an `XpEvent` with its reason, so the score can be
 audited (`history`) and is not affected by later rule changes.

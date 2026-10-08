@@ -21,6 +21,16 @@
 - Reading log (`read`, `note`, `dismiss`, `show`, `history`).
 - Gamification (`score`): XP, bonuses, weekly streaks, weekly quest, levels,
   badges, weekly grade, reading impact factor.
+- Local web UI (`serve`): dashboard, recommendations with an evidence tree and
+  filter funnel, reading queue, library search, paper pages with notes,
+  progress, weekly reports, XP ledger (TSV export), settings, "How it works";
+  animations for rewards.
+- Every recommendation stores its evidence; batches store a filter funnel and
+  the settings used. All scoring constants are configurable settings.
+- Penalty for picked recommendations that leave the queue unread
+  (`game.drop_penalty`).
+- Additive schema migration for existing databases.
+- Documentation: `docs/recommendation-criteria.md`, `docs/web-ui.md`.
 - Offline test suite with recorded API responses; live smoke test behind
   `--network`.
 - Documentation in `docs/`.

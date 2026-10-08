@@ -43,6 +43,9 @@ Obsidian export.
 | `reading.py` | Paper references, queue operations, reading log, notes |
 | `game.py` | XP rules, streaks, quests, levels, badges, statistics |
 | `cli_reading.py` | Queue/reading/score commands |
+| `web/app.py` | FastAPI routes, celebration tokens, same-origin check |
+| `web/settings.py` | Settings schema (labels, help, ranges) and comment-preserving save |
+| `web/templates/`, `web/static/` | Jinja2 pages, CSS and JS (no external assets) |
 
 ## Ingest pipeline
 
@@ -108,8 +111,13 @@ in the report and the remaining steps still run.
    (λ = `mmr_lambda`) picks `n_detail + n_skim` diverse papers. The
    `n_detail` papers with the highest relevance + impact become "read in
    detail", the rest "skim".
-5. **Persist**: one `RecommendationBatch` per week (keyed by its Monday) and
-   its `Recommendation` rows, with the score breakdown and a one-line reason.
+5. **Persist**: one `RecommendationBatch` per week (keyed by its Monday), with
+   the filter funnel and a snapshot of the settings, and its `Recommendation`
+   rows with the score breakdown, the full evidence (shown as an evidence tree
+   in the UI) and a one-line reason.
+
+All constants are settings; the full criteria are in
+[recommendation-criteria.md](recommendation-criteria.md).
 
 ## Data model
 
@@ -124,8 +132,9 @@ in the report and the remaining steps still run.
 | `xpevent` | every point earned, with kind and reason |
 | `achievement` | unlocked badges |
 
-Timestamps are local ISO 8601 without a UTC offset (CUBI convention). There
-are no schema migrations yet. **Reading history, notes and points live only in
+Timestamps are local ISO 8601 without a UTC offset (CUBI convention).
+`init_db` adds new columns to existing tables (`add_missing_columns`), which
+covers additive schema changes; anything else needs a manual migration. **Reading history, notes and points live only in
 the database**, so back up `data/litresearch.sqlite`. Library data can always
 be rebuilt with `ingest`.
 

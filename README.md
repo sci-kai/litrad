@@ -17,8 +17,11 @@ and notes are logged, and a **game layer** keeps you motivated: XP, streaks,
 weekly quests, career levels from *Curious Undergrad* to *Hallmarks Author*,
 badges and a weekly report card.
 
-**Status:** `v0.1.0-dev`. Everything runs from the command line; the phone web
-app is next. See the [roadmap](#roadmap).
+Everything is **transparent**: each recommendation shows an evidence tree,
+every criterion is documented, and every parameter can be changed in the UI.
+
+**Status:** `v0.1.0-dev`. Local web UI and command line; a phone app (PWA) is
+planned. See the [roadmap](#roadmap).
 
 ## Quick start
 
@@ -33,7 +36,9 @@ cp config/config.example.yaml config/config.yaml   # set paths.bibtex, topics, A
 .venv/bin/litresearch score
 ```
 
-The weekly workflow is described in [docs/usage.md](docs/usage.md).
+Or use the web UI: `litresearch serve` opens it in your browser
+(see [docs/web-ui.md](docs/web-ui.md)). The weekly workflow is described in
+[docs/usage.md](docs/usage.md).
 
 Full instructions, including the Paperpile auto-export and Google Drive sync:
 [docs/setup.md](docs/setup.md).
@@ -51,7 +56,7 @@ Full instructions, including the Paperpile auto-export and Google Drive sync:
 | `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant | ✅ |
 | `score`, `history` | level, streak, weekly grade, badges / reading log | ✅ |
-| `serve` | web app / phone PWA | milestone 4 |
+| `serve [--port] [--no-browser]` | local web UI | ✅ |
 | `export`, `sync-notes` | Obsidian export and note round-trip | milestone 6 |
 | `export-paperpile` | BibTeX with reading-status keywords, for import into Paperpile | milestone 6 |
 
@@ -61,6 +66,8 @@ Global option: `-v/--verbose` shows HTTP requests and retries.
 
 - [Setup](docs/setup.md): installation, Paperpile export, sync, first ingest, troubleshooting
 - [Usage](docs/usage.md): the weekly loop of recommend, queue, read and score
+- [Web UI](docs/web-ui.md): pages, rewards, removing papers, settings
+- [Recommendation criteria](docs/recommendation-criteria.md): every rule and formula, with the evidence tree
 - [Gamification](docs/gamification.md): points, bonuses, levels, badges, metrics
 - [Configuration](docs/configuration.md): every config key
 - [Architecture](docs/architecture.md): pipeline, data model, external services and their limits
@@ -82,7 +89,7 @@ auto-export is the interface.
 1. ✅ Skeleton: config, database, CLI
 2. ✅ Library ingest and enrichment
 3. ✅ Candidate search, scoring, weekly ≤ 5-paper detail/skim list
-4. ✅ Reading queue, reading log, gamification · ⏳ web app (PWA) for phone/laptop
+4. ✅ Reading queue, reading log, gamification, local web UI · ⏳ phone app (PWA)
 5. LLM summaries via an OpenAI-compatible endpoint (LM Studio / Ollama)
 6. Obsidian export/sync, Paperpile write-back file, systemd deployment
 7. Feedback loop: ✅ dismissals and good ratings already steer the S2 recommendations; ⏳ weight tuning

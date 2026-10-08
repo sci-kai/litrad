@@ -1,5 +1,8 @@
 # Usage: the weekly reading loop
 
+The easiest way is the web UI: `litresearch serve` (see [web-ui.md](web-ui.md)).
+Everything below also works on the command line.
+
 ```
 recommend  ──pick──>  queue (max 5, ordered)  ──next──>  read ... ──>  score
    ^                       ^                                  │
@@ -58,11 +61,14 @@ litresearch queue add 10.1038/s41586-024-07894-z   # any DOI (metadata from Open
 litresearch queue add --title "Preprint from the lab meeting" --url https://...
 litresearch queue                     # show it
 litresearch queue move q4 1           # reorder
-litresearch queue drop q3             # remove, no penalty
+litresearch queue drop q3             # remove (costs XP for picked recommendations left unread)
 ```
 
 When the queue is full (`queue.max_size`, default 5) nothing can be added
-until you read or drop something. That limit is intentional.
+until you read or drop something. That limit is intentional. Removing a paper
+you picked from the recommendations before at least skimming it costs
+`game.drop_penalty` XP (default 15); papers you added yourself are free to
+remove.
 
 ### Referring to papers
 

@@ -51,6 +51,7 @@ git branch -d feat-scoring
 | `test_reading.py` | references, queue order/limits, reading log, notes, ratings |
 | `test_game.py` | XP rules, anti-farming, bonuses, streaks, quests, badges, levels, statistics |
 | `test_cli.py` | all CLI commands (plain console, fake APIs) |
+| `test_web.py` | every page, actions, celebrations, penalties, settings round trip (comments kept), same-origin and redirect checks, TSV export |
 | `test_config.py`, `test_db.py` | config validation, status history |
 | `test_live.py` | smoke test against the real APIs (`--network`) |
 

@@ -87,6 +87,19 @@ papers (to the Semantic Scholar recommendations service). Disable
 | `weights` | 0.5 / 0.3 / 0.2 | weights of relevance / impact / timeliness |
 | `results_per_query` | 25 | OpenAlex results per topic query and kind |
 | `cooldown_weeks` | 8 | an unpicked recommendation may come back after this many weeks |
+| `similarity_share` | 0.7 | relevance = share × library-similarity rank + (1 − share) × topic bonus |
+| `knn` | 5 | library papers averaged for the similarity |
+| `s2_only_topic_bonus` | 0.5 | topic bonus of papers found only by S2 recommendations |
+| `top_venue_citedness` | 30 | journal 2-year mean citedness that counts as impact 1.0 (fresh papers) |
+| `unknown_venue_impact` | 0.05 | impact of fresh papers without a known journal |
+| `early_citation_bonus` / `early_citation_saturation` | 0.2 / 50 | extra impact for already-cited fresh papers |
+| `citations_per_year_saturation` | 200 | citations/year for impact 1.0 when no percentile is known |
+| `landmark_timeliness` | 0.4 | timeliness of landmark papers |
+| `min_relative_score` | 0.6 | picks need this share of the best score |
+
+All of these are explained with formulas in
+[recommendation-criteria.md](recommendation-criteria.md) and editable in the
+web UI (Settings).
 
 ## `queue`
 
@@ -100,13 +113,16 @@ papers (to the Semantic Scholar recommendations service). Disable
 |---|---|---|
 | `weekly_detail_goal` | 1 | weekly quest: papers read at least at `read` depth |
 | `weekly_skim_goal` | 2 | weekly quest: further papers at least skimmed |
+| `drop_penalty` | 15 | XP lost when a picked recommendation leaves the queue unread (0 = off) |
 
 ## `llm` *(planned, milestone 5)*
 
 Any OpenAI-compatible endpoint (LM Studio, Ollama, an institutional server):
 `enabled`, `base_url`, `model`, `api_key`.
 
-## `schedule` / `web` *(planned)*
+## `schedule` *(planned)* / `web`
 
 `schedule.cron`: when to build a new list (cron syntax).
-`web.host`, `web.port`, `web.password_hash`: the web app.
+`web.port` is the default port of `litresearch serve`. `web.host` and
+`web.password_hash` are not used yet: the server listens on 127.0.0.1 unless
+you pass `--host`.
