@@ -317,7 +317,8 @@ def test_settings_round_trip_keeps_comments(app_env):
     client, path, _ = app_env
     data = settings_form(client)
     data["selection.mmr_lambda"] = "0.55"
-    data["game.drop_penalty"] = "25"
+    data["queue.max_size"] = "4"
+    data["game.drop_penalty"] = "25"  # game rules are not settings: ignored here
     data["topic_name"] = ["evo", "ctdna"]
     data["topic_weight"] = ["1.0", "0.6"]
     data["topic_queries"] = ["clonal evolution\ntumour phylogeny", "circulating tumor DNA"]
@@ -328,14 +329,15 @@ def test_settings_round_trip_keeps_comments(app_env):
     assert "# my litresearch config" in text and "# tumour evolution is my main topic" in text
     assert "# a full week of papers" in text
     cfg = load_config(path)
-    assert cfg.selection.mmr_lambda == 0.55 and cfg.game.drop_penalty == 25
+    assert cfg.selection.mmr_lambda == 0.55 and cfg.queue.max_size == 4
+    assert cfg.game.drop_penalty == 15  # only the profile page sets game rules
     assert [t.name for t in cfg.topics] == ["evo", "ctdna"]
     assert cfg.topics[0].mesh_terms == ["Clonal Evolution"]  # untouched field kept
     assert cfg.topics[0].queries == ["clonal evolution", "tumour phylogeny"]
     assert cfg.excluded_terms == ["veterinary", "mouse only"]
     assert path.with_name("config.yaml.bak").exists()
     how = client.get("/how").text
-    assert "−25" in how and "0.55" in how and "ctdna" in how
+    assert "0.55" in how and "ctdna" in how
 
 
 def test_invalid_settings_change_nothing(app_env):

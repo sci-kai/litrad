@@ -22,6 +22,7 @@ from litresearch.backup import (
     rotate,
     run_backup,
     snapshot,
+    verify_checksum,
 )
 from litresearch.config import Config
 from litresearch.db import (
@@ -203,7 +204,9 @@ def test_export_contents(source):
     _, engine = source
     with Session(engine) as session:
         data = export_progress(session, AT)
-    assert data["format_version"] == 1 and data["exported_at"] == "2026-10-05T09:00:00"
+    assert data["format_version"] == 2 and data["exported_at"] == "2026-10-05T09:00:00"
+    assert data["profile"]["name"] == "My reading journey"  # auto-started by the first read
+    assert verify_checksum(data) is True
     assert len(data["readings"]) == 3 and len(data["queue"]) == 1  # A left the queue
     assert {p["title"] for p in data["papers"].values()} == {
         "Clonal evolution",

@@ -17,32 +17,40 @@ Two complementary formats are written into ``backup.dir``:
   ids differ between machines.
 """
 
+import hashlib
+import hmac
 import json
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
-from sqlmodel import Session, func, select
+from sqlmodel import Session, delete, func, select
 
 from litresearch import __version__
 from litresearch.config import Config
 from litresearch.db import (
     Achievement,
+    Category,
     Paper,
+    Profile,
     QueueItem,
     Reading,
     ReadStatus,
+    Recommendation,
+    RecommendationBatch,
     StatusEvent,
     XpEvent,
     now,
 )
+from litresearch.rules import GameRules
 
 FORMAT = "litresearch-progress"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2  # 2: profile with locked rules, recommendations, checksum
 SNAPSHOT_PREFIX = "litresearch_"
 PROGRESS_PREFIX = "litresearch_progress_"
 
@@ -182,44 +190,97 @@ def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _canonical(data: dict) -> str:
+    return json.dumps({k: v for k, v in data.items() if k != "checksum"}, sort_keys=True)
+
+
+def checksum(data: dict) -> str:
+    """SHA-256 over the file content; detects edits made outside the tool."""
+    return hashlib.sha256(_canonical(data).encode()).hexdigest()
+
+
+def verify_checksum(data: dict) -> bool | None:
+    """True/False, or None for files without a checksum (format version 1)."""
+    if "checksum" not in data:
+        return None
+    return hmac.compare_digest(str(data["checksum"]), checksum(data))
+
+
+PAPER_FIELDS = (
+    "doi",
+    "pmid",
+    "bibtex_key",
+    "title",
+    "authors",
+    "year",
+    "venue",
+    "url",
+    "citation_percentile",
+    "topics",
+    "folders",
+    "in_library",
+)
+
+
 def export_progress(session: Session, moment: datetime | None = None) -> dict:
-    """All personal data, independent of internal paper ids."""
+    """The whole profile: rules, progress and recommendations, independent of ids."""
     readings = session.exec(select(Reading)).all()
     events = session.exec(select(StatusEvent).order_by(StatusEvent.at, StatusEvent.id)).all()
     queue = session.exec(select(QueueItem).order_by(QueueItem.position)).all()
     xp = session.exec(select(XpEvent).order_by(XpEvent.at, XpEvent.id)).all()
     achievements = session.exec(select(Achievement)).all()
+    batches = session.exec(select(RecommendationBatch).order_by(RecommendationBatch.id)).all()
+    recommendations = session.exec(
+        select(Recommendation).order_by(Recommendation.batch_id, Recommendation.rank)
+    ).all()
+    profile = session.exec(select(Profile).order_by(Profile.id)).first()
 
     ids = (
         {r.paper_id for r in readings}
         | {e.paper_id for e in events}
         | {q.paper_id for q in queue}
         | {e.paper_id for e in xp if e.paper_id is not None}
+        | {r.paper_id for r in recommendations}
     )
     papers = {}
     for paper_id in sorted(ids):
         paper = session.get(Paper, paper_id)
         if paper is None:
             continue
-        papers[f"p{paper_id}"] = {
-            "doi": paper.doi,
-            "pmid": paper.pmid,
-            "bibtex_key": paper.bibtex_key,
-            "title": paper.title,
-            "authors": paper.authors,
-            "year": paper.year,
-            "venue": paper.venue,
-            "url": paper.url,
-        }
+        info = {name: getattr(paper, name) for name in PAPER_FIELDS}
+        info["pub_date"] = _iso(paper.pub_date)
+        papers[f"p{paper_id}"] = info
 
     def ref(paper_id):
         return f"p{paper_id}" if paper_id is not None and f"p{paper_id}" in papers else None
 
-    return {
+    items_by_batch: dict[int, list] = {}
+    for rec in recommendations:
+        if ref(rec.paper_id):
+            items_by_batch.setdefault(rec.batch_id, []).append(
+                {
+                    "paper": ref(rec.paper_id),
+                    "rank": rec.rank,
+                    "category": rec.category.value,
+                    "score": rec.score,
+                    "breakdown": rec.breakdown,
+                    "reason": rec.reason,
+                }
+            )
+
+    data = {
         "format": FORMAT,
         "format_version": FORMAT_VERSION,
         "app_version": __version__,
         "exported_at": _iso(moment or now()),
+        "profile": {
+            "name": profile.name,
+            "created_at": _iso(profile.created_at),
+            "rules": profile.rules,
+            "fingerprint": profile.fingerprint,
+        }
+        if profile
+        else None,
         "papers": papers,
         "readings": [
             {
@@ -265,7 +326,21 @@ def export_progress(session: Session, moment: datetime | None = None) -> dict:
         "achievements": [
             {"code": a.code, "unlocked_at": _iso(a.unlocked_at)} for a in achievements
         ],
+        "recommendations": [
+            {
+                "week_start": _iso(b.week_start),
+                "created_at": _iso(b.created_at),
+                "n_candidates": b.n_candidates,
+                "warnings": b.warnings,
+                "funnel": b.funnel,
+                "params": b.params,
+                "items": items_by_batch.get(b.id, []),
+            }
+            for b in batches
+        ],
     }
+    data["checksum"] = checksum(data)
+    return data
 
 
 @dataclass
@@ -279,6 +354,8 @@ class ImportReport:
     xp_added: int = 0
     achievements_added: int = 0
     queue_added: int = 0
+    batches_added: int = 0
+    profile_adopted: bool = False
     queue_skipped: list[str] = field(default_factory=list)
 
     def lines(self) -> list[str]:
@@ -290,7 +367,10 @@ class ImportReport:
             f"XP transactions:           {self.xp_added}",
             f"Badges:                    {self.achievements_added}",
             f"Queue entries:             {self.queue_added}",
+            f"Recommendation batches:    {self.batches_added}",
         ]
+        if self.profile_adopted:
+            out.append("Profile and its locked rules taken over from the file.")
         if self.queue_skipped:
             out.append(f"Not queued (queue full):   {', '.join(self.queue_skipped)}")
         return out
@@ -326,20 +406,60 @@ def _merge_notes(local: str, incoming: str) -> str:
     return "\n\n".join(entries)
 
 
-def import_progress(session: Session, cfg: Config, data: dict) -> ImportReport:
-    """Merge an export into this database. Importing the same file twice is a no-op.
-
-    - readings: the newer ``updated_at`` wins; notes from both sides are kept;
-    - history, XP and badges: added when not present yet;
-    - queue: entries are appended while there is room.
-    Nothing is written if the file is invalid.
-    """
-    if data.get("format") != FORMAT:
+def check_file(data: dict, allow_modified: bool = False) -> None:
+    if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise BackupError("Not a litresearch progress export")
     if data.get("format_version", 0) > FORMAT_VERSION:
         raise BackupError("This export was made by a newer litresearch version")
+    if verify_checksum(data) is False and not allow_modified:
+        raise BackupError(
+            "The file was modified outside litresearch (checksum mismatch); refusing to load it"
+        )
+
+
+def import_progress(
+    session: Session,
+    cfg: Config,
+    data: dict,
+    allow_different_rules: bool = False,
+    allow_modified: bool = False,
+    commit: bool = True,
+) -> ImportReport:
+    """Merge an export into this database. Importing the same file twice is a no-op.
+
+    - readings: the newer ``updated_at`` wins; notes from both sides are kept;
+    - history, XP, badges and recommendation batches: added when not present;
+    - queue: entries are appended while there is room;
+    - profile: adopted if this database has none. XP earned under different
+      locked rules is not mixed unless ``allow_different_rules``.
+    Nothing is written if the file is invalid.
+    """
+    check_file(data, allow_modified)
     report = ImportReport()
     try:
+        incoming_profile = data.get("profile")
+        local_profile = session.exec(select(Profile).order_by(Profile.id)).first()
+        if incoming_profile and local_profile:
+            if incoming_profile["fingerprint"] != local_profile.fingerprint:
+                if not allow_different_rules:
+                    raise BackupError(
+                        "The file was played with different game rules "
+                        f"({incoming_profile['fingerprint']} vs. {local_profile.fingerprint}); "
+                        "merging would mix incomparable points. Load it as a profile instead."
+                    )
+        elif incoming_profile:
+            rules = GameRules.model_validate(incoming_profile["rules"])
+            session.add(
+                Profile(
+                    name=incoming_profile["name"],
+                    created_at=_dt(incoming_profile["created_at"]) or now(),
+                    rules=rules.model_dump(mode="json"),
+                    fingerprint=rules.fingerprint(),
+                    app_version=__version__,
+                )
+            )
+            report.profile_adopted = True
+
         ids: dict[str, int] = {}
         for key, info in data.get("papers", {}).items():
             paper = _find_paper(session, info)
@@ -350,8 +470,12 @@ def import_progress(session: Session, cfg: Config, data: dict) -> ImportReport:
                     pmid=info.get("pmid"),
                     authors=info.get("authors") or [],
                     year=info.get("year"),
+                    pub_date=date.fromisoformat(info["pub_date"]) if info.get("pub_date") else None,
                     venue=info.get("venue"),
                     url=info.get("url"),
+                    citation_percentile=info.get("citation_percentile"),
+                    topics=info.get("topics") or [],
+                    folders=info.get("folders") or [],
                 )
                 session.add(paper)
                 session.flush()
@@ -382,9 +506,8 @@ def import_progress(session: Session, cfg: Config, data: dict) -> ImportReport:
                 report.notes_merged += 1
             if incoming_time > local.updated_at:
                 local.status = ReadStatus(item["status"])
-                local.rating = (
-                    item.get("rating") if item.get("rating") is not None else local.rating
-                )
+                if item.get("rating") is not None:
+                    local.rating = item["rating"]
                 local.updated_at = incoming_time
                 report.readings_updated += 1
             session.add(local)
@@ -438,6 +561,40 @@ def import_progress(session: Session, cfg: Config, data: dict) -> ImportReport:
                 session.add(Achievement(code=item["code"], unlocked_at=_dt(item["unlocked_at"])))
                 report.achievements_added += 1
 
+        for batch in data.get("recommendations", []):
+            week, created = date.fromisoformat(batch["week_start"]), _dt(batch["created_at"])
+            exists = session.exec(
+                select(RecommendationBatch).where(
+                    RecommendationBatch.week_start == week,
+                    RecommendationBatch.created_at == created,
+                )
+            ).first()
+            if exists:
+                continue
+            stored = RecommendationBatch(
+                week_start=week,
+                created_at=created,
+                n_candidates=batch.get("n_candidates", 0),
+                warnings=batch.get("warnings") or [],
+                funnel=batch.get("funnel"),
+                params=batch.get("params"),
+            )
+            session.add(stored)
+            session.flush()
+            for item in batch.get("items", []):
+                session.add(
+                    Recommendation(
+                        batch_id=stored.id,
+                        paper_id=ids[item["paper"]],
+                        rank=item["rank"],
+                        category=Category(item.get("category", "open")),
+                        score=item["score"],
+                        breakdown=item.get("breakdown") or {},
+                        reason=item.get("reason", ""),
+                    )
+                )
+            report.batches_added += 1
+
         queued = session.exec(select(QueueItem).order_by(QueueItem.position)).all()
         position = len(queued)
         present = {q.paper_id for q in queued}
@@ -462,7 +619,10 @@ def import_progress(session: Session, cfg: Config, data: dict) -> ImportReport:
             )
             present.add(paper_id)
             report.queue_added += 1
-        session.commit()
+        if commit:
+            session.commit()
+        else:
+            session.flush()
     except (KeyError, ValueError, TypeError) as error:
         session.rollback()
         raise BackupError(f"Invalid progress file: {error}") from error
@@ -470,6 +630,123 @@ def import_progress(session: Session, cfg: Config, data: dict) -> ImportReport:
         session.rollback()
         raise
     return report
+
+
+PERSONAL_TABLES = (
+    Recommendation,
+    RecommendationBatch,
+    QueueItem,
+    StatusEvent,
+    XpEvent,
+    Achievement,
+    Reading,
+    Profile,
+)
+
+
+def reset_progress(session: Session, commit: bool = True) -> None:
+    """Delete the profile and all personal data (the library stays)."""
+    for model in PERSONAL_TABLES:
+        session.exec(delete(model))
+    if commit:
+        session.commit()
+
+
+def load_profile(session: Session, cfg: Config, data: dict, allow_modified: bool = False):
+    """Replace the current profile and progress with a saved one (one transaction)."""
+    check_file(data, allow_modified)
+    try:
+        reset_progress(session, commit=False)
+        report = import_progress(session, cfg, data, allow_modified=allow_modified, commit=False)
+        session.commit()
+    except BaseException:
+        session.rollback()
+        raise
+    return report
+
+
+# --- saved profiles and comparison ---------------------------------------------------------
+
+PROFILE_PREFIX = "litresearch_profile_"
+
+
+def slug(text: str) -> str:
+    """File-name-safe version of a profile name (a-z, 0-9 and -)."""
+    cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return cleaned[:40] or "profile"
+
+
+def save_profile_file(session: Session, directory: Path, moment: datetime | None = None) -> Path:
+    moment = moment or now()
+    data = export_progress(session, moment)
+    name = (data["profile"] or {}).get("name", "no-profile")
+    path = directory / f"{PROFILE_PREFIX}{slug(name)}_{stamp(moment)}.json"
+    atomic_write_text(path, json.dumps(data, indent=1))
+    return path
+
+
+def saved_files(directory: Path) -> list[Path]:
+    """Saved profiles and progress exports in a folder, newest first."""
+    if not directory.exists():
+        return []
+    files = list(directory.glob(f"{PROFILE_PREFIX}*.json")) + list(
+        directory.glob(f"{PROGRESS_PREFIX}*.json")
+    )
+    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def memory_engine():
+    """An empty in-memory litresearch database (for comparisons)."""
+    from sqlalchemy.pool import StaticPool
+    from sqlmodel import SQLModel, create_engine
+
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    SQLModel.metadata.create_all(engine)
+    return engine
+
+
+def summarize(data: dict, cfg: Config, label: str = "") -> dict:
+    """Key figures of a saved profile, computed in a throw-away database."""
+    from litresearch.game import level_for, reading_impact_factor, stats
+
+    check_file(data, allow_modified=True)
+    engine = memory_engine()
+    try:
+        with Session(engine) as session:
+            import_progress(session, cfg, data, allow_modified=True)
+            profile = session.exec(select(Profile)).first()
+            rules = GameRules.model_validate(profile.rules) if profile else cfg.game
+            moment = _dt(data.get("exported_at")) or now()
+            figures = stats(session, moment.date(), rules)
+            level = level_for(figures["xp"], rules)
+            badges = len(session.exec(select(Achievement)).all())
+            read = figures["papers_read"]
+            return {
+                "label": label,
+                "name": profile.name if profile else "(no profile)",
+                "started": profile.created_at if profile else None,
+                "exported_at": moment,
+                "fingerprint": profile.fingerprint if profile else None,
+                "checksum_ok": verify_checksum(data),
+                "xp": figures["xp"],
+                "level": level,
+                "papers_read": read,
+                "thorough": figures["thorough"],
+                "best_streak": figures["best_streak"],
+                "quests": figures["quests"],
+                "badges": badges,
+                "discipline": figures["frogs"] / read if read else 0.0,
+                "depth": figures["deep_reads"] / read if read else 0.0,
+                "notes_chars": figures["notes_chars"],
+                "rif": reading_impact_factor(session, moment.date()),
+                "weeks": len(
+                    {e.at.date().isocalendar()[:2] for e in session.exec(select(StatusEvent)).all()}
+                ),
+            }
+    finally:
+        engine.dispose()
 
 
 # --- automatic backups while the web UI runs ---------------------------------------------

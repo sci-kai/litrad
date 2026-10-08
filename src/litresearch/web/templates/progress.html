@@ -7,11 +7,11 @@
   <div class="card level-card">
     <div class="ring">
       <svg width="132" height="132"><circle class="track" cx="66" cy="66" r="55"/><circle class="fill" cx="66" cy="66" r="55" data-ring="{{ level.progress(stats.xp) }}"/></svg>
-      <div class="center"><div><span style="font-size:2rem">{{ level_icons[level.number - 1] }}</span><b>Lv {{ level.number }}</b></div></div>
+      <div class="center"><div><span style="font-size:2rem">{{ level.icon }}</span><b>Lv {{ level.number }}</b></div></div>
     </div>
     <div>
       <div class="title">{{ level.title }}</div>
-      <p><b>{{ stats.xp }}</b> XP{% if level.next_floor %} · {{ level.next_floor - stats.xp }} XP to <b>{{ levels[level.number][1] }}</b>{% else %} · maximum level reached 🎉{% endif %}</p>
+      <p><b>{{ stats.xp }}</b> XP{% if level.next_floor %} · {{ level.next_floor - stats.xp }} XP to <b>{{ level.next_title }}</b>{% else %} · maximum level reached 🎉{% endif %}</p>
       {% for hint in hints %}<div class="hint">💡 <span>{{ hint }}</span></div>{% endfor %}
     </div>
   </div>
@@ -59,24 +59,27 @@
 
 <div class="card" style="margin-top:1rem">
   {% set owned = badges | selectattr("2") | list %}
-  <h2>🏅 Badges <small class="muted">{{ owned | length }}/{{ badges | length }} · +25 XP each</small></h2>
+  <h2>🏅 Badges <small class="muted">{{ owned | length }}/{{ badges | length }} · +{{ rules.badge_xp }} XP each</small></h2>
+  {% for group, members in badges | groupby("0.group") %}
+  <h3 style="margin:.8rem 0 .4rem">{{ group }} <small class="muted">{{ members | selectattr("2") | list | length }}/{{ members | length }}</small></h3>
   <div class="badges">
-    {% for badge, value, unlocked in badges %}
+    {% for badge, value, unlocked in members %}
     <div class="badge {{ 'unlocked' if unlocked else 'locked' }}" title="{{ badge.description }}">
-      <span class="emoji">{{ badge_icons.get(badge.code, "🏅") }}</span>
+      <span class="emoji">{{ badge.icon }}</span>
       <div class="name">{{ badge.name }}</div>
       <div class="desc">{{ badge.description }}</div>
       {% if not unlocked %}<div class="mini-bar"><span style="width: {{ (value / badge.target * 100) | round(1) }}%"></span></div><small class="muted">{{ value }}/{{ badge.target }}</small>{% else %}<small style="color: var(--gold); font-weight: 700">unlocked</small>{% endif %}
     </div>
     {% endfor %}
   </div>
+  {% endfor %}
 </div>
 
 <div class="card" style="margin-top:1rem">
   <h2>🪜 Career ladder</h2>
   <div class="row" style="gap:.4rem">
-    {% for floor, title in levels %}
-    <span class="chip {{ 'queued' if loop.index == level.number }}" title="{{ floor }} XP">{{ level_icons[loop.index0] }} {{ title }} <small>{{ floor }}</small></span>
+    {% for step in levels %}
+    <span class="chip {{ 'queued' if loop.index == level.number }}" title="{{ step.xp }} XP">{{ step.icon }} {{ step.title }} <small>{{ step.xp }}</small></span>
     {% endfor %}
   </div>
   <p class="muted" style="margin-top:.6rem">How points work: <a href="/how#game">rules</a> · every point: <a href="/ledger">XP ledger</a></p>

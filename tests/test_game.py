@@ -16,8 +16,6 @@ from litresearch.db import (
     init_db,
 )
 from litresearch.game import (
-    BADGE_XP,
-    LEVELS,
     grade,
     ledger,
     level_for,
@@ -33,6 +31,7 @@ from litresearch.game import (
     weekly_summaries,
 )
 from litresearch.reading import queue_add, record_reading
+from litresearch.rules import GameRules
 
 MONDAY = datetime(2026, 10, 5, 9, 0, 0)
 
@@ -61,10 +60,12 @@ def kinds(award) -> dict[str, int]:
 
 def test_levels():
     assert level_for(0).number == 1 and level_for(0).title == "Curious Undergrad"
-    assert level_for(99).number == 1 and level_for(100).number == 2
-    assert level_for(200).progress(200) == pytest.approx(0.5)
+    assert level_for(59).number == 1 and level_for(60).number == 2
+    assert level_for(100).progress(100) == pytest.approx(0.5)  # 60 -> 140
+    assert level_for(0).next_title == "Bachelor Student" and level_for(0).icon == "🎓"
     top = level_for(10**6)
-    assert top.number == len(LEVELS) and top.next_floor is None and top.progress(10**6) == 1
+    assert top.number == len(GameRules().levels) == 20
+    assert top.title == "Hallmarks Author" and top.next_floor is None and top.progress(10**6) == 1
 
 
 def test_streaks():
@@ -254,7 +255,7 @@ def test_badges_unlock_once_and_pay(db):
     cfg, session = db
     first = record_reading(session, cfg, add_paper(session), ReadStatus.skimmed, at=MONDAY).award
     assert [b.code for b in first.badges] == ["first_read"]
-    assert kinds(first)["badge"] == BADGE_XP
+    assert kinds(first)["badge"] == GameRules().badge_xp
     second = record_reading(session, cfg, add_paper(session), ReadStatus.skimmed, at=MONDAY).award
     assert second.badges == []
     assert session.exec(select(Achievement)).all()[0].code == "first_read"
@@ -277,7 +278,7 @@ def test_inbox_zero_only_by_reading(db):
 
 def test_level_up_is_reported(db):
     cfg, session = db
-    session.add(XpEvent(points=95, kind="test", reason="setup", at=MONDAY))
+    session.add(XpEvent(points=55, kind="test", reason="setup", at=MONDAY))  # level 2 at 60
     session.commit()
     award = record_reading(session, cfg, add_paper(session), ReadStatus.skimmed, at=MONDAY).award
     assert award.level_before.number == 1 and award.level_after.number == 2
@@ -360,7 +361,7 @@ def test_personal_bests_and_hints(db):
     cfg, session = db
     hints = next_goals(session, cfg, MONDAY.date())
     assert any("Weekly quest: 1 deep read and 2 more skims" in h for h in hints)
-    assert any("XP until Lab Rotation Student" in h for h in hints)
+    assert any("XP until Bachelor Student" in h for h in hints)
     for i in range(3):
         record_reading(session, cfg, add_paper(session, f"P{i}"), ReadStatus.read, at=MONDAY)
     bests = personal_bests(session, cfg, MONDAY.date())

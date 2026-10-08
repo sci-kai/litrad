@@ -25,6 +25,7 @@ from litresearch.db import (
 )
 from litresearch.game import Award, award_reading, level_for, total_xp
 from litresearch.ingest.bibtex import normalize_doi
+from litresearch.profile import active_rules, ensure_profile, profile_rules
 from litresearch.recommend.engine import latest_batch
 
 
@@ -171,11 +172,13 @@ def unread_drop_penalty(
     """
     if item is None or item.source != "recommendation" or read_depth >= 2:
         return None
-    if not cfg.game.drop_penalty:
+    profile, _ = ensure_profile(session, cfg, at)
+    penalty = profile_rules(profile).drop_penalty
+    if not penalty:
         return None
     event = XpEvent(
         paper_id=paper.id,
-        points=-cfg.game.drop_penalty,
+        points=-penalty,
         kind="penalty",
         reason=f"Picked recommendation left the queue unread: {paper.title[:60]}",
         at=at,
@@ -203,7 +206,7 @@ def drop_would_cost(session: Session, cfg: Config, paper: Paper) -> int:
     item = session.get(QueueItem, paper.id)
     if item is None or item.source != "recommendation" or deepest_depth(session, paper.id) >= 2:
         return 0
-    return cfg.game.drop_penalty
+    return active_rules(session, cfg).drop_penalty
 
 
 def queue_move(session: Session, paper: Paper, position: int) -> None:
@@ -297,9 +300,11 @@ def record_reading(
     left_queue = removed is not None
     emptied = left_queue and status != ReadStatus.dismissed and not queue_items(session)
 
+    profile, started = ensure_profile(session, cfg, at)
+    rules = profile_rules(profile)
     award = award_reading(
         session,
-        cfg,
+        rules,
         paper,
         previous_depth,
         status,
@@ -308,12 +313,13 @@ def record_reading(
         emptied,
         at,
     )
+    award.profile_started = started
     if status == ReadStatus.dismissed:
         penalty = unread_drop_penalty(session, cfg, paper, removed, previous_depth, at)
         if penalty:
             award.events.append(penalty)
             session.flush()
-            award.level_after = level_for(total_xp(session))
+            award.level_after = level_for(total_xp(session), rules)
     session.commit()
     session.refresh(reading)
     return ReadingOutcome(reading, previous, left_queue, award)
@@ -329,9 +335,10 @@ def add_note(session: Session, cfg: Config, paper: Paper, text: str, at: datetim
     reading.updated_at = at
     session.add(reading)
     session.flush()
+    profile, started = ensure_profile(session, cfg, at)
     award = award_reading(
         session,
-        cfg,
+        profile_rules(profile),
         paper,
         deepest_depth(session, paper.id),
         reading.status,
@@ -340,5 +347,6 @@ def add_note(session: Session, cfg: Config, paper: Paper, text: str, at: datetim
         False,
         at,
     )
+    award.profile_started = started
     session.commit()
     return award

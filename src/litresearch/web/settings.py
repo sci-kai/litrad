@@ -13,6 +13,7 @@ from ruamel.yaml import YAML
 
 from litresearch.backup import atomic_write_text
 from litresearch.config import Config
+from litresearch.rules import BADGE_CODES, GameRules, LevelDef
 
 
 @dataclass(frozen=True)
@@ -285,8 +286,9 @@ GROUPS = (
         ),
     ),
     Group(
-        "Reading queue and game",
-        "Limits and rules of the reading queue and the points system.",
+        "Reading queue",
+        "The game rules (points, penalty, levels, badges) are set when you start your "
+        "profile and are then locked; see the Profile page.",
         (
             Setting(
                 ("queue", "max_size"),
@@ -295,34 +297,6 @@ GROUPS = (
                 "int",
                 1,
                 20,
-                1,
-            ),
-            Setting(
-                ("game", "weekly_detail_goal"),
-                "Weekly quest: deep reads",
-                "Papers read at least at 'read' depth per week.",
-                "int",
-                0,
-                20,
-                1,
-            ),
-            Setting(
-                ("game", "weekly_skim_goal"),
-                "Weekly quest: further skims",
-                "Further papers at least skimmed per week.",
-                "int",
-                0,
-                20,
-                1,
-            ),
-            Setting(
-                ("game", "drop_penalty"),
-                "Penalty for dropping a picked recommendation",
-                "XP lost when a paper you took from the recommendations leaves the queue "
-                "without being at least skimmed.",
-                "int",
-                0,
-                200,
                 1,
             ),
         ),
@@ -463,3 +437,101 @@ def save_settings(config_path: Path, updates: dict) -> Config:
     _apply(document, updates, document.get("topics"))
     _write_document(config_path, yaml, document)
     return validated
+
+
+# --- game rules (profile start form) ------------------------------------------------------
+
+RULE_GROUPS = (
+    (
+        "Points per reading level",
+        "Your marking after reading decides the points; upgrading later pays only the difference.",
+        (
+            ("xp_abstract", "👀 abstract", "int", 0, 1000, 1),
+            ("xp_skimmed", "📄 skimmed", "int", 0, 1000, 1),
+            ("xp_read", "📖 read", "int", 0, 1000, 1),
+            ("xp_thorough", "🔬 thorough", "int", 0, 1000, 1),
+        ),
+    ),
+    (
+        "Bonuses",
+        "Paid on top of the base points.",
+        (
+            ("frog_bonus", "🐸 top paper first: share of base points", "float", 0, 5, 0.05),
+            ("streak_step", "🔥 streak: extra share per consecutive week", "float", 0, 1, 0.01),
+            ("streak_max_steps", "🔥 streak: maximum number of steps", "int", 0, 100, 1),
+            ("classic_percentile", "🏛️ landmark: minimum citation percentile", "float", 0, 100, 0.5),
+            ("classic_xp", "🏛️ landmark read (≥ read)", "int", 0, 1000, 1),
+            ("hot_days", "📰 fresh paper: days after publication", "int", 0, 365, 1),
+            ("hot_xp", "📰 fresh paper read", "int", 0, 1000, 1),
+            ("recommendation_xp", "🎯 read a recommended paper", "int", 0, 1000, 1),
+            ("rating_xp", "⭐ first rating", "int", 0, 1000, 1),
+            ("reflection_chars", "✍️ notes: characters needed", "int", 1, 100000, 10),
+            ("reflection_xp", "✍️ substantial notes", "int", 0, 1000, 1),
+            ("inbox_zero_xp", "📭 queue emptied by reading", "int", 0, 1000, 1),
+            ("badge_xp", "🏅 per badge", "int", 0, 1000, 1),
+        ),
+    ),
+    (
+        "Weekly quest",
+        "A target for every week (Monday to Sunday).",
+        (
+            ("weekly_detail_goal", "papers read at least at 'read' depth", "int", 0, 50, 1),
+            ("weekly_skim_goal", "further papers at least skimmed", "int", 0, 50, 1),
+            ("quest_xp", "🗓️ quest reward", "int", 0, 5000, 1),
+        ),
+    ),
+    (
+        "Penalty",
+        "Discourages picking recommendations and abandoning them.",
+        (("drop_penalty", "⚠️ picked recommendation leaves the queue unread", "int", 0, 1000, 1),),
+    ),
+)
+
+
+def levels_text(rules) -> str:
+    return "\n".join(f"{level.xp} | {level.title} | {level.icon}" for level in rules.levels)
+
+
+def parse_rules_form(form: dict, base: GameRules) -> GameRules:
+    """Build GameRules from the start form; raises SettingsError on bad input."""
+    values = base.model_dump()
+    for _, _, fields in RULE_GROUPS:
+        for name, label, kind, *_ in fields:
+            raw = str(form.get(name, "")).strip()
+            if raw == "":
+                raise SettingsError(f"'{label}' is empty")
+            try:
+                values[name] = int(raw) if kind == "int" else float(raw)
+            except ValueError as error:
+                raise SettingsError(f"'{label}': '{raw}' is not a number") from error
+    levels = []
+    for number, line in enumerate(str(form.get("levels", "")).splitlines(), start=1):
+        if not line.strip():
+            continue
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) < 2:
+            raise SettingsError(f"Level line {number}: use 'XP | title | icon'")
+        try:
+            levels.append(
+                LevelDef(
+                    xp=int(parts[0]),
+                    title=parts[1],
+                    icon=parts[2] if len(parts) > 2 and parts[2] else "⭐",
+                )
+            )
+        except ValueError as error:
+            raise SettingsError(f"Level line {number}: {error}") from error
+    values["levels"] = [level.model_dump() for level in levels] or values["levels"]
+    targets = {}
+    for code in BADGE_CODES:
+        raw = str(form.get(f"badge_{code}", "")).strip()
+        if raw:
+            try:
+                targets[code] = int(raw)
+            except ValueError as error:
+                raise SettingsError(f"Badge target '{code}': '{raw}' is not a number") from error
+    values["badge_targets"] = targets or values["badge_targets"]
+    try:
+        return GameRules.model_validate(values)
+    except ValueError as error:
+        raise SettingsError(str(error)) from error

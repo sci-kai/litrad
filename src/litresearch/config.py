@@ -6,6 +6,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from litresearch.rules import GameRules
+
 # value used in config files for "not set"
 NA = "n/a"
 
@@ -122,14 +124,6 @@ class Queue(_Base):
     max_size: int = Field(5, ge=1, le=20)
 
 
-class Game(_Base):
-    # weekly quest: papers read at least "read" depth / at least "skimmed" depth
-    weekly_detail_goal: int = Field(1, ge=0)
-    weekly_skim_goal: int = Field(2, ge=0)
-    # XP lost when a paper picked from the recommendations leaves the queue unread
-    drop_penalty: int = Field(15, ge=0)
-
-
 class Backup(_Base):
     # put this in a cloud-synced folder (Nextcloud, Dropbox, Syncthing, rclone mount ...)
     dir: Path = Path("data/backups")
@@ -166,7 +160,8 @@ class Config(_Base):
     embeddings: Embeddings = Embeddings()
     selection: Selection = Selection()
     queue: Queue = Queue()
-    game: Game = Game()
+    # defaults for a new game profile; a running profile keeps its own locked copy
+    game: GameRules = GameRules()
     backup: Backup = Backup()
     llm: Llm = Llm()
     schedule: Schedule = Schedule()

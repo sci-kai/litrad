@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set active = "profile" %}
+{% block title %}Compare profiles{% endblock %}
+{% block heading %}⚖️ Compare profiles{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:1rem">
+  <form method="post" action="/profile/compare" enctype="multipart/form-data" class="grid" style="gap:.6rem">
+    <p class="muted" style="margin:0">Compare your current profile with saved ones: your own archives or files from colleagues. Nothing is loaded or changed.</p>
+    {% if saves %}
+    <div class="row">{% for name in saves %}<label class="chip"><input type="checkbox" name="saved" value="{{ name }}" style="width:auto"> {{ name }}</label>{% endfor %}</div>
+    {% endif %}
+    <input type="file" name="file" accept=".json,application/json" multiple>
+    <div><button class="primary">⚖️ Compare</button></div>
+  </form>
+</div>
+{% for problem in problems %}<div class="notice error">{{ problem }}</div>{% endfor %}
+{% set reference = rows[0].fingerprint %}
+<div class="card" style="overflow-x:auto">
+  <table>
+    <thead><tr><th></th>{% for row in rows %}<th class="num">{{ "🙂 current" if row.label == "current" else row.label }}</th>{% endfor %}</tr></thead>
+    {% set metrics = [
+      ("Profile", "name", "text"), ("Started", "started", "date"), ("Saved", "exported_at", "date"),
+      ("Level", "level", "level"), ("XP", "xp", "max"), ("Papers read", "papers_read", "max"),
+      ("Thorough reads", "thorough", "max"), ("Longest streak (weeks)", "best_streak", "max"),
+      ("Weekly quests", "quests", "max"), ("Badges", "badges", "max"),
+      ("Discipline (top paper first)", "discipline", "pct"), ("Depth (read or deeper)", "depth", "pct"),
+      ("Reading Impact Factor", "rif", "max1"), ("Notes (characters)", "notes_chars", "max"),
+      ("Active weeks", "weeks", "max")] %}
+    {% for label, key, kind in metrics %}
+    {% set best = rows | map(attribute=key) | max if kind in ("max", "pct", "max1") else none %}
+    <tr><td>{{ label }}</td>
+      {% for row in rows %}{% set value = row[key] %}
+      <td class="num {{ 'pos' if best is not none and value == best and rows | length > 1 }}">
+        {% if kind == "level" %}{{ value.icon }} {{ value.number }} · {{ value.title }}
+        {% elif kind == "pct" %}{{ (value * 100) | round | int }} %
+        {% elif kind == "max1" %}{{ "%.1f" | format(value) }}
+        {% elif kind == "date" %}{{ value.date().isoformat() if value else "–" }}
+        {% else %}{{ value }}{% endif %}</td>
+      {% endfor %}</tr>
+    {% endfor %}
+    <tr><td>Rules</td>{% for row in rows %}<td class="num">{% if row.fingerprint == reference %}<span class="chip queued">same rules</span>{% else %}<span class="chip penalty">different rules</span>{% endif %}<br><small><code>{{ row.fingerprint or "none" }}</code></small></td>{% endfor %}</tr>
+    <tr><td>File integrity</td>{% for row in rows %}<td class="num">{% if row.checksum_ok is none %}<small class="muted">no checksum (old file)</small>{% elif row.checksum_ok %}✅ unmodified{% else %}<span class="neg">⚠️ edited outside litresearch</span>{% endif %}</td>{% endfor %}</tr>
+  </table>
+  <p class="muted" style="margin-top:.6rem">Green marks the best value per row. XP is only comparable between profiles with the same rules; the checksum reveals files that were edited by hand (it is a consistency check, not a cryptographic proof).</p>
+</div>
+{% endblock %}

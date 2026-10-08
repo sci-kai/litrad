@@ -1,9 +1,12 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form %}
+{% from "macros.html" import paper_meta, read_form with context %}
 {% set active = "dashboard" %}
 {% block title %}Dashboard{% endblock %}
 {% block heading %}Good to see you 👋{% endblock %}
 {% block content %}
+{% if not profile %}
+<div class="notice">🎮 <b>Set up your game:</b> choose your rewards, penalty, levels and badges before you start. <a href="/profile">Start your profile →</a> (If you log a reading first, the game starts with your configured defaults.)</div>
+{% endif %}
 {% if waiting is not none and waiting >= nudge_days %}
 <div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>. Read it today, or drop it if it no longer matters.</div>
 {% endif %}

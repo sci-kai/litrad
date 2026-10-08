@@ -28,6 +28,7 @@
       <a href="/queue" class="{{ 'active' if active == 'queue' }}"><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
       <a href="/library" class="{{ 'active' if active == 'library' }}"><span class="icon">🔍</span>Find &amp; add</a>
       <a href="/progress" class="{{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress</a>
+      <a href="/profile" class="{{ 'active' if active == 'profile' }}"><span class="icon">🎮</span>Profile{% if not profile %}<span class="count">start</span>{% endif %}</a>
       <a href="/weekly" class="{{ 'active' if active == 'weekly' }}"><span class="icon">🗓️</span>Weekly reports</a>
       <a href="/ledger" class="{{ 'active' if active == 'ledger' }}"><span class="icon">💰</span>XP ledger</a>
       <a href="/how" class="{{ 'active' if active == 'how' }}"><span class="icon">🔎</span>How it works</a>
@@ -41,7 +42,7 @@
     <div class="topbar">
       <h1>{% block heading %}{% endblock %}</h1>
       <a class="player" href="/progress" title="{{ header.xp }} XP">
-        <span class="avatar">{{ header.level_icon }}</span>
+        <span class="avatar">{{ header.level.icon }}</span>
         <span>
           <span class="lvl">Lv {{ header.level.number }} · {{ header.level.title }}</span><br>
           <span class="xpbar"><span style="width: {{ (header.progress * 100) | round(1) }}%"></span></span>

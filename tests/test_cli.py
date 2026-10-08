@@ -149,7 +149,9 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert code == 0 and "Paper from a colleague" in out and "litresearch read q1" in out
 
     code, out = invoke("read", "q1", "read", "--rating", "4", "--note", "useful", "-c", config)
-    assert code == 0 and "Ate the frog" in out and "LEVEL" not in out
+    assert code == 0 and "Ate the frog" in out
+    assert "game has started" in out  # first read starts the game with the config rules
+    assert "LEVEL UP! You are now a Bachelor Student" in out
     assert "Badge unlocked: First Steps" in out and "Up next: q1 A collective" in out
 
     code, out = invoke("note", "Cheung2016-vl", "x", "-c", config)
@@ -162,7 +164,7 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert "Status: abstract" in out and "a thought" in out
 
     code, out = invoke("score", "-c", config)
-    assert code == 0 and "Level 1 · Curious Undergrad" in out and "Badges 1/15" in out
+    assert code == 0 and "📘 Level 2 · Bachelor Student" in out and "Badges 1/44" in out
     assert "Reading Impact Factor" in out and "This week" in out
 
     code, out = invoke("history", "-c", config)

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form %}
+{% from "macros.html" import paper_meta, read_form with context %}
 {% set active = "queue" %}
 {% block title %}Reading queue{% endblock %}
 {% block heading %}📚 Reading queue <small class="muted">{{ queue | length }}/{{ cfg.queue.max_size }}</small>{% endblock %}
 {% block content %}
 <p class="muted">Short and ordered on purpose: there is always exactly one paper up next. Reading it first earns the 🐸 frog bonus.
-  Removing a paper you picked from the recommendations before at least skimming it costs <b>{{ cfg.game.drop_penalty }} XP</b>.</p>
+  Removing a paper you picked from the recommendations before at least skimming it costs <b>{{ rules.drop_penalty }} XP</b>.</p>
 
 <div class="grid">
   {% for item, paper in queue %}

@@ -37,7 +37,6 @@ from litresearch.db import (
     init_db,
 )
 from litresearch.game import (
-    BASE_XP,
     ledger,
     level_for,
     personal_bests,
@@ -60,6 +59,7 @@ from litresearch.reading import (
 )
 from litresearch.recommend.engine import build_recommendations
 from litresearch.recommend.scoring import Candidate, LibraryProfile, rank_candidates
+from litresearch.rules import GameRules
 from litresearch.sources.http import HttpClient, HttpError
 from litresearch.sources.openalex import OpenAlex
 
@@ -449,7 +449,8 @@ def check_invariants(session, cfg):
     base_per_paper: dict[int, int] = {}
     for event in session.exec(select(XpEvent).where(XpEvent.kind == "read")).all():
         base_per_paper[event.paper_id] = base_per_paper.get(event.paper_id, 0) + event.points
-    assert all(points <= BASE_XP[ReadStatus.thorough] for points in base_per_paper.values())
+    maximum = GameRules().xp_thorough
+    assert all(points <= maximum for points in base_per_paper.values())
     for kind in ("classic", "hot", "recommended", "rating", "reflection"):
         paid = session.exec(select(XpEvent.paper_id).where(XpEvent.kind == kind)).all()
         assert len(paid) == len(set(paid)), f"{kind} paid twice"
@@ -458,7 +459,7 @@ def check_invariants(session, cfg):
     frog: dict[int, int] = {}
     for event in session.exec(select(XpEvent).where(XpEvent.kind == "frog")).all():
         frog[event.paper_id] = frog.get(event.paper_id, 0) + event.points
-    assert all(points <= BASE_XP[ReadStatus.thorough] // 2 + 1 for points in frog.values())
+    assert all(points <= maximum * GameRules().frog_bonus + 1 for points in frog.values())
     level_for(total_xp(session))
 
 

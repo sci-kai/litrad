@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree %}
+{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree with context %}
 {% block title %}{{ paper.title | truncate(40) }}{% endblock %}
 {% block heading %}📄 Paper{% endblock %}
 {% block content %}

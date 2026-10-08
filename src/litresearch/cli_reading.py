@@ -20,10 +20,12 @@ from litresearch.game import (
     reading_impact_factor,
     stats,
     streak_multiplier,
+    total_xp,
     week_progress,
 )
 from litresearch.ingest.bibtex import normalize_doi
 from litresearch.papers import upsert_work
+from litresearch.profile import active_rules
 from litresearch.reading import (
     REF_HELP,
     ReadingError,
@@ -76,9 +78,14 @@ def show_award(session: Session, award: Award) -> None:
         if event.kind != "badge":
             colour = "green" if event.points >= 0 else "red"
             console.print(f"  [{colour}]{event.points:>+4}[/{colour}]  {event.reason}")
+    if award.profile_started:
+        console.print(
+            "  [bold cyan]🎮 Your game has started with the rules from config.yaml; they are "
+            "now locked ('litresearch profile show').[/bold cyan]"
+        )
     if award.points:
         level = award.level_after
-        xp = stats(session, date.today())["xp"]
+        xp = total_xp(session)
         to_go = f"{level.next_floor - xp} XP to next level" if level.next_floor else "max level"
         console.print(
             f"  [bold]{award.points:+} XP[/bold]  ·  total {xp} XP  ·  "
@@ -86,7 +93,8 @@ def show_award(session: Session, award: Award) -> None:
         )
     for badge in award.badges:
         console.print(
-            f"  [bold yellow]🏅 Badge unlocked: {badge.name}[/bold yellow] ({badge.description})"
+            f"  [bold yellow]{badge.icon} Badge unlocked: {badge.name}[/bold yellow] "
+            f"({badge.description})"
         )
     if award.level_before and award.level_after.number > award.level_before.number:
         console.print(
@@ -311,22 +319,23 @@ def score(config: Path = ConfigOpt):
     """Your reading dashboard: level, streak, weekly report card, badges."""
     today = date.today()
     with open_db(config) as (cfg, session):
-        s = stats(session, today)
-        level = level_for(s["xp"])
+        rules = active_rules(session, cfg)
+        s = stats(session, today, rules)
+        level = level_for(s["xp"], rules)
         to_go = (
             f"{level.next_floor - s['xp']} XP to next level" if level.next_floor else "max level"
         )
         console.print(
-            f"[bold]Level {level.number} · {level.title}[/bold]   {s['xp']} XP  "
+            f"[bold]{level.icon} Level {level.number} · {level.title}[/bold]   {s['xp']} XP  "
             f"[{bar(level.progress(s['xp']))}] {to_go}"
         )
         flame = " 🔥" if s["streak"] >= 2 else ""
         console.print(
             f"Streak: {s['streak']} week(s){flame} (best {s['best_streak']}) · "
-            f"next reads earn x{streak_multiplier(max(s['streak'], 1)):.2f}"
+            f"next reads earn x{streak_multiplier(max(s['streak'], 1), rules):.2f}"
         )
 
-        week = week_progress(session, cfg, today)
+        week = week_progress(session, rules, today)
         letter, comment = grade(week, week_over=False)
         console.print(
             f"\n[bold]This week[/bold] (from {week['week_start'].isoformat()}): "
@@ -338,7 +347,7 @@ def score(config: Path = ConfigOpt):
             f"  Quest [{bar(week['fraction'], 10)}]  deep reads {deep}/{week['goal_detail']}, "
             f"papers {week['total']}/{goal_total}  ·  {week['xp']} XP this week"
         )
-        last_week = week_progress(session, cfg, date.fromordinal(today.toordinal() - 7))
+        last_week = week_progress(session, rules, date.fromordinal(today.toordinal() - 7))
         console.print(
             f"  Last week: grade {grade(last_week, week_over=True)[0]}, {last_week['xp']} XP"
         )
@@ -355,11 +364,11 @@ def score(config: Path = ConfigOpt):
                 f"Depth (read or deeper): {depth_share:.0%} · papers read: {s['papers_read']}"
             )
 
-        progress = badge_progress(session, today)
+        progress = badge_progress(session, today, rules)
         owned = [b for b, _, unlocked in progress if unlocked]
         console.print(
             f"\n[bold]Badges {len(owned)}/{len(progress)}[/bold]: "
-            + (", ".join(f"🏅 {b.name}" for b in owned) or "none yet")
+            + (", ".join(f"{b.icon} {b.name}" for b in owned) or "none yet")
         )
         upcoming = sorted(
             ((b, v) for b, v, unlocked in progress if not unlocked),

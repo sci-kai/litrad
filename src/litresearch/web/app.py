@@ -10,7 +10,7 @@ import io
 import json
 import secrets
 from collections import OrderedDict
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -21,7 +21,18 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from litresearch import __version__
-from litresearch.backup import BackupError, export_progress, latest_backup, run_backup
+from litresearch.backup import (
+    BackupError,
+    export_progress,
+    latest_backup,
+    load_profile,
+    reset_progress,
+    run_backup,
+    save_profile_file,
+    saved_files,
+    slug,
+    summarize,
+)
 from litresearch.config import load_config
 from litresearch.db import (
     Category,
@@ -36,12 +47,10 @@ from litresearch.db import (
     init_db,
 )
 from litresearch.game import (
-    BADGES,
-    BASE_XP,
     KIND_LABELS,
-    LEVELS,
     Award,
     badge_progress,
+    header_stats,
     ledger,
     level_for,
     next_goals,
@@ -51,11 +60,13 @@ from litresearch.game import (
     reading_impact_factor,
     stats,
     streak_multiplier,
+    total_xp,
     week_progress,
     weekly_summaries,
 )
 from litresearch.ingest.bibtex import normalize_doi
 from litresearch.papers import upsert_work
+from litresearch.profile import ProfileError, active_rules, get_profile, start_profile
 from litresearch.reading import (
     ReadingError,
     add_note,
@@ -79,11 +90,20 @@ from litresearch.web.auth import (
     make_session,
     verify_password,
 )
-from litresearch.web.settings import GROUPS, SettingsError, parse_form, save_settings
+from litresearch.web.settings import (
+    GROUPS,
+    RULE_GROUPS,
+    SettingsError,
+    levels_text,
+    parse_form,
+    parse_rules_form,
+    save_settings,
+)
 
 HERE = Path(__file__).parent
 QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
+MAX_UPLOAD = 50 * 2**20  # bytes
 
 KIND_ICONS = {
     "read": "📖",
@@ -99,24 +119,6 @@ KIND_ICONS = {
     "badge": "🏅",
     "penalty": "⚠️",
 }
-BADGE_ICONS = {
-    "first_read": "🌱",
-    "bookworm": "🐛",
-    "centurion": "💯",
-    "deep_diver": "🤿",
-    "frog_eater": "🐸",
-    "classicist": "🏛️",
-    "early_bird": "🐦",
-    "polymath": "🧭",
-    "scribe": "✍️",
-    "critic": "⭐",
-    "streak_4": "🔥",
-    "streak_12": "🏃",
-    "streak_26": "🦸",
-    "quest_master": "🗺️",
-    "inbox_zero": "📭",
-}
-LEVEL_ICONS = ["🎓", "🧪", "📚", "☕", "🔬", "🧬", "👩‍🔬", "🎩", "🖋️", "🏆"]
 STATUS_ICONS = {
     "abstract": "👀",
     "skimmed": "📄",
@@ -159,15 +161,18 @@ def award_payload(award: Award | None, message: str, session: Session, kind="suc
     ]
     payload["points"] = award.points
     payload["badges"] = [
-        {"name": b.name, "description": b.description, "icon": BADGE_ICONS.get(b.code, "🏅")}
-        for b in award.badges
+        {"name": b.name, "description": b.description, "icon": b.icon} for b in award.badges
     ]
     if award.level_before and award.level_after.number > award.level_before.number:
         payload["level_up"] = {
             "number": award.level_after.number,
             "title": award.level_after.title,
-            "icon": LEVEL_ICONS[award.level_after.number - 1],
+            "icon": award.level_after.icon,
         }
+    if award.profile_started:
+        payload["message"] += (
+            " · Your game has started with your configured rules; they are now locked."
+        )
     payload["quest"] = any(e.kind == "quest" for e in award.events)
     payload["penalty"] = any(e.points < 0 for e in award.events)
     return payload
@@ -185,11 +190,7 @@ def create_app(config_path: Path) -> FastAPI:
         version=__version__,
         kind_icons=KIND_ICONS,
         kind_labels=KIND_LABELS,
-        badge_icons=BADGE_ICONS,
-        level_icons=LEVEL_ICONS,
         status_icons=STATUS_ICONS,
-        base_xp=BASE_XP,
-        levels=LEVELS,
     )
     env.filters["authors"] = lambda a: (
         "unknown authors" if not a else a[0].split(",")[0] + (" et al." if len(a) > 1 else "")
@@ -239,18 +240,21 @@ def create_app(config_path: Path) -> FastAPI:
     def render(request: Request, name: str, session: Session, cfg, **context):
         token = request.query_params.get("c")
         today = date.today()
-        s = stats(session, today)
-        level = level_for(s["xp"])
+        rules = active_rules(session, cfg)
+        head = header_stats(session, today, rules)
         context.update(
             request=request,
             cfg=cfg,
             today=today,
+            rules=rules,
+            profile=get_profile(session),
+            base_xp=rules.base_xp(),
+            levels=rules.levels,
             header={
-                "xp": s["xp"],
-                "level": level,
-                "level_icon": LEVEL_ICONS[level.number - 1],
-                "progress": level.progress(s["xp"]),
-                "streak": s["streak"],
+                "xp": head["xp"],
+                "level": head["level"],
+                "progress": head["level"].progress(head["xp"]),
+                "streak": head["streak"],
                 "queue": len(queue_items(session)),
             },
             celebration=celebrations.pop(token),
@@ -315,8 +319,10 @@ def create_app(config_path: Path) -> FastAPI:
                 items = queue_items(session)
                 batch = latest_batch(session)
                 recs = batch_items(session, batch) if batch else []
-                progress = week_progress(session, cfg, today)
+                rules = active_rules(session, cfg)
+                progress = week_progress(session, rules, today)
                 recent, _ = ledger(session, limit=6)
+                figures = stats(session, today, rules)
                 return render(
                     request,
                     "dashboard.html",
@@ -328,12 +334,12 @@ def create_app(config_path: Path) -> FastAPI:
                     recs=recs,
                     rec_status=recommendation_status(session, recs),
                     week=progress,
-                    hints=next_goals(session, cfg, today),
+                    hints=next_goals(session, rules, today),
                     recent=recent,
                     waiting=queue_top_waiting_days(session, today),
                     nudge_days=QUEUE_NUDGE_DAYS,
-                    stats=stats(session, today),
-                    multiplier=streak_multiplier(max(stats(session, today)["streak"], 1)),
+                    stats=figures,
+                    multiplier=streak_multiplier(max(figures["streak"], 1), rules),
                 )
         finally:
             engine.dispose()
@@ -500,22 +506,23 @@ def create_app(config_path: Path) -> FastAPI:
         try:
             with Session(engine) as session:
                 today = date.today()
-                s = stats(session, today)
-                summaries = weekly_summaries(session, cfg, today, weeks=12)
+                rules = active_rules(session, cfg)
+                s = stats(session, today, rules)
+                summaries = weekly_summaries(session, rules, today, weeks=12)
                 return render(
                     request,
                     "progress.html",
                     session,
                     cfg,
                     stats=s,
-                    level=level_for(s["xp"]),
-                    badges=badge_progress(session, today),
-                    bests=personal_bests(session, cfg, today),
+                    level=level_for(s["xp"], rules),
+                    badges=badge_progress(session, today, rules),
+                    bests=personal_bests(session, rules, today),
                     calendar=reading_calendar(session, today, weeks=26),
                     rif=reading_impact_factor(session, today),
                     weeks=list(reversed(summaries)),
-                    multiplier=streak_multiplier(max(s["streak"], 1)),
-                    hints=next_goals(session, cfg, today),
+                    multiplier=streak_multiplier(max(s["streak"], 1), rules),
+                    hints=next_goals(session, rules, today),
                 )
         finally:
             engine.dispose()
@@ -525,7 +532,9 @@ def create_app(config_path: Path) -> FastAPI:
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                summaries = weekly_summaries(session, cfg, date.today(), weeks=min(weeks, 104))
+                summaries = weekly_summaries(
+                    session, active_rules(session, cfg), date.today(), weeks=min(weeks, 104)
+                )
                 return render(
                     request, "weekly.html", session, cfg, summaries=summaries, weeks=weeks
                 )
@@ -589,6 +598,212 @@ def create_app(config_path: Path) -> FastAPI:
                     headers={
                         "Content-Disposition": "attachment; filename=litresearch_xp_ledger.tsv"
                     },
+                )
+        finally:
+            engine.dispose()
+
+    # --- profile -------------------------------------------------------------------
+
+    @app.get("/profile", response_class=HTMLResponse)
+    def profile_page(request: Request):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                rules = active_rules(session, cfg)
+                saves = [
+                    {
+                        "path": path,
+                        "name": path.name,
+                        "modified": datetime.fromtimestamp(path.stat().st_mtime).replace(
+                            microsecond=0
+                        ),
+                    }
+                    for path in saved_files(cfg.backup.dir)
+                ]
+                return render(
+                    request,
+                    "profile.html",
+                    session,
+                    cfg,
+                    rule_groups=RULE_GROUPS,
+                    levels_text=levels_text(rules),
+                    form_rules=rules,
+                    saves=saves[:30],
+                    xp_total=total_xp(session),
+                )
+        finally:
+            engine.dispose()
+
+    @app.post("/profile/start")
+    async def profile_start(request: Request):
+        form = await request.form()
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                try:
+                    rules = parse_rules_form(dict(form), cfg.game)
+                    profile = start_profile(session, cfg, str(form.get("name", "")), rules)
+                except (SettingsError, ProfileError) as exc:
+                    return error("/profile", f"Not started: {exc}")
+                return back(
+                    "/profile",
+                    {
+                        "kind": "success",
+                        "events": [],
+                        "points": 0,
+                        "sparkle": True,
+                        "message": f"Your game '{profile.name}' has started. The rules are locked "
+                        f"(fingerprint {profile.fingerprint}). Happy reading!",
+                    },
+                )
+        finally:
+            engine.dispose()
+
+    @app.post("/profile/save")
+    def profile_save():
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                path = save_profile_file(session, cfg.backup.dir)
+            return back(
+                "/profile",
+                {
+                    "kind": "success",
+                    "events": [],
+                    "points": 0,
+                    "message": f"Profile saved as {path.name}",
+                },
+            )
+        finally:
+            engine.dispose()
+
+    @app.get("/profile/download")
+    def profile_download():
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                data = export_progress(session)
+            name = slug((data["profile"] or {}).get("name", "profile"))
+            filename = f"litresearch_profile_{name}_{date.today().strftime('%Y%m%d')}.json"
+            return Response(
+                json.dumps(data, indent=1),
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+        finally:
+            engine.dispose()
+
+    async def read_upload(request: Request, field_name: str = "file") -> list[dict]:
+        form = await request.form()
+        files = [f for f in form.getlist(field_name) if hasattr(f, "read")]
+        result = []
+        for upload in files:
+            try:
+                raw = await upload.read()
+            finally:
+                await upload.close()  # release the temporary file right away
+            if len(raw) > MAX_UPLOAD:
+                raise BackupError(f"{upload.filename} is larger than {MAX_UPLOAD // 2**20} MB")
+            try:
+                result.append({"name": upload.filename, "data": json.loads(raw)})
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise BackupError(f"{upload.filename} is not a JSON file") from exc
+        return result
+
+    @app.post("/profile/load")
+    async def profile_load(request: Request):
+        form = await request.form()
+        cfg, engine = open_session()
+        try:
+            if form.get("confirm") != "replace":
+                return error("/profile", "Tick the confirmation to replace your current progress")
+            try:
+                uploads = await read_upload(request)
+                saved = str(form.get("saved", "")).strip()
+                if saved:
+                    path = next((f for f in saved_files(cfg.backup.dir) if f.name == saved), None)
+                    if path is None:
+                        raise BackupError("Saved file not found")
+                    uploads = [{"name": saved, "data": json.loads(path.read_text("utf-8"))}]
+                if not uploads:
+                    raise BackupError("Choose a saved profile or upload a file")
+                with Session(engine) as session:
+                    archive = save_profile_file(session, cfg.backup.dir)  # safety net
+                    report = load_profile(session, cfg, uploads[0]["data"])
+            except BackupError as exc:
+                return error("/profile", f"Not loaded: {exc}")
+            return back(
+                "/profile",
+                {
+                    "kind": "success",
+                    "events": [],
+                    "points": 0,
+                    "sparkle": True,
+                    "message": f"Loaded {uploads[0]['name']} ({report.readings_added} readings, "
+                    f"{report.xp_added} XP transactions). Your previous state was saved "
+                    f"as {archive.name}.",
+                },
+            )
+        finally:
+            engine.dispose()
+
+    @app.post("/profile/reset")
+    def profile_reset(confirm_name: str = Form("")):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                profile = get_profile(session)
+                expected = profile.name if profile else ""
+                if not profile or confirm_name.strip() != expected:
+                    return error("/profile", "Type the exact profile name to confirm")
+                archive = save_profile_file(session, cfg.backup.dir)
+                reset_progress(session)
+            return back(
+                "/profile",
+                {
+                    "kind": "info",
+                    "events": [],
+                    "points": 0,
+                    "message": f"Profile archived as {archive.name} and reset. "
+                    "Set up your new game.",
+                },
+            )
+        finally:
+            engine.dispose()
+
+    @app.get("/profile/compare", response_class=HTMLResponse)
+    async def compare_page(request: Request):
+        return await compare(request, [])
+
+    @app.post("/profile/compare", response_class=HTMLResponse)
+    async def compare_post(request: Request):
+        form = await request.form()
+        cfg = load_config(config_path)
+        entries = []
+        try:
+            for name in form.getlist("saved"):
+                path = next((f for f in saved_files(cfg.backup.dir) if f.name == name), None)
+                if path:
+                    entries.append({"name": name, "data": json.loads(path.read_text("utf-8"))})
+            entries += await read_upload(request)
+        except (BackupError, json.JSONDecodeError) as exc:
+            return error("/profile/compare", str(exc))
+        return await compare(request, entries)
+
+    async def compare(request: Request, entries: list[dict]):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                rows = [summarize(export_progress(session), cfg, "current")]
+                problems = []
+                for entry in entries:
+                    try:
+                        rows.append(summarize(entry["data"], cfg, entry["name"]))
+                    except BackupError as exc:
+                        problems.append(f"{entry['name']}: {exc}")
+                saves = [path.name for path in saved_files(cfg.backup.dir)][:30]
+                return render(
+                    request, "compare.html", session, cfg, rows=rows, problems=problems, saves=saves
                 )
         finally:
             engine.dispose()
@@ -848,7 +1063,7 @@ def create_app(config_path: Path) -> FastAPI:
         return url if url.startswith("/") and not url.startswith("//") else "/"
 
     app.state.celebrations = celebrations
-    env.globals.update(Category=Category, depth=depth, badges=BADGES)
+    env.globals.update(Category=Category, depth=depth)
     return app
 
 

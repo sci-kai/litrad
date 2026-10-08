@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view %}
+{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view with context %}
 {% set active = "recommendations" %}
 {% block title %}This week{% endblock %}
 {% block heading %}✨ Recommendations{% endblock %}

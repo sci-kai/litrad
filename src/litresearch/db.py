@@ -149,6 +149,17 @@ class XpEvent(SQLModel, table=True):
     at: NaiveDatetime = Field(default_factory=now)
 
 
+class Profile(SQLModel, table=True):
+    """The game profile. Its rules are a locked copy taken when the game started."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    created_at: NaiveDatetime = Field(default_factory=now)
+    rules: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    fingerprint: str = ""
+    app_version: str = ""
+
+
 class Achievement(SQLModel, table=True):
     code: str = Field(primary_key=True)
     unlocked_at: NaiveDatetime = Field(default_factory=now)
