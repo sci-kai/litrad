@@ -28,11 +28,11 @@ from litresearch.reading import (
     REF_HELP,
     ReadingError,
     add_note,
+    drop_from_queue,
     find_paper,
     queue_add,
     queue_items,
     queue_move,
-    queue_remove,
     record_reading,
     source_of,
 )
@@ -74,13 +74,14 @@ def bar(fraction: float, width: int = 20) -> str:
 def show_award(session: Session, award: Award) -> None:
     for event in award.events:
         if event.kind != "badge":
-            console.print(f"  [green]+{event.points:>3}[/green]  {event.reason}")
+            colour = "green" if event.points >= 0 else "red"
+            console.print(f"  [{colour}]{event.points:>+4}[/{colour}]  {event.reason}")
     if award.points:
         level = award.level_after
         xp = stats(session, date.today())["xp"]
         to_go = f"{level.next_floor - xp} XP to next level" if level.next_floor else "max level"
         console.print(
-            f"  [bold green]+{award.points} XP[/bold green]  ·  total {xp} XP  ·  "
+            f"  [bold]{award.points:+} XP[/bold]  ·  total {xp} XP  ·  "
             f"Level {level.number} {level.title} [{bar(level.progress(xp), 10)}] {to_go}"
         )
     for badge in award.badges:
@@ -176,12 +177,15 @@ def queue_add_cmd(
 
 @queue_app.command("drop")
 def queue_drop_cmd(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
-    """Remove a paper from the queue (no points, no judgement)."""
-    with open_db(config) as (_, session):
+    """Remove a paper from the queue (costs XP for picked recommendations left unread)."""
+    with open_db(config) as (cfg, session):
         paper = find_paper(session, ref)
-        if paper is None or not queue_remove(session, paper):
+        if paper is None:
             raise ReadingError("Not on the queue")
+        penalty = drop_from_queue(session, cfg, paper)
         console.print(f"Dropped: {paper.title}")
+        if penalty:
+            console.print(f"  [red]{penalty.points} XP[/red]  {penalty.reason}")
         show_next(session)
 
 
@@ -278,8 +282,9 @@ def dismiss(ref: str = typer.Argument(..., help=REF_HELP), config: Path = Config
         paper = find_paper(session, ref)
         if paper is None:
             raise ReadingError("Unknown paper")
-        record_reading(session, cfg, paper, ReadStatus.dismissed)
+        outcome = record_reading(session, cfg, paper, ReadStatus.dismissed)
         console.print(f"Dismissed: {paper.title}")
+        show_award(session, outcome.award)
 
 
 @app.command()

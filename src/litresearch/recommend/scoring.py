@@ -12,6 +12,10 @@ Each candidate gets three components in [0, 1]:
 A paper must be either *fresh* or a *landmark*, otherwise it is ignored. The
 final list is chosen with maximal marginal relevance (MMR) so that the papers
 do not all cover the same subject.
+
+Every number that influences the result is recorded in ``Scored.evidence``,
+which the UI shows as an evidence tree. The criteria are documented in
+``docs/recommendation-criteria.md``; keep both in sync.
 """
 
 import math
@@ -24,15 +28,7 @@ from litresearch.config import Selection
 from litresearch.db import Category, Paper
 from litresearch.recommend.text import tfidf_matrix
 
-KNN = 5
-# a missing venue is a warning sign (preprint servers do count as venues)
-UNKNOWN_VENUE_IMPACT = 0.05
-# journal 2-year mean citedness that counts as "top" (log-scaled up to here)
-TOP_VENUE_CITEDNESS = 30.0
-LANDMARK_TIMELINESS = 0.4
-S2_ONLY_TOPIC_BONUS = 0.5
-# diversity must not pull in weak papers: picks need this share of the best score
-MIN_RELATIVE_SCORE = 0.6
+NEIGHBOURS_SHOWN = 5
 
 
 @dataclass
@@ -41,6 +37,23 @@ class Candidate:
     topics: set[str] = field(default_factory=set)
     sources: set[str] = field(default_factory=set)
     vector: np.ndarray | None = None
+    # how the candidate was found: [{"source", "topic", "query"}]
+    found_by: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class LibraryProfile:
+    """Library papers as seen by the scorer."""
+
+    ids: list[int]
+    titles: list[str]
+    texts: list[str]
+    # SPECTER2 vectors of the library papers that have one
+    vector_ids: list[int] = field(default_factory=list)
+    vectors: np.ndarray = field(default_factory=lambda: np.zeros((0, 0)))
+
+    def title_of(self, paper_id: int) -> str:
+        return self.titles[self.ids.index(paper_id)]
 
 
 @dataclass
@@ -52,6 +65,7 @@ class Scored:
     timeliness: float
     score: float
     category: Category = Category.skim
+    evidence: dict = field(default_factory=dict)
 
     @property
     def paper(self) -> Paper:
@@ -66,7 +80,14 @@ class Scored:
             "score": round(self.score, 3),
             "topics": sorted(self.candidate.topics),
             "sources": sorted(self.candidate.sources),
+            "evidence": self.evidence,
         }
+
+
+@dataclass
+class RankResult:
+    picks: list[Scored]
+    funnel: dict
 
 
 def age_days(paper: Paper, today: date) -> int | None:
@@ -77,12 +98,16 @@ def age_days(paper: Paper, today: date) -> int | None:
     return None
 
 
+def fresh_window_days(sel: Selection) -> float:
+    return sel.fresh_window_months * 30.5
+
+
 def classify(paper: Paper, today: date, sel: Selection) -> str | None:
     """'fresh', 'landmark' or None (neither: not eligible)."""
     age = age_days(paper, today)
     if age is None:
         return None
-    if age <= sel.fresh_window_months * 30.5:
+    if age <= fresh_window_days(sel):
         return "fresh"
     percentile = paper.citation_percentile
     if (
@@ -94,27 +119,66 @@ def classify(paper: Paper, today: date, sel: Selection) -> str | None:
     return None
 
 
-def venue_impact(citedness: float | None) -> float:
+def eligibility_evidence(paper: Paper, kind: str, today: date, sel: Selection) -> dict:
+    return {
+        "kind": kind,
+        "age_days": age_days(paper, today),
+        "fresh_window_days": round(fresh_window_days(sel)),
+        "citation_percentile": paper.citation_percentile,
+        "landmark_min_percentile": sel.landmark_min_percentile,
+        "landmark_max_age_years": sel.landmark_max_age_years,
+    }
+
+
+def log_scale(value: float, saturation: float) -> float:
+    """0 at 0, 1 at ``saturation`` (and above), logarithmic in between."""
+    return min(1.0, math.log1p(max(value, 0)) / math.log1p(saturation))
+
+
+def venue_impact(citedness: float | None, sel: Selection) -> float:
     if citedness is None:
-        return UNKNOWN_VENUE_IMPACT
-    return min(1.0, math.log1p(max(citedness, 0)) / math.log1p(TOP_VENUE_CITEDNESS))
+        return sel.unknown_venue_impact
+    return log_scale(citedness, sel.top_venue_citedness)
 
 
-def impact_score(paper: Paper, kind: str, today: date) -> float:
+def impact_score(paper: Paper, kind: str, today: date, sel: Selection) -> tuple[float, dict]:
     if kind == "fresh":
-        early = 0.2 * min(1.0, math.log1p(paper.citation_count or 0) / math.log1p(50))
-        return min(1.0, venue_impact(paper.venue_mean_citedness) + early)
+        venue = venue_impact(paper.venue_mean_citedness, sel)
+        early = sel.early_citation_bonus * log_scale(
+            paper.citation_count or 0, sel.early_citation_saturation
+        )
+        value = min(1.0, venue + early)
+        return value, {
+            "basis": "journal",
+            "venue": paper.venue,
+            "venue_mean_citedness": paper.venue_mean_citedness,
+            "top_venue_citedness": sel.top_venue_citedness,
+            "venue_score": round(venue, 3),
+            "citations": paper.citation_count or 0,
+            "early_citation_bonus": round(early, 3),
+        }
     if paper.citation_percentile is not None:
-        return paper.citation_percentile / 100
+        return paper.citation_percentile / 100, {
+            "basis": "citation percentile",
+            "citation_percentile": paper.citation_percentile,
+            "citations": paper.citation_count,
+        }
     years = max((age_days(paper, today) or 365) / 365.25, 1)
     per_year = (paper.citation_count or 0) / years
-    return min(1.0, math.log1p(per_year) / math.log1p(200))
+    return log_scale(per_year, sel.citations_per_year_saturation), {
+        "basis": "citations per year",
+        "citations": paper.citation_count,
+        "citations_per_year": round(per_year, 1),
+        "saturation": sel.citations_per_year_saturation,
+    }
 
 
-def timeliness_score(kind: str, age: int, window_days: float) -> float:
+def timeliness_score(kind: str, age: int, sel: Selection) -> tuple[float, dict]:
+    window = fresh_window_days(sel)
     if kind == "fresh":
-        return 0.5 + 0.5 * max(0.0, 1 - age / window_days)
-    return LANDMARK_TIMELINESS
+        value = 0.5 + 0.5 * max(0.0, 1 - age / window)
+        return value, {"basis": "fresh", "age_days": age, "fresh_window_days": round(window)}
+    return sel.landmark_timeliness, {"basis": "landmark (constant)", "age_days": age}
 
 
 def normalize_rows(matrix: np.ndarray) -> np.ndarray:
@@ -123,14 +187,20 @@ def normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
-def knn_similarity(candidates: np.ndarray, library: np.ndarray, k: int = KNN) -> np.ndarray:
-    """Mean cosine similarity of each candidate to its k most similar library papers."""
-    if len(candidates) == 0 or len(library) == 0:
-        return np.zeros(len(candidates))
+def knn(candidates: np.ndarray, library: np.ndarray, k: int):
+    """Mean cosine similarity to the k most similar library rows.
+
+    Returns ``(mean, top_indices, top_similarities)``, the latter two sorted
+    from most to least similar.
+    """
+    n = len(candidates)
+    if n == 0 or len(library) == 0:
+        return np.zeros(n), np.zeros((n, 0), dtype=int), np.zeros((n, 0))
     sims = normalize_rows(candidates) @ normalize_rows(library).T
     k = min(k, sims.shape[1])
-    top = np.sort(sims, axis=1)[:, -k:]
-    return top.mean(axis=1)
+    top = np.argsort(-sims, axis=1, kind="stable")[:, :k]
+    top_sims = np.take_along_axis(sims, top, axis=1)
+    return top_sims.mean(axis=1), top, top_sims
 
 
 def percentile_ranks(values: np.ndarray) -> np.ndarray:
@@ -151,32 +221,70 @@ def percentile_ranks(values: np.ndarray) -> np.ndarray:
 
 def relevance_scores(
     candidates: list[Candidate],
-    library_vectors: np.ndarray,
+    library: LibraryProfile,
     candidate_tfidf: np.ndarray,
     library_tfidf: np.ndarray,
     topic_weights: dict[str, float],
-) -> np.ndarray:
-    """Combine library similarity (ranked) with a topic bonus."""
+    sel: Selection,
+) -> tuple[np.ndarray, list[dict]]:
+    """Library similarity (as a rank among candidates) blended with a topic bonus."""
     n = len(candidates)
     similarity = np.zeros(n)
-    tfidf_rank = percentile_ranks(knn_similarity(candidate_tfidf, library_tfidf))
+    evidence: list[dict] = [{} for _ in range(n)]
+
+    def fill(indices, mean, top, top_sims, method, ids):
+        ranks = percentile_ranks(mean)
+        for row, i in enumerate(indices):
+            similarity[i] = ranks[row]
+            evidence[i] = {
+                "method": method,
+                "knn_mean_similarity": round(float(mean[row]), 4),
+                "similarity_rank": round(float(ranks[row]), 3),
+                "rank_among": len(indices),
+                "neighbours": [
+                    {
+                        "paper_id": ids[j],
+                        "title": library.title_of(ids[j]),
+                        "similarity": round(float(s), 4),
+                    }
+                    for j, s in zip(
+                        top[row][:NEIGHBOURS_SHOWN], top_sims[row][:NEIGHBOURS_SHOWN], strict=True
+                    )
+                ],
+            }
+
     embedded = [i for i, c in enumerate(candidates) if c.vector is not None]
-    if embedded and len(library_vectors):
+    use_vectors = bool(embedded) and len(library.vectors) > 0
+    if use_vectors:
         vectors = np.stack([candidates[i].vector for i in embedded])
-        embed_rank = percentile_ranks(knn_similarity(vectors, library_vectors))
-        similarity[embedded] = embed_rank
-    missing = [i for i in range(n) if candidates[i].vector is None or not len(library_vectors)]
-    similarity[missing] = tfidf_rank[missing]
+        fill(embedded, *knn(vectors, library.vectors, sel.knn), "SPECTER2", library.vector_ids)
+    text_only = [i for i in range(n) if not use_vectors or candidates[i].vector is None]
+    if text_only:
+        mean, top, top_sims = knn(candidate_tfidf[text_only], library_tfidf, sel.knn)
+        fill(text_only, mean, top, top_sims, "TF-IDF", library.ids)
 
     max_weight = max(topic_weights.values(), default=1.0) or 1.0
-    bonus = np.zeros(n)
+    relevance = np.zeros(n)
     for i, candidate in enumerate(candidates):
-        weights = [topic_weights.get(t, 0.0) for t in candidate.topics]
+        weights = {t: topic_weights.get(t, 0.0) for t in candidate.topics}
         if weights:
-            bonus[i] = max(weights) / max_weight
+            best = max(weights, key=weights.get)
+            bonus = weights[best] / max_weight
+            reason = f"topic '{best}' (weight {weights[best]} / max {max_weight})"
         elif "s2-recs" in candidate.sources:
-            bonus[i] = S2_ONLY_TOPIC_BONUS
-    return 0.7 * similarity + 0.3 * bonus
+            bonus = sel.s2_only_topic_bonus
+            reason = "found only by library-based recommendations"
+        else:
+            bonus, reason = 0.0, "no topic"
+        relevance[i] = sel.similarity_share * similarity[i] + (1 - sel.similarity_share) * bonus
+        evidence[i].update(
+            {
+                "similarity_share": sel.similarity_share,
+                "topic_bonus": round(bonus, 3),
+                "topic_bonus_reason": reason,
+            }
+        )
+    return relevance, evidence
 
 
 def similarity_matrix(candidates: list[Candidate], tfidf: np.ndarray) -> np.ndarray:
@@ -189,72 +297,132 @@ def similarity_matrix(candidates: list[Candidate], tfidf: np.ndarray) -> np.ndar
     return sims
 
 
-def mmr_select(scores: np.ndarray, sims: np.ndarray, n: int, lam: float) -> list[int]:
-    """Greedy maximal marginal relevance."""
-    selected: list[int] = []
+def mmr_select(
+    scores: np.ndarray, sims: np.ndarray, n: int, lam: float
+) -> list[tuple[int, float, int | None]]:
+    """Greedy maximal marginal relevance.
+
+    Returns ``(index, redundancy, most_similar_earlier_index)`` per pick, where
+    redundancy is the highest similarity to an earlier pick.
+    """
+    picks: list[tuple[int, float, int | None]] = []
     remaining = list(range(len(scores)))
-    while remaining and len(selected) < n:
+    while remaining and len(picks) < n:
 
-        def value(i: int) -> float:
-            redundancy = max((sims[i, j] for j in selected), default=0.0)
-            return lam * scores[i] - (1 - lam) * redundancy
+        def redundancy(i: int) -> tuple[float, int | None]:
+            if not picks:
+                return 0.0, None
+            j = max((p[0] for p in picks), key=lambda j: sims[i, j])
+            return float(sims[i, j]), j
 
-        best = max(remaining, key=value)
-        selected.append(best)
+        best = max(remaining, key=lambda i: lam * scores[i] - (1 - lam) * redundancy(i)[0])
+        picks.append((best, *redundancy(best)))
         remaining.remove(best)
-    return selected
+    return picks
 
 
 def rank_candidates(
     candidates: list[Candidate],
-    library_vectors: np.ndarray,
-    library_texts: list[str],
+    library: LibraryProfile,
     topic_weights: dict[str, float],
     sel: Selection,
     today: date,
-) -> list[Scored]:
-    """Score all eligible candidates and return the final ≤5 picks, detail first."""
-    eligible = []
-    kinds = []
+) -> RankResult:
+    """Score all eligible candidates and return the final picks, detail first."""
+    eligible, kinds = [], []
     for candidate in candidates:
         kind = classify(candidate.paper, today, sel)
         if kind:
             eligible.append(candidate)
             kinds.append(kind)
+    funnel = {"scored": len(candidates), "not_fresh_or_landmark": len(candidates) - len(eligible)}
     if not eligible:
-        return []
+        return RankResult([], {**funnel, "eligible": 0, "above_floor": 0, "picked": 0})
 
     texts = [f"{c.paper.title} {c.paper.abstract or ''}" for c in eligible]
-    tfidf = tfidf_matrix(texts + library_texts)
+    tfidf = tfidf_matrix(texts + library.texts)
     candidate_tfidf, library_tfidf = tfidf[: len(texts)], tfidf[len(texts) :]
-
-    relevance = relevance_scores(
-        eligible, library_vectors, candidate_tfidf, library_tfidf, topic_weights
+    relevance, relevance_evidence = relevance_scores(
+        eligible, library, candidate_tfidf, library_tfidf, topic_weights, sel
     )
-    window = sel.fresh_window_months * 30.5
+
     w = sel.weights
     scored = []
     for i, (candidate, kind) in enumerate(zip(eligible, kinds, strict=True)):
-        impact = impact_score(candidate.paper, kind, today)
-        timeliness = timeliness_score(kind, age_days(candidate.paper, today) or 0, window)
-        total = w.relevance * relevance[i] + w.impact * impact + w.timeliness * timeliness
-        scored.append(Scored(candidate, kind, float(relevance[i]), impact, timeliness, total))
+        paper = candidate.paper
+        impact, impact_evidence = impact_score(paper, kind, today, sel)
+        timeliness, time_evidence = timeliness_score(kind, age_days(paper, today) or 0, sel)
+        contributions = {
+            "relevance": w.relevance * relevance[i],
+            "impact": w.impact * impact,
+            "timeliness": w.timeliness * timeliness,
+        }
+        total = sum(contributions.values())
+        evidence = {
+            "found_by": candidate.found_by,
+            "eligibility": eligibility_evidence(paper, kind, today, sel),
+            "relevance": relevance_evidence[i],
+            "impact": impact_evidence,
+            "timeliness": time_evidence,
+            "weights": {"relevance": w.relevance, "impact": w.impact, "timeliness": w.timeliness},
+            "contributions": {k: round(float(v), 4) for k, v in contributions.items()},
+        }
+        scored.append(
+            Scored(
+                candidate,
+                kind,
+                float(relevance[i]),
+                impact,
+                timeliness,
+                float(total),
+                evidence=evidence,
+            )
+        )
 
-    best = max(s.score for s in scored)
-    strong = [i for i, s in enumerate(scored) if s.score >= MIN_RELATIVE_SCORE * best]
-    sims = similarity_matrix(eligible, candidate_tfidf)[np.ix_(strong, strong)]
+    order = sorted(range(len(scored)), key=lambda i: -scored[i].score)
+    best = scored[order[0]].score
+    floor = sel.min_relative_score * best
+    strong = [i for i in order if scored[i].score >= floor]
+    sims = similarity_matrix(eligible, candidate_tfidf)
     picks = mmr_select(
         np.array([scored[i].score for i in strong]),
-        sims,
+        sims[np.ix_(strong, strong)],
         sel.n_detail + sel.n_skim,
         sel.mmr_lambda,
     )
-    chosen = [scored[strong[i]] for i in picks]
+    chosen = []
+    for pick_number, (local, redundancy, earlier) in enumerate(picks, start=1):
+        item = scored[strong[local]]
+        item.evidence["selection"] = {
+            "score_rank": order.index(strong[local]) + 1,
+            "eligible": len(scored),
+            "best_score": round(best, 4),
+            "floor": round(floor, 4),
+            "min_relative_score": sel.min_relative_score,
+            "above_floor": len(strong),
+            "mmr_lambda": sel.mmr_lambda,
+            "mmr_pick": pick_number,
+            "redundancy": round(redundancy, 4),
+            "most_similar_pick": scored[strong[earlier]].paper.title
+            if earlier is not None
+            else None,
+        }
+        chosen.append(item)
+
     # the most relevant *and* impactful papers deserve a careful read
     by_depth = sorted(chosen, key=lambda s: s.relevance + s.impact, reverse=True)
-    for item in by_depth[: sel.n_detail]:
-        item.category = Category.detail
-    return sorted(chosen, key=lambda s: (s.category != Category.detail, -s.score))
+    for position, item in enumerate(by_depth, start=1):
+        if position <= sel.n_detail:
+            item.category = Category.detail
+        item.evidence["category"] = {
+            "relevance_plus_impact": round(item.relevance + item.impact, 4),
+            "position": position,
+            "n_detail": sel.n_detail,
+            "category": item.category.value,
+        }
+    funnel.update({"eligible": len(scored), "above_floor": len(strong), "picked": len(chosen)})
+    picks_sorted = sorted(chosen, key=lambda s: (s.category != Category.detail, -s.score))
+    return RankResult(picks_sorted, funnel)
 
 
 def describe(item: Scored) -> str:

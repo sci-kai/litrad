@@ -19,10 +19,11 @@ from litresearch.db import (
     ReadStatus,
     Recommendation,
     StatusEvent,
+    XpEvent,
     depth,
     now,
 )
-from litresearch.game import Award, award_reading
+from litresearch.game import Award, award_reading, level_for, total_xp
 from litresearch.ingest.bibtex import normalize_doi
 from litresearch.recommend.engine import latest_batch
 
@@ -135,12 +136,14 @@ def queue_add(
     return new
 
 
-def queue_remove(session: Session, paper: Paper, commit: bool = True) -> bool:
+def queue_remove(session: Session, paper: Paper, commit: bool = True) -> QueueItem | None:
+    """Take a paper off the queue; returns the removed item (None if not queued)."""
     items = [item for item, _ in queue_items(session)]
     remaining = [item for item in items if item.paper_id != paper.id]
     if len(remaining) == len(items):
-        return False
-    session.delete(next(item for item in items if item.paper_id == paper.id))
+        return None
+    removed = next(item for item in items if item.paper_id == paper.id)
+    session.delete(removed)
     session.flush()
     _renumber(remaining)
     for item in remaining:
@@ -149,7 +152,58 @@ def queue_remove(session: Session, paper: Paper, commit: bool = True) -> bool:
         session.commit()
     else:
         session.flush()
-    return True
+    return removed
+
+
+def unread_drop_penalty(
+    session: Session,
+    cfg: Config,
+    paper: Paper,
+    item: QueueItem | None,
+    read_depth: int,
+    at: datetime,
+) -> XpEvent | None:
+    """Penalty for a recommended paper you picked but let go unread.
+
+    Applies only to papers added to the queue from a recommendation that were
+    not at least skimmed. Manually added and library papers can be dropped
+    freely.
+    """
+    if item is None or item.source != "recommendation" or read_depth >= 2:
+        return None
+    if not cfg.game.drop_penalty:
+        return None
+    event = XpEvent(
+        paper_id=paper.id,
+        points=-cfg.game.drop_penalty,
+        kind="penalty",
+        reason=f"Picked recommendation left the queue unread: {paper.title[:60]}",
+        at=at,
+    )
+    session.add(event)
+    return event
+
+
+def drop_from_queue(
+    session: Session, cfg: Config, paper: Paper, at: datetime | None = None
+) -> XpEvent | None:
+    """Remove a paper from the queue; returns the penalty, if any."""
+    at = at or now()
+    read_depth = deepest_depth(session, paper.id)
+    item = queue_remove(session, paper, commit=False)
+    if item is None:
+        raise ReadingError("Not on the queue")
+    penalty = unread_drop_penalty(session, cfg, paper, item, read_depth, at)
+    session.commit()
+    return penalty
+
+
+def drop_would_cost(session: Session, cfg: Config, paper: Paper) -> int:
+    """XP a drop would cost right now (for warnings in the UI)."""
+    item = session.get(QueueItem, paper.id)
+    if item is None or item.source != "recommendation" or deepest_depth(session, paper.id) >= 2:
+        return 0
+    return cfg.game.drop_penalty
 
 
 def queue_move(session: Session, paper: Paper, position: int) -> None:
@@ -226,9 +280,10 @@ def record_reading(
     session.add(StatusEvent(paper_id=paper.id, status=status, was_queue_top=was_top, at=at))
     session.flush()
 
-    left_queue = False
+    removed = None
     if depth(status) >= 2 or status == ReadStatus.dismissed:
-        left_queue = queue_remove(session, paper, commit=False)
+        removed = queue_remove(session, paper, commit=False)
+    left_queue = removed is not None
     emptied = left_queue and status != ReadStatus.dismissed and not queue_items(session)
 
     award = award_reading(
@@ -242,6 +297,12 @@ def record_reading(
         emptied,
         at,
     )
+    if status == ReadStatus.dismissed:
+        penalty = unread_drop_penalty(session, cfg, paper, removed, previous_depth, at)
+        if penalty:
+            award.events.append(penalty)
+            session.flush()
+            award.level_after = level_for(total_xp(session))
     session.commit()
     session.refresh(reading)
     return ReadingOutcome(reading, previous, left_queue, award)

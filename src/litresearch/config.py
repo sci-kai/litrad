@@ -85,6 +85,26 @@ class Selection(_Base):
     results_per_query: int = Field(25, ge=1, le=100)
     # an unread recommendation may come back after this many weeks
     cooldown_weeks: int = Field(8, ge=0)
+    # --- fine-tuning (see docs/recommendation-criteria.md) ---
+    # relevance = similarity_share * library similarity + (1 - share) * topic bonus
+    similarity_share: float = Field(0.7, ge=0, le=1)
+    # number of most similar library papers averaged for the similarity
+    knn: int = Field(5, ge=1, le=50)
+    # topic bonus for papers found only by Semantic Scholar's library-based recommendations
+    s2_only_topic_bonus: float = Field(0.5, ge=0, le=1)
+    # journal 2-year mean citedness that counts as a top journal (impact 1.0)
+    top_venue_citedness: float = Field(30.0, gt=0)
+    # impact of fresh papers whose journal is unknown
+    unknown_venue_impact: float = Field(0.05, ge=0, le=1)
+    # maximal impact bonus of fresh papers for early citations, reached at this many
+    early_citation_bonus: float = Field(0.2, ge=0, le=1)
+    early_citation_saturation: int = Field(50, ge=1)
+    # citations per year that count as maximal impact when no percentile is known
+    citations_per_year_saturation: int = Field(200, ge=1)
+    # timeliness of landmark papers (fresh papers: 0.5-1.0)
+    landmark_timeliness: float = Field(0.4, ge=0, le=1)
+    # picks need at least this share of the best score (diversity must not pull in weak papers)
+    min_relative_score: float = Field(0.6, ge=0, le=1)
 
     @model_validator(mode="after")
     def _max_five(self):
@@ -102,6 +122,8 @@ class Game(_Base):
     # weekly quest: papers read at least "read" depth / at least "skimmed" depth
     weekly_detail_goal: int = Field(1, ge=0)
     weekly_skim_goal: int = Field(2, ge=0)
+    # XP lost when a paper picked from the recommendations leaves the queue unread
+    drop_penalty: int = Field(15, ge=0)
 
 
 class Llm(_Base):

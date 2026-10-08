@@ -6,13 +6,14 @@ import pytest
 from litresearch.config import Selection
 from litresearch.db import Category, Paper
 from litresearch.recommend.scoring import (
-    UNKNOWN_VENUE_IMPACT,
     Candidate,
+    LibraryProfile,
     age_days,
     classify,
     describe,
     impact_score,
-    knn_similarity,
+    knn,
+    log_scale,
     mmr_select,
     percentile_ranks,
     rank_candidates,
@@ -56,38 +57,59 @@ def test_classify(kwargs, expected):
     assert classify(paper(**kwargs), TODAY, SEL) == expected
 
 
+def test_classify_follows_settings():
+    sel = Selection(fresh_window_months=1, landmark_min_percentile=99.5, landmark_max_age_years=30)
+    assert classify(paper(pub_date=date(2026, 8, 1)), TODAY, sel) is None
+    assert classify(paper(pub_date=date(2005, 1, 1), citation_percentile=99.9), TODAY, sel)
+    assert classify(paper(pub_date=date(2020, 1, 1), citation_percentile=99.0), TODAY, sel) is None
+
+
 # --- components -----------------------------------------------------------
 
 
-def test_venue_impact_scale():
-    assert venue_impact(None) == UNKNOWN_VENUE_IMPACT
-    assert venue_impact(0) == 0
-    assert venue_impact(30) == pytest.approx(1.0)
-    assert venue_impact(300) == 1.0
-    assert venue_impact(2) < venue_impact(10) < venue_impact(20)
+def test_log_scale_and_venue_impact():
+    assert (
+        log_scale(0, 30) == 0 and log_scale(30, 30) == pytest.approx(1) and log_scale(99, 30) == 1
+    )
+    assert venue_impact(None, SEL) == SEL.unknown_venue_impact
+    assert venue_impact(2, SEL) < venue_impact(10, SEL) < venue_impact(20, SEL)
+    assert venue_impact(10, Selection(top_venue_citedness=10)) == pytest.approx(1)
 
 
 def test_impact_fresh_uses_venue_and_early_citations():
-    top = paper(venue_mean_citedness=25.0)
-    weak = paper(venue_mean_citedness=1.0)
-    assert impact_score(top, "fresh", TODAY) > impact_score(weak, "fresh", TODAY)
-    cited = paper(venue_mean_citedness=1.0, citation_count=20)
-    assert impact_score(cited, "fresh", TODAY) > impact_score(weak, "fresh", TODAY)
-    assert impact_score(paper(venue_mean_citedness=500, citation_count=500), "fresh", TODAY) == 1
+    top, top_ev = impact_score(paper(venue_mean_citedness=25.0), "fresh", TODAY, SEL)
+    weak, _ = impact_score(paper(venue_mean_citedness=1.0), "fresh", TODAY, SEL)
+    cited, cited_ev = impact_score(
+        paper(venue_mean_citedness=1.0, citation_count=20), "fresh", TODAY, SEL
+    )
+    assert top > weak and cited > weak
+    assert top_ev["basis"] == "journal" and top_ev["venue_mean_citedness"] == 25.0
+    assert cited_ev["early_citation_bonus"] > 0
+    capped, _ = impact_score(
+        paper(venue_mean_citedness=500, citation_count=500), "fresh", TODAY, SEL
+    )
+    assert capped == 1
 
 
 def test_impact_landmark_uses_percentile_or_citations_per_year():
-    assert impact_score(paper(citation_percentile=99.5), "landmark", TODAY) == 0.995
-    many = paper(pub_date=date(2016, 1, 1), citation_count=5000)
-    few = paper(pub_date=date(2016, 1, 1), citation_count=50)
-    assert 0 < impact_score(few, "landmark", TODAY) < impact_score(many, "landmark", TODAY) <= 1
+    value, evidence = impact_score(paper(citation_percentile=99.5), "landmark", TODAY, SEL)
+    assert value == 0.995 and evidence["basis"] == "citation percentile"
+    many, _ = impact_score(
+        paper(pub_date=date(2016, 1, 1), citation_count=5000), "landmark", TODAY, SEL
+    )
+    few, few_ev = impact_score(
+        paper(pub_date=date(2016, 1, 1), citation_count=50), "landmark", TODAY, SEL
+    )
+    assert 0 < few < many <= 1 and few_ev["basis"] == "citations per year"
 
 
 def test_timeliness():
-    assert timeliness_score("fresh", 0, 180) == 1.0
-    assert timeliness_score("fresh", 90, 180) == 0.75
-    assert timeliness_score("fresh", 400, 180) == 0.5
-    assert timeliness_score("landmark", 4000, 180) == 0.4
+    assert timeliness_score("fresh", 0, SEL)[0] == 1.0
+    window = SEL.fresh_window_months * 30.5
+    assert timeliness_score("fresh", window / 2, SEL)[0] == pytest.approx(0.75)
+    assert timeliness_score("fresh", 400, SEL)[0] == 0.5
+    assert timeliness_score("landmark", 4000, SEL)[0] == SEL.landmark_timeliness
+    assert timeliness_score("landmark", 1, Selection(landmark_timeliness=0.9))[0] == 0.9
 
 
 def test_percentile_ranks_handles_ties_and_small_inputs():
@@ -97,20 +119,25 @@ def test_percentile_ranks_handles_ties_and_small_inputs():
     assert ranks[0] == 0 and ranks[3] == 1 and ranks[1] == ranks[2] == 0.5
 
 
-def test_knn_similarity_prefers_close_vectors():
+def test_knn_returns_neighbours_in_order():
     library = np.array([[1.0, 0, 0], [0.9, 0.1, 0], [0, 0, 1]])
     candidates = np.array([[1.0, 0.05, 0], [0, 1.0, 0]])
-    sims = knn_similarity(candidates, library, k=2)
-    assert sims[0] > 0.9 > sims[1]
-    assert knn_similarity(candidates, np.zeros((0, 3))).tolist() == [0, 0]
+    mean, top, top_sims = knn(candidates, library, k=2)
+    assert mean[0] > 0.9 > mean[1]
+    assert top[0].tolist() == [0, 1] and top_sims[0][0] >= top_sims[0][1]
+    empty_mean, empty_top, _ = knn(candidates, np.zeros((0, 3)), 2)
+    assert empty_mean.tolist() == [0, 0] and empty_top.shape == (2, 0)
 
 
 def test_mmr_trades_score_for_diversity():
     scores = np.array([1.0, 0.98, 0.7])
     sims = np.array([[1, 0.99, 0.1], [0.99, 1, 0.1], [0.1, 0.1, 1]])
-    assert mmr_select(scores, sims, 2, lam=0.7) == [0, 2]
-    assert mmr_select(scores, sims, 2, lam=1.0) == [0, 1]
-    assert mmr_select(scores, sims, 10, lam=0.7) == [0, 2, 1]
+    assert [p[0] for p in mmr_select(scores, sims, 2, lam=0.7)] == [0, 2]
+    assert [p[0] for p in mmr_select(scores, sims, 2, lam=1.0)] == [0, 1]
+    picks = mmr_select(scores, sims, 10, lam=0.7)
+    assert [p[0] for p in picks] == [0, 2, 1]
+    assert picks[0][1:] == (0.0, None)
+    assert picks[2][1] == pytest.approx(0.99) and picks[2][2] == 0
 
 
 def test_tfidf_rows_are_normalised_and_ignore_stopwords():
@@ -133,55 +160,117 @@ def candidate(title, vector=None, topics=(), sources=("openalex-fresh",), **kwar
         set(topics),
         set(sources),
         None if vector is None else np.array(vector, dtype=np.float32),
+        found_by=[{"source": s, "topic": next(iter(topics), None), "query": "q"} for s in sources],
     )
 
 
-LIBRARY_VECTORS = np.array([[1.0, 0, 0, 0], [0.9, 0.1, 0, 0], [0, 1.0, 0, 0]])
-LIBRARY_TEXTS = ["clonal evolution of tumours", "tumour phylogeny", "single-cell sequencing"]
+LIBRARY = LibraryProfile(
+    ids=[11, 12, 13],
+    titles=["Clonal evolution of tumours", "Tumour phylogeny", "Single-cell sequencing"],
+    texts=["clonal evolution of tumours", "tumour phylogeny", "single-cell sequencing"],
+    vector_ids=[11, 12, 13],
+    vectors=np.array([[1.0, 0, 0, 0], [0.9, 0.1, 0, 0], [0, 1.0, 0, 0]]),
+)
+TEXT_ONLY_LIBRARY = LibraryProfile(ids=LIBRARY.ids, titles=LIBRARY.titles, texts=LIBRARY.texts)
 WEIGHTS = {"evo": 1.0, "other": 0.5}
+
+
+def rank(candidates, library=LIBRARY, sel=SEL):
+    return rank_candidates(candidates, library, WEIGHTS, sel, TODAY)
 
 
 def test_rank_selects_at_most_five_and_puts_detail_first():
     candidates = [candidate(f"Paper {i}", [1.0, i / 10, 0, 0], topics=["evo"]) for i in range(8)]
-    ranked = rank_candidates(candidates, LIBRARY_VECTORS, LIBRARY_TEXTS, WEIGHTS, SEL, TODAY)
-    assert len(ranked) == 5
-    categories = [r.category for r in ranked]
+    result = rank(candidates)
+    assert len(result.picks) == 5
+    categories = [r.category for r in result.picks]
     assert categories == [Category.detail] * 2 + [Category.skim] * 3
-    assert ranked[0].breakdown()["topics"] == ["evo"]
+    assert result.funnel == {
+        "scored": 8,
+        "not_fresh_or_landmark": 0,
+        "eligible": 8,
+        "above_floor": 8,
+        "picked": 5,
+    }
 
 
 def test_ineligible_and_weak_papers_are_not_picked():
     good = candidate("Clonal evolution", [1.0, 0, 0, 0], topics=["evo"])
     stale = candidate("Old and uncited", [1.0, 0, 0, 0], pub_date=date(2018, 1, 1))
     weak = candidate("Off-topic", [0, 0, 0, 1.0], venue_mean_citedness=None)
-    ranked = rank_candidates(
-        [good, stale, weak], LIBRARY_VECTORS, LIBRARY_TEXTS, WEIGHTS, SEL, TODAY
-    )
-    assert [r.paper.title for r in ranked] == ["Clonal evolution"]
+    result = rank([good, stale, weak])
+    assert [r.paper.title for r in result.picks] == ["Clonal evolution"]
+    assert result.funnel["not_fresh_or_landmark"] == 1 and result.funnel["above_floor"] == 1
+
+
+def test_floor_is_configurable():
+    good = candidate("Clonal evolution", [1.0, 0, 0, 0], topics=["evo"])
+    weak = candidate("Off-topic", [0, 0, 0, 1.0], venue_mean_citedness=None)
+    result = rank([good, weak], sel=Selection(min_relative_score=0))
+    assert len(result.picks) == 2
 
 
 def test_text_fallback_without_embeddings():
     on_topic = candidate("Tumour phylogeny and clonal evolution", topics=["evo"])
     off_topic = candidate("Cardiac muscle physiology in mice", topics=["evo"])
-    ranked = rank_candidates(
-        [off_topic, on_topic], np.zeros((0, 0)), LIBRARY_TEXTS, WEIGHTS, SEL, TODAY
-    )
-    assert ranked[0].paper.title.startswith("Tumour phylogeny")
-    assert all(r.relevance < ranked[0].relevance for r in ranked[1:])
+    result = rank([off_topic, on_topic], library=TEXT_ONLY_LIBRARY)
+    assert result.picks[0].paper.title.startswith("Tumour phylogeny")
+    assert all(r.relevance < result.picks[0].relevance for r in result.picks[1:])
+    assert result.picks[0].evidence["relevance"]["method"] == "TF-IDF"
 
 
 def test_topic_weight_and_s2_bonus():
     a = candidate("A", [1.0, 0, 0, 0], topics=["evo"])
     b = candidate("B", [1.0, 0, 0, 0], topics=["other"])
     c = candidate("C", [1.0, 0, 0, 0], topics=[], sources=["s2-recs"])
-    ranked = rank_candidates([a, b, c], LIBRARY_VECTORS, LIBRARY_TEXTS, WEIGHTS, SEL, TODAY)
-    relevance = {r.paper.title: r.relevance for r in ranked}
+    relevance = {r.paper.title: r.relevance for r in rank([a, b, c]).picks}
     assert relevance["A"] > relevance["B"]
     assert relevance["C"] == pytest.approx(relevance["B"])  # both get half the bonus
 
 
+def test_similarity_share_setting():
+    a = candidate("A", [1.0, 0, 0, 0], topics=["evo"])
+    b = candidate("B", [0, 1.0, 0, 0], topics=["other"])
+    only_topics = {
+        r.paper.title: r.relevance
+        for r in rank([a, b], sel=Selection(similarity_share=0, min_relative_score=0)).picks
+    }
+    assert only_topics == {"A": 1.0, "B": 0.5}
+
+
 def test_no_candidates():
-    assert rank_candidates([], LIBRARY_VECTORS, LIBRARY_TEXTS, WEIGHTS, SEL, TODAY) == []
+    result = rank([])
+    assert result.picks == [] and result.funnel["eligible"] == 0
+
+
+def test_evidence_tree_contents():
+    a = candidate("Clonal evolution", [1.0, 0, 0, 0], topics=["evo"])
+    b = candidate("Phylogeny", [0.95, 0.05, 0, 0], topics=["evo"])
+    result = rank([a, b])
+    first = next(r for r in result.picks if r.paper.title == "Clonal evolution")
+    ev = first.evidence
+    assert ev["found_by"] == [{"source": "openalex-fresh", "topic": "evo", "query": "q"}]
+    assert ev["eligibility"]["kind"] == "fresh" and ev["eligibility"]["age_days"] == 36
+    rel = ev["relevance"]
+    assert rel["method"] == "SPECTER2" and rel["topic_bonus"] == 1.0
+    assert rel["neighbours"][0] == {
+        "paper_id": 11,
+        "title": "Clonal evolution of tumours",
+        "similarity": 1.0,
+    }
+    assert "topic 'evo'" in rel["topic_bonus_reason"]
+    assert ev["impact"]["basis"] == "journal"
+    assert ev["timeliness"]["basis"] == "fresh"
+    assert sum(ev["contributions"].values()) == pytest.approx(first.score, abs=1e-3)
+    assert ev["weights"] == {"relevance": 0.5, "impact": 0.3, "timeliness": 0.2}
+    selection = ev["selection"]
+    assert selection["eligible"] == 2 and selection["score_rank"] in (1, 2)
+    second = [r for r in result.picks if r is not first][0]
+    assert second.evidence["selection"]["mmr_pick"] + selection["mmr_pick"] == 3
+    later = max(result.picks, key=lambda r: r.evidence["selection"]["mmr_pick"])
+    assert later.evidence["selection"]["most_similar_pick"] is not None
+    assert ev["category"]["n_detail"] == 2 and ev["category"]["category"] == "detail"
+    assert first.breakdown()["evidence"] is ev
 
 
 def test_describe():
@@ -195,7 +284,6 @@ def test_describe():
         venue="Nature",
     )
     fresh = candidate("F", [0.9, 0.1, 0, 0], sources=["s2-recs"], citation_count=1)
-    ranked = rank_candidates([landmark, fresh], LIBRARY_VECTORS, LIBRARY_TEXTS, WEIGHTS, SEL, TODAY)
-    text = {r.paper.title: describe(r) for r in ranked}
+    text = {r.paper.title: describe(r) for r in rank([landmark, fresh]).picks}
     assert text["L"] == "landmark · top 0.5% cited · 1,234 citations · Nature · topic: evo"
     assert text["F"] == "fresh · 1 citation · similar to your library"

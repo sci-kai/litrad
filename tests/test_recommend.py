@@ -121,6 +121,33 @@ def test_batch_contents(setup):
     assert fresh.venue_mean_citedness == 20.0 and not fresh.in_library
 
 
+def test_batch_records_funnel_params_and_provenance(setup):
+    batch, items = build(setup)
+    funnel = batch.funnel
+    assert funnel["gathered"] == 9  # 6 fresh + 2 landmark + 1 S2 recommendation
+    assert funnel["removed"] == {
+        "wrong_type": 1,
+        "meeting_abstract": 1,
+        "in_library": 1,
+        "read_or_dismissed": 0,
+        "queued": 0,
+        "recently_recommended": 0,
+        "excluded_term": 1,
+    }
+    assert funnel["scored"] == 5 and funnel["not_fresh_or_landmark"] == 1
+    assert funnel["picked"] == len(items) == 4
+    assert funnel["library_papers"] == 7 and funnel["library_embedded"] == 3
+    assert batch.params["selection"]["n_detail"] == 2
+    assert batch.params["topics"][0]["queries"] == ["clonal evolution"]
+    rec = next(r for r, p in items if p.doi == "10.9/fresh-good")
+    found = rec.breakdown["evidence"]["found_by"]
+    assert found == [
+        {"source": "openalex-fresh", "topic": "evo", "query": "clonal evolution", "position": 1}
+    ]
+    s2 = next(r for r, p in items if p.doi == "10.9/s2-rec")
+    assert s2.breakdown["evidence"]["found_by"][0]["source"] == "s2-recs"
+
+
 def test_latest_batch_per_week(setup):
     _, engine, _, _ = setup
     first, _ = build(setup)

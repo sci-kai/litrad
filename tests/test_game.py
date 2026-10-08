@@ -19,13 +19,18 @@ from litresearch.game import (
     BADGE_XP,
     LEVELS,
     grade,
+    ledger,
     level_for,
+    next_goals,
+    personal_bests,
+    reading_calendar,
     reading_impact_factor,
     stats,
     streak_multiplier,
     streaks,
     total_xp,
     week_progress,
+    weekly_summaries,
 )
 from litresearch.reading import queue_add, record_reading
 
@@ -299,3 +304,66 @@ def test_queue_is_untouched_by_abstract_reads(db):
     outcome = record_reading(session, cfg, paper, ReadStatus.abstract, at=MONDAY)
     assert not outcome.left_queue
     assert session.exec(select(QueueItem)).one().paper_id == paper.id
+
+
+# --- summaries -------------------------------------------------------------------
+
+
+def test_weekly_summary(db):
+    cfg, session = db
+    a, b = add_paper(session, "A"), add_paper(session, "B")
+    record_reading(session, cfg, a, ReadStatus.abstract, at=MONDAY)
+    record_reading(session, cfg, a, ReadStatus.thorough, at=MONDAY + timedelta(days=1))
+    record_reading(session, cfg, b, ReadStatus.skimmed, at=MONDAY + timedelta(days=2))
+    summaries = weekly_summaries(session, cfg, MONDAY.date() + timedelta(days=3), weeks=2)
+    this, last = summaries
+    assert this["current"] and not last["current"]
+    assert [e["paper"].title for e in this["papers"]] == ["A", "B"]
+    assert this["papers"][0]["status"] == ReadStatus.thorough
+    assert this["xp"] == total_xp(session)
+    assert this["xp_by_kind"]["read"] == 95  # 5 + 75 + 15
+    assert [b.code for b in this["badges"]] == ["first_read"]
+    assert this["grade"] == "B" and last["grade"] == "-" and last["xp"] == 0
+
+
+def test_ledger_running_balance_and_filter(db):
+    cfg, session = db
+    paper = add_paper(session, "A")
+    record_reading(session, cfg, paper, ReadStatus.read, at=MONDAY)
+    session.add(XpEvent(points=-15, kind="penalty", reason="test", at=MONDAY + timedelta(hours=1)))
+    session.commit()
+    rows, total = ledger(session)
+    assert total == len(rows) >= 3
+    assert rows[0]["event"].kind == "penalty"  # newest first
+    assert rows[0]["balance"] == total_xp(session)
+    assert rows[1]["balance"] == total_xp(session) + 15
+    assert rows[-1]["paper"].title == "A"
+    penalties, n = ledger(session, kind="penalty")
+    assert n == 1 and penalties[0]["event"].points == -15
+    page, _ = ledger(session, limit=1, offset=1)
+    assert page[0]["event"] is rows[1]["event"]
+
+
+def test_reading_calendar(db):
+    cfg, session = db
+    record_reading(session, cfg, add_paper(session), ReadStatus.read, at=MONDAY)
+    calendar = reading_calendar(session, MONDAY.date() + timedelta(days=2), weeks=4)
+    assert len(calendar) == 4 and all(len(column) == 7 for column in calendar)
+    monday = calendar[-1][0]
+    assert monday["date"] == MONDAY.date() and monday["count"] == 1 and monday["xp"] > 0
+    assert calendar[-1][6]["future"] and not calendar[0][0]["future"]
+
+
+def test_personal_bests_and_hints(db):
+    cfg, session = db
+    hints = next_goals(session, cfg, MONDAY.date())
+    assert any("Weekly quest: 1 deep read and 2 more skims" in h for h in hints)
+    assert any("XP until Lab Rotation Student" in h for h in hints)
+    for i in range(3):
+        record_reading(session, cfg, add_paper(session, f"P{i}"), ReadStatus.read, at=MONDAY)
+    bests = personal_bests(session, cfg, MONDAY.date())
+    assert bests["best_week"] == MONDAY.date() and bests["busiest_week_papers"] == 3
+    assert bests["best_week_xp"] == total_xp(session) and bests["quests"] == 1
+    # a week later the streak needs attention
+    hints = next_goals(session, cfg, MONDAY.date() + timedelta(weeks=1))
+    assert any("keep your 1-week streak alive" in h for h in hints)

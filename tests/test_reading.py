@@ -13,9 +13,12 @@ from litresearch.db import (
     RecommendationBatch,
     init_db,
 )
+from litresearch.game import level_for, total_xp
 from litresearch.reading import (
     ReadingError,
     add_note,
+    drop_from_queue,
+    drop_would_cost,
     find_paper,
     queue_add,
     queue_items,
@@ -198,3 +201,52 @@ def test_rating_validation_and_update(db):
     record_reading(session, cfg, papers[0], ReadStatus.read, rating=3, at=AT)
     outcome = record_reading(session, cfg, papers[0], ReadStatus.thorough, rating=5, at=AT)
     assert outcome.reading.rating == 5 and outcome.previous == ReadStatus.read
+
+
+# --- drop penalty --------------------------------------------------------------
+
+
+def test_dropping_a_picked_recommendation_unread_costs_xp(db):
+    cfg, session, papers = db
+    queue_add(session, cfg, papers[1], source="recommendation")
+    assert drop_would_cost(session, cfg, papers[1]) == 15
+    penalty = drop_from_queue(session, cfg, papers[1], at=AT)
+    assert penalty.points == -15 and penalty.kind == "penalty"
+    assert total_xp(session) == -15
+    assert level_for(total_xp(session)).number == 1  # levels never go below 1
+
+
+def test_abstract_only_still_counts_as_unread(db):
+    cfg, session, papers = db
+    queue_add(session, cfg, papers[1], source="recommendation")
+    record_reading(session, cfg, papers[1], ReadStatus.abstract, at=AT)
+    assert drop_from_queue(session, cfg, papers[1], at=AT).points == -15
+
+
+def test_manual_and_library_papers_drop_for_free(db):
+    cfg, session, papers = db
+    queue_add(session, cfg, papers[0], source="library")
+    queue_add(session, cfg, papers[2], source="manual")
+    assert drop_would_cost(session, cfg, papers[0]) == 0
+    assert drop_from_queue(session, cfg, papers[0], at=AT) is None
+    assert drop_from_queue(session, cfg, papers[2], at=AT) is None
+    with pytest.raises(ReadingError, match="Not on the queue"):
+        drop_from_queue(session, cfg, papers[2], at=AT)
+
+
+def test_dismissing_a_picked_recommendation_costs_xp(db):
+    cfg, session, papers = db
+    queue_add(session, cfg, papers[1], source="recommendation")
+    award = record_reading(session, cfg, papers[1], ReadStatus.dismissed, at=AT).award
+    assert [e.kind for e in award.events] == ["penalty"] and award.points == -15
+    # dismissing a recommendation you never picked is free
+    award = record_reading(session, cfg, papers[3], ReadStatus.dismissed, at=AT).award
+    assert award.points == 0
+
+
+def test_penalty_can_be_disabled(db):
+    cfg, session, papers = db
+    cfg = Config.model_validate({**cfg.model_dump(mode="json"), "game": {"drop_penalty": 0}})
+    queue_add(session, cfg, papers[1], source="recommendation")
+    assert drop_would_cost(session, cfg, papers[1]) == 0
+    assert drop_from_queue(session, cfg, papers[1], at=AT) is None

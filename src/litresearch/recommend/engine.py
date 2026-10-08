@@ -21,7 +21,7 @@ from litresearch.db import (
     store_embedding,
 )
 from litresearch.papers import upsert_work
-from litresearch.recommend.scoring import Candidate, describe, rank_candidates
+from litresearch.recommend.scoring import Candidate, LibraryProfile, describe, rank_candidates
 from litresearch.sources.http import HttpClient, HttpError
 from litresearch.sources.openalex import OpenAlex, Work
 from litresearch.sources.semanticscholar import EMBEDDING_MODEL, SemanticScholar
@@ -49,15 +49,28 @@ class Gathered:
     works: dict[str, Work] = field(default_factory=dict)
     topics: dict[str, set[str]] = field(default_factory=dict)
     sources: dict[str, set[str]] = field(default_factory=dict)
+    found_by: dict[str, list[dict]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    without_doi: int = 0
 
-    def add(self, work: Work, source: str, topic: str | None = None) -> None:
+    def add(
+        self,
+        work: Work,
+        source: str,
+        topic: str | None = None,
+        query: str | None = None,
+        position: int | None = None,
+    ) -> None:
         if not work.doi:
+            self.without_doi += 1
             return
         self.works.setdefault(work.doi, work)
         self.sources.setdefault(work.doi, set()).add(source)
         if topic:
             self.topics.setdefault(work.doi, set()).add(topic)
+        self.found_by.setdefault(work.doi, []).append(
+            {"source": source, "topic": topic, "query": query, "position": position}
+        )
 
 
 def gather_topic_candidates(cfg: Config, openalex: OpenAlex, today: date, out: Gathered) -> None:
@@ -89,8 +102,8 @@ def gather_topic_candidates(cfg: Config, openalex: OpenAlex, today: date, out: G
                 except HttpError as error:
                     out.warnings.append(f"OpenAlex search '{query}': {error}")
                     continue
-                for work in works:
-                    out.add(work, source, topic.name)
+                for position, work in enumerate(works, start=1):
+                    out.add(work, source, topic.name, query, position)
 
 
 def gather_s2_candidates(
@@ -120,28 +133,30 @@ def gather_s2_candidates(
     except HttpError as error:
         out.warnings.append(f"Semantic Scholar recommendations: {error}")
         return
+    rank = {doi: i for i, doi in enumerate(dois, start=1)}
     for work in works.values():
-        out.add(work, "s2-recs")
+        out.add(work, "s2-recs", position=rank.get(work.doi))
 
 
-def excluded_ids(session: Session, cfg: Config, today: date) -> set[int]:
-    """Papers that must not be recommended: read, dismissed, queued, recently shown.
+def exclusion_sets(session: Session, cfg: Config, today: date) -> dict[str, set[int]]:
+    """Papers that must not be recommended, by reason.
 
-    Batches of the current week do not count, so ``--refresh`` can rebuild them.
+    Batches of the current week do not count, so a refresh can rebuild them.
     """
-    ids = set(session.exec(select(Reading.paper_id)).all())
-    ids |= set(session.exec(select(QueueItem.paper_id)).all())
     this_week = week_start(today)
     since = this_week - timedelta(weeks=cfg.selection.cooldown_weeks)
-    ids |= set(
-        session.exec(
-            select(Recommendation.paper_id)
-            .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
-            .where(RecommendationBatch.week_start >= since)
-            .where(RecommendationBatch.week_start < this_week)
-        ).all()
-    )
-    return ids
+    return {
+        "read_or_dismissed": set(session.exec(select(Reading.paper_id)).all()),
+        "queued": set(session.exec(select(QueueItem.paper_id)).all()),
+        "recently_recommended": set(
+            session.exec(
+                select(Recommendation.paper_id)
+                .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
+                .where(RecommendationBatch.week_start >= since)
+                .where(RecommendationBatch.week_start < this_week)
+            ).all()
+        ),
+    }
 
 
 def has_excluded_term(paper: Paper, terms: list[str]) -> bool:
@@ -197,17 +212,34 @@ def build_recommendations(
     if use_s2 and cfg.sources.semanticscholar:
         gather_s2_candidates(session, s2, openalex, gathered)
 
-    excluded = excluded_ids(session, cfg, today)
+    exclusions = exclusion_sets(session, cfg, today)
+    removed = dict.fromkeys(
+        ["wrong_type", "meeting_abstract", "in_library", *exclusions, "excluded_term"], 0
+    )
     candidates: list[Candidate] = []
     for doi, work in gathered.works.items():
-        if work.type not in ALLOWED_TYPES or MEETING_ABSTRACT.match(work.title or ""):
+        if work.type not in ALLOWED_TYPES:
+            removed["wrong_type"] += 1
+            continue
+        if MEETING_ABSTRACT.match(work.title or ""):
+            removed["meeting_abstract"] += 1
             continue
         paper = upsert_work(session, work)
         session.flush()
-        if paper.in_library or paper.id in excluded or has_excluded_term(paper, cfg.excluded_terms):
+        reason = "in_library" if paper.in_library else None
+        reason = reason or next((r for r, ids in exclusions.items() if paper.id in ids), None)
+        if reason is None and has_excluded_term(paper, cfg.excluded_terms):
+            reason = "excluded_term"
+        if reason:
+            removed[reason] += 1
             continue
         candidates.append(
-            Candidate(paper, gathered.topics.get(doi, set()), gathered.sources.get(doi, set()))
+            Candidate(
+                paper,
+                gathered.topics.get(doi, set()),
+                gathered.sources.get(doi, set()),
+                found_by=gathered.found_by.get(doi, []),
+            )
         )
 
     venues = {c.paper.venue_openalex_id for c in candidates if c.paper.venue_openalex_id}
@@ -228,22 +260,44 @@ def build_recommendations(
     cand_vectors = vectors_for(session, [c.paper.id for c in candidates])
     for c in candidates:
         c.vector = cand_vectors.get(c.paper.id)
-
-    ranked = rank_candidates(
-        candidates,
-        np.stack(list(lib_vectors.values())) if lib_vectors else np.zeros((0, 0)),
-        [f"{p.title} {p.abstract or ''}" for p in library],
-        {t.name: t.weight for t in cfg.topics},
-        cfg.selection,
-        today,
+    profile = LibraryProfile(
+        ids=[p.id for p in library],
+        titles=[p.title for p in library],
+        texts=[f"{p.title} {p.abstract or ''}" for p in library],
+        vector_ids=list(lib_vectors),
+        vectors=np.stack(list(lib_vectors.values())) if lib_vectors else np.zeros((0, 0)),
     )
 
+    result = rank_candidates(
+        candidates, profile, {t.name: t.weight for t in cfg.topics}, cfg.selection, today
+    )
+    funnel = {
+        "gathered": len(gathered.works),
+        "without_doi": gathered.without_doi,
+        "removed": removed,
+        **result.funnel,
+        "library_papers": len(library),
+        "library_embedded": len(lib_vectors),
+        "candidates_embedded": len(cand_vectors),
+    }
     batch = RecommendationBatch(
-        week_start=week_start(today), n_candidates=len(candidates), warnings=gathered.warnings
+        week_start=week_start(today),
+        n_candidates=len(candidates),
+        warnings=gathered.warnings,
+        funnel=funnel,
+        params={
+            "selection": cfg.selection.model_dump(mode="json"),
+            "topics": [t.model_dump(mode="json") for t in cfg.topics],
+            "excluded_terms": list(cfg.excluded_terms),
+            "sources": {
+                "openalex": cfg.sources.openalex,
+                "semanticscholar": cfg.sources.semanticscholar and use_s2,
+            },
+        },
     )
     session.add(batch)
     session.flush()
-    for rank, item in enumerate(ranked, start=1):
+    for rank, item in enumerate(result.picks, start=1):
         session.add(
             Recommendation(
                 batch_id=batch.id,
