@@ -149,6 +149,24 @@ class XpEvent(SQLModel, table=True):
     at: NaiveDatetime = Field(default_factory=now)
 
 
+class IngestRun(SQLModel, table=True):
+    """One import of the Paperpile BibTeX export."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    at: NaiveDatetime = Field(default_factory=now)
+    # upload | file (re-import of paths.bibtex) | cli
+    source: str = "file"
+    file_name: str = ""
+    sha256: str = ""
+    size: int = 0
+    entries: int = 0
+    added: int = 0
+    updated: int = 0
+    removed: int = 0
+    check: dict | None = Field(default=None, sa_column=Column(JSON))
+    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+
+
 class Profile(SQLModel, table=True):
     """The game profile. Its rules are a locked copy taken when the game started."""
 

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta with context %}
+{% set active = "paperpile" %}
+{% block title %}Paperpile library{% endblock %}
+{% block heading %}📁 Your Paperpile library{% endblock %}
+{% macro findings(check) -%}
+  {% for f in check.findings %}
+  <div class="hint"><span>{{ {"error": "❌", "warning": "⚠️", "info": "ℹ️", "ok": "✅"}[f.level] }}</span><span class="{{ 'neg' if f.level == 'error' }}">{{ f.message }}</span></div>
+  {% endfor %}
+{%- endmacro %}
+{% block content %}
+{% set age = (today - last_run.at.date()).days if last_run else none %}
+
+{% if upload_check %}
+<div class="card {{ 'up-next' if upload_check.ok }}" style="margin-bottom:1rem">
+  <h2>{{ "✅" if upload_check.ok else "❌" }} Check of “{{ upload_name }}”: {{ upload_check.entries }} entries</h2>
+  {{ findings(upload_check) }}
+  {% if upload_check.coverage %}
+  <div class="bars" style="margin-top:.6rem">
+    {% for rule in field_rules %}<span>{{ rule.label }}</span><div class="bar"><span style="width: {{ (upload_check.coverage[rule.name] * 100) | round(1) }}%"></span></div><b>{{ (upload_check.coverage[rule.name] * 100) | round | int }} %</b>{% endfor %}
+  </div>
+  {% endif %}
+  <p class="muted" style="margin-top:.6rem">{{ "Nothing was changed yet. Upload again with 'Check & import' to replace your library file." if upload_check.ok else "Fix the export in Paperpile and upload again; your library was not changed." }}</p>
+</div>
+{% endif %}
+
+<div class="grid two">
+  <div class="card">
+    <h2>🔄 Status</h2>
+    <table>
+      <tr><td>Papers in your library</td><td class="num"><b>{{ n_library }}</b> ({{ n_read }} read in litresearch)</td></tr>
+      <tr><td>Last import</td><td class="num">{% if last_run %}{{ last_run.at.isoformat() }} <small class="muted">({{ age }} days ago, {{ last_run.source }})</small>{% else %}<span class="neg">never</span>{% endif %}</td></tr>
+      <tr><td>BibTeX file</td><td class="num"><code>{{ bib_path }}</code><br><small class="muted">{% if bib_modified %}changed {{ bib_modified.isoformat() }}{% else %}not found{% endif %}</small></td></tr>
+    </table>
+    {% if age is not none and age >= stale_days %}<div class="notice warn" style="margin:.6rem 0 0">⏳ Your library was last updated {{ age }} days ago. Export it from Paperpile again and upload it below.</div>{% endif %}
+    {% if last_run and bib_modified and bib_modified > last_run.at %}<div class="notice warn" style="margin:.6rem 0 0">📥 The BibTeX file changed after the last import (e.g. via rclone). Re-import it to update the library.</div>{% endif %}
+    <form method="post" action="/paperpile/reimport" data-loading="Importing and enriching your library (about a minute)…" style="margin-top:.8rem">
+      <button {{ "disabled" if not bib_modified }}>🔄 Re-import the BibTeX file</button>
+    </form>
+    {% if last_run and last_run.check %}
+    <h3 style="margin-top:1rem">Checks of the last import</h3>
+    {{ findings(last_run.check) }}
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>⬆️ Upload a new export</h2>
+    <form method="post" action="/paperpile/upload" enctype="multipart/form-data" class="grid" style="gap:.6rem" data-loading="Checking and importing (about a minute)…">
+      <input type="file" name="file" accept=".bib,.bibtex,text/plain" required>
+      <div class="row">
+        <button name="action" value="check">🔍 Check only</button>
+        <button class="primary" name="action" value="import">⬆️ Check &amp; import</button>
+      </div>
+      <p class="muted" style="margin:0">The file is checked first; an invalid export never replaces your library. The previous file is kept as <code>{{ bib_path.name }}.bak</code>.</p>
+    </form>
+    <details style="margin-top:.8rem" {{ "open" if not last_run }}>
+      <summary><b>📋 What the export must contain</b></summary>
+      <ol style="margin:.5rem 0">{% for step in instructions %}<li>{{ step }}</li>{% endfor %}</ol>
+      <table>
+        <thead><tr><th>Field</th><th>Why it matters</th><th class="num">Last import</th></tr></thead>
+        {% for rule in field_rules %}
+        <tr><td>{{ rule.label }}{% if rule.required %} <span class="chip penalty">required</span>{% elif rule.warn_below == 0 %} <span class="chip">optional</span>{% endif %}</td><td><small>{{ rule.why }}</small></td>
+          <td class="num">{% if last_run and last_run.check and last_run.check.coverage %}{{ (last_run.check.coverage.get(rule.name, 0) * 100) | round | int }} %{% else %}–{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+    </details>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>📚 Library <small class="muted">{{ n_rows }} of {{ n_library }} papers · without PDFs</small></h2>
+  <form method="get" class="row" style="margin-bottom:.8rem">
+    <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title, author, journal, DOI, citation key" style="flex:1 1 240px">
+    <select name="folder" style="max-width:340px">
+      <option value="">All folders and labels</option>
+      {% for name, count in folders %}<option value="{{ name }}" {{ "selected" if name == folder }}>{{ name }} ({{ count }})</option>{% endfor %}
+    </select>
+    <select name="status" style="max-width:180px">
+      <option value="" {{ "selected" if not status }}>All papers</option>
+      <option value="unread" {{ "selected" if status == "unread" }}>Not read yet</option>
+      <option value="read" {{ "selected" if status == "read" }}>Read</option>
+    </select>
+    <button class="primary">Filter</button>
+  </form>
+  <table>
+    <thead><tr><th>Paper</th><th>Folders</th><th>Status</th><th></th></tr></thead>
+    {% for row in rows %}{% set paper = row.paper %}
+    <tr>
+      <td><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br>{{ paper_meta(paper) }}</td>
+      <td>{% for f in paper.folders[:3] %}<span class="chip">📁 {{ f }}</span> {% endfor %}{% if paper.folders | length > 3 %}<small class="muted">+{{ paper.folders | length - 3 }}</small>{% endif %}</td>
+      <td style="white-space:nowrap">{% if row.reading %}{{ status_icons[row.reading.status.value] }} {{ row.reading.status.value }}{% elif row.queued %}📚 queued{% else %}<span class="muted">unread</span>{% endif %}</td>
+      <td>{% if not row.queued and (not row.reading or depth(row.reading.status) < 2) %}
+        <form method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="library"><input type="hidden" name="next_url" value="/paperpile?q={{ q | urlencode }}&folder={{ folder | urlencode }}&status={{ status }}&page={{ page }}"><button class="small">➕ Queue</button></form>
+      {% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">{{ "No papers match the filter." if n_library else "No library imported yet. Upload your Paperpile BibTeX export above." }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if pages > 1 %}
+  <div class="row" style="margin-top:.8rem; justify-content:center">
+    {% if page > 1 %}<a class="button small" href="/paperpile?q={{ q | urlencode }}&folder={{ folder | urlencode }}&status={{ status }}&page={{ page - 1 }}">← previous</a>{% endif %}
+    <span class="muted">page {{ page }}/{{ pages }}</span>
+    {% if page < pages %}<a class="button small" href="/paperpile?q={{ q | urlencode }}&folder={{ folder | urlencode }}&status={{ status }}&page={{ page + 1 }}">next →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if runs %}
+<details class="card" style="margin-top:1rem">
+  <summary><h2 style="display:inline">🕑 Import history</h2></summary>
+  <table style="margin-top:.6rem">
+    <thead><tr><th>When</th><th>Source</th><th>File</th><th class="num">Entries</th><th class="num">New / removed</th><th>Warnings</th></tr></thead>
+    {% for run in runs %}
+    <tr><td style="white-space:nowrap">{{ run.at.isoformat() }}</td><td>{{ run.source }}</td><td><code>{{ run.file_name }}</code><br><small class="muted">sha256 {{ run.sha256[:12] }} · {{ (run.size / 1024) | round(1) }} kB</small></td>
+      <td class="num">{{ run.entries }}</td><td class="num">{{ run.added }} / {{ run.removed }}</td>
+      <td>{% for w in run.warnings[:4] %}<small>{{ w }}</small><br>{% else %}<small class="muted">none</small>{% endfor %}</td></tr>
+    {% endfor %}
+  </table>
+</details>
+{% endif %}
+{% endblock %}

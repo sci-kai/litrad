@@ -8,7 +8,10 @@ import asyncio
 import csv
 import io
 import json
+import os
 import secrets
+import shutil
+import tempfile
 from collections import OrderedDict
 from datetime import date, datetime
 from pathlib import Path
@@ -36,6 +39,7 @@ from litresearch.backup import (
 from litresearch.config import load_config
 from litresearch.db import (
     Category,
+    IngestRun,
     Paper,
     QueueItem,
     Reading,
@@ -65,6 +69,9 @@ from litresearch.game import (
     weekly_summaries,
 )
 from litresearch.ingest.bibtex import normalize_doi
+from litresearch.ingest.check import FIELDS as BIB_FIELDS
+from litresearch.ingest.check import INSTRUCTIONS as BIB_INSTRUCTIONS
+from litresearch.ingest.check import check_bibtex
 from litresearch.papers import upsert_work
 from litresearch.profile import ProfileError, active_rules, get_profile, start_profile
 from litresearch.reading import (
@@ -104,6 +111,8 @@ HERE = Path(__file__).parent
 QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
 MAX_UPLOAD = 50 * 2**20  # bytes
+LIBRARY_PAGE = 50
+STALE_LIBRARY_DAYS = 30
 
 KIND_ICONS = {
     "read": "📖",
@@ -601,6 +610,168 @@ def create_app(config_path: Path) -> FastAPI:
                 )
         finally:
             engine.dispose()
+
+    # --- Paperpile library ------------------------------------------------------------
+
+    def library_rows(session: Session, q: str, folder: str, status: str):
+        papers = session.exec(select(Paper).where(Paper.in_library).order_by(Paper.title)).all()
+        readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
+        queued = set(session.exec(select(QueueItem.paper_id)).all())
+        rows = []
+        words = q.lower().split()
+        for paper in papers:
+            reading = readings.get(paper.id)
+            level = depth(reading.status) if reading else 0
+            if folder and not any(f == folder or f.startswith(folder + "/") for f in paper.folders):
+                continue
+            if status == "unread" and level >= 2:
+                continue
+            if status == "read" and level < 2:
+                continue
+            if words:
+                haystack = " ".join(
+                    [
+                        paper.title,
+                        " ".join(paper.authors),
+                        paper.bibtex_key or "",
+                        paper.doi or "",
+                        paper.venue or "",
+                    ]
+                ).lower()
+                if not all(w in haystack for w in words):
+                    continue
+            rows.append({"paper": paper, "reading": reading, "queued": paper.id in queued})
+        return rows
+
+    def paperpile_context(session: Session, cfg, q="", folder="", status="", page=1):
+        papers = session.exec(select(Paper).where(Paper.in_library)).all()
+        folders: dict[str, int] = {}
+        for paper in papers:
+            for name in paper.folders:
+                folders[name] = folders.get(name, 0) + 1
+        rows = library_rows(session, q, folder, status)
+        page = max(page, 1)
+        bib = cfg.paths.bibtex
+        modified = (
+            datetime.fromtimestamp(bib.stat().st_mtime).replace(microsecond=0)
+            if bib.exists()
+            else None
+        )
+        runs = session.exec(select(IngestRun).order_by(IngestRun.id.desc()).limit(10)).all()
+        return {
+            "rows": rows[(page - 1) * LIBRARY_PAGE : page * LIBRARY_PAGE],
+            "n_rows": len(rows),
+            "page": page,
+            "pages": max(1, -(-len(rows) // LIBRARY_PAGE)),
+            "q": q,
+            "folder": folder,
+            "status": status,
+            "folders": sorted(folders.items()),
+            "n_library": len(papers),
+            "n_read": sum(1 for r in library_rows(session, "", "", "read")),
+            "bib_path": bib,
+            "bib_modified": modified,
+            "runs": runs,
+            "last_run": runs[0] if runs else None,
+            "instructions": BIB_INSTRUCTIONS,
+            "field_rules": BIB_FIELDS,
+            "stale_days": STALE_LIBRARY_DAYS,
+        }
+
+    @app.get("/paperpile", response_class=HTMLResponse)
+    def paperpile_page(
+        request: Request, q: str = "", folder: str = "", status: str = "", page: int = 1
+    ):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                return render(
+                    request,
+                    "paperpile.html",
+                    session,
+                    cfg,
+                    **paperpile_context(session, cfg, q, folder, status, page),
+                )
+        finally:
+            engine.dispose()
+
+    def run_ingest(cfg, source: str):
+        from litresearch.ingest.pipeline import ingest_library
+
+        engine = init_db(cfg.paths.database)
+        http = make_http(cfg)
+        try:
+            with Session(engine) as session:
+                return ingest_library(cfg, session, http, source=source)
+        finally:
+            http.close()
+            engine.dispose()
+
+    def ingest_payload(report) -> dict:
+        warnings = len(report.errors)
+        return {
+            "kind": "success" if not warnings else "warning",
+            "events": [],
+            "points": 0,
+            "sparkle": True,
+            "message": f"Library updated: {report.entries} entries ({report.added} new, "
+            f"{report.removed} removed), {report.openalex_enriched} with metrics, "
+            f"{report.embeddings} with embeddings"
+            + (f"; {warnings} warning(s), see the import history" if warnings else ""),
+        }
+
+    @app.post("/paperpile/reimport")
+    def paperpile_reimport():
+        cfg = load_config(config_path)
+        if not cfg.paths.bibtex.exists():
+            return error("/paperpile", f"No BibTeX file at {cfg.paths.bibtex}; upload one.")
+        check = check_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels)
+        if not check.ok:
+            return error("/paperpile", "Not imported: " + check.findings[0].message)
+        return back("/paperpile", ingest_payload(run_ingest(cfg, "file")))
+
+    @app.post("/paperpile/upload", response_class=HTMLResponse)
+    async def paperpile_upload(request: Request):
+        form = await request.form()
+        cfg = load_config(config_path)
+        upload = form.get("file")
+        if not hasattr(upload, "read") or not upload.filename:
+            return error("/paperpile", "Choose a .bib file to upload")
+        try:
+            raw = await upload.read()
+        finally:
+            await upload.close()
+        if len(raw) > MAX_UPLOAD:
+            return error("/paperpile", f"The file is larger than {MAX_UPLOAD // 2**20} MB")
+        target = cfg.paths.bibtex
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=target.parent, prefix=".upload.", suffix=".bib")
+        tmp = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(raw)
+            check = check_bibtex(tmp, cfg.library.ignore_labels)
+            if form.get("action") != "import" or not check.ok:
+                engine = init_db(cfg.paths.database)
+                try:
+                    with Session(engine) as session:
+                        return render(
+                            request,
+                            "paperpile.html",
+                            session,
+                            cfg,
+                            upload_check=check,
+                            upload_name=upload.filename,
+                            **paperpile_context(session, cfg),
+                        )
+                finally:
+                    engine.dispose()
+            if target.exists():
+                shutil.copy2(target, target.with_name(target.name + ".bak"))
+            os.replace(tmp, target)
+        finally:
+            tmp.unlink(missing_ok=True)
+        return back("/paperpile", ingest_payload(run_ingest(cfg, "upload")))
 
     # --- profile -------------------------------------------------------------------
 

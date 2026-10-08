@@ -1,13 +1,15 @@
 """Library ingest: BibTeX -> database, DOI resolution, metadata enrichment."""
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 
 from sqlmodel import Session, select
 
 from litresearch.config import Config
-from litresearch.db import Paper, now, store_embedding
+from litresearch.db import IngestRun, Paper, now, store_embedding
 from litresearch.ingest.bibtex import BibEntry, parse_bibtex
+from litresearch.ingest.check import BibCheck, check_entries
 from litresearch.sources import crossref
 from litresearch.sources.http import HttpClient, HttpError
 from litresearch.sources.openalex import OpenAlex
@@ -31,6 +33,7 @@ class IngestReport:
     s2_enriched: int = 0
     embeddings: int = 0
     errors: list[str] = field(default_factory=list)
+    check: BibCheck | None = None
 
     def lines(self) -> list[str]:
         out = [
@@ -218,7 +221,7 @@ def enrich_semanticscholar(
 
 
 def ingest_library(
-    cfg: Config, session: Session, http: HttpClient, use_s2: bool = True
+    cfg: Config, session: Session, http: HttpClient, use_s2: bool = True, source: str = "file"
 ) -> IngestReport:
     report = IngestReport()
     duplicate_keys = []
@@ -227,6 +230,7 @@ def ingest_library(
         f"duplicate BibTeX key {key}: only the first entry is used" for key in duplicate_keys
     ]
     report.entries = len(entries)
+    report.check = check_entries(entries, duplicate_keys)
     papers = sync_library(session, entries, report)
     resolve_missing_dois(session, papers, http, cfg, report)
     if cfg.sources.openalex:
@@ -234,5 +238,24 @@ def ingest_library(
     if use_s2 and cfg.sources.semanticscholar:
         enrich_semanticscholar(session, papers, http, cfg, report)
     report.unresolved = [p.bibtex_key for p in papers if not (p.doi or p.openalex_id)]
+    raw = cfg.paths.bibtex.read_bytes()
+    session.add(
+        IngestRun(
+            source=source,
+            file_name=cfg.paths.bibtex.name,
+            sha256=hashlib.sha256(raw).hexdigest(),
+            size=len(raw),
+            entries=report.entries,
+            added=report.added,
+            updated=report.updated,
+            removed=report.removed,
+            check=report.check.to_dict(),
+            warnings=list(report.errors),
+        )
+    )
     session.commit()
     return report
+
+
+def last_ingest(session: Session) -> IngestRun | None:
+    return session.exec(select(IngestRun).order_by(IngestRun.id.desc())).first()

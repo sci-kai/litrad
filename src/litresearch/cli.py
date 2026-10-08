@@ -89,11 +89,46 @@ def ingest(
     http = make_http(cfg)
     try:
         with Session(engine) as session:
-            report = ingest_library(cfg, session, http, use_s2=s2)
+            report = ingest_library(cfg, session, http, use_s2=s2, source="cli")
     finally:
         http.close()
         engine.dispose()
     typer.echo("\n".join(report.lines()))
+    if report.check:
+        for finding in report.check.findings:
+            if finding.level in ("error", "warning"):
+                typer.echo(f"CHECK: {finding.message}")
+
+
+@app.command("check-bib")
+def check_bib(
+    bibtex: Path = typer.Argument(None, help="BibTeX file (default: paths.bibtex)"),
+    config: Path = ConfigOpt,
+):
+    """Check a Paperpile BibTeX export: does it contain what litresearch needs?"""
+    from litresearch.ingest.check import FIELDS, INSTRUCTIONS, check_bibtex
+
+    cfg = load_config(config)
+    path = bibtex or cfg.paths.bibtex
+    result = check_bibtex(path, cfg.library.ignore_labels)
+    console.print(f"[bold]{path}[/bold]: {result.entries} entries")
+    for rule in FIELDS:
+        if rule.name in result.coverage:
+            console.print(f"  {rule.label:<28} {result.coverage[rule.name]:>5.0%}")
+    icons = {
+        "error": "[red]ERROR[/red]",
+        "warning": "[yellow]WARNING[/yellow]",
+        "info": "INFO",
+        "ok": "[green]OK[/green]",
+    }
+    for finding in result.findings:
+        console.print(f"{icons[finding.level]}: {finding.message}")
+    if not result.ok or any(f.level == "warning" for f in result.findings):
+        console.print("\nHow to export from Paperpile:")
+        for number, step in enumerate(INSTRUCTIONS, start=1):
+            console.print(f"  {number}. {step}")
+    if not result.ok:
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -103,6 +138,9 @@ def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         papers = session.exec(select(Paper).where(Paper.in_library)).all()
+        from litresearch.ingest.pipeline import last_ingest
+
+        last = last_ingest(session)
         n_embedded = session.exec(
             select(func.count(func.distinct(Embedding.paper_id)))
             .join(Paper, Paper.id == Embedding.paper_id)
@@ -111,6 +149,9 @@ def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of
     engine.dispose()
     folders = Counter(folder for paper in papers for folder in paper.folders)
     typer.echo(f"Library papers:  {len(papers)}")
+    if last is not None:
+        age = (date.today() - last.at.date()).days
+        typer.echo(f"  last import:   {last.at.isoformat()} ({age} days ago, {last.source})")
     typer.echo(f"  with DOI:      {sum(bool(p.doi) for p in papers)}")
     typer.echo(f"  with metrics:  {sum(p.enriched_at is not None for p in papers)}")
     typer.echo(f"  with abstract: {sum(bool(p.abstract) for p in papers)}")

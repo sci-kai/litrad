@@ -26,6 +26,7 @@
       <a href="/" class="{{ 'active' if active == 'dashboard' }}"><span class="icon">🏠</span>Dashboard</a>
       <a href="/recommendations" class="{{ 'active' if active == 'recommendations' }}"><span class="icon">✨</span>This week</a>
       <a href="/queue" class="{{ 'active' if active == 'queue' }}"><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
+      <a href="/paperpile" class="{{ 'active' if active == 'paperpile' }}"><span class="icon">📁</span>Paperpile</a>
       <a href="/library" class="{{ 'active' if active == 'library' }}"><span class="icon">🔍</span>Find &amp; add</a>
       <a href="/progress" class="{{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress</a>
       <a href="/profile" class="{{ 'active' if active == 'profile' }}"><span class="icon">🎮</span>Profile{% if not profile %}<span class="count">start</span>{% endif %}</a>
