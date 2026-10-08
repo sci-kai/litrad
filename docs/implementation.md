@@ -27,12 +27,12 @@ Contents:
 ## 1. Purpose in one paragraph
 
 litresearch reads a Paperpile library (BibTeX export) and enriches it with
-open bibliographic data. Every week it recommends up to five papers, split
-into *read in detail* and *skim*, chosen by similarity to the library and to
-self-defined topics, by paper impact, and by being either recent or a
-landmark. The user picks papers into a short, ordered reading queue, logs
-reading depth, ratings and notes, and is motivated by a game layer (XP,
-streaks, quests, levels, badges). Everything runs locally, from the command
+open bibliographic data. Every week it recommends up to five papers, ranked
+by similarity to the library and to self-defined topics, by paper impact,
+and by being either recent or a landmark. The user picks papers into a
+short, ordered reading queue, decides how deeply to read each one, logs
+ratings and notes, and is motivated by a game layer (XP, streaks, quests,
+20 levels, 44 badges) whose rules are set once per profile and then locked. Everything runs locally, from the command
 line or a web UI, using only free services and without sending personal data.
 
 ## 2. How it was developed
@@ -47,7 +47,7 @@ line or a web UI, using only free services and without sending personal data.
 - **Research first.** Before any code, existing tools were compared:
   Semantic Scholar feeds, Scholar Inbox, ResearchRabbit, Litmaps,
   zotero-arxiv-daily and others. None combined Paperpile, own topics, impact
-  weighting, a detail/skim split, reading-depth tracking and notes, so the
+  weighting, a short reading list, reading-depth tracking and notes, so the
   decision was to build. The plan and milestones are in the README roadmap.
 - **Driven by real data.** Each stage was run against the user's real
   Paperpile export (145 entries) and the live APIs before being finalised.
@@ -73,6 +73,7 @@ line or a web UI, using only free services and without sending personal data.
  Crossref ◄──►│ sources/     HTTP client (cache, rate limits, retries) + 3 APIs  │
  OpenAlex ◄──►│                                                                  │
  Sem.Scholar◄►│ reading.py   queue, reading log, notes, drop penalty             │
+              │ rules.py     locked game rules · profile.py  the game profile    │
               │ game.py      XP, streaks, quests, levels, badges, summaries      │
               │ backup.py    snapshots, progress export/import, restore          │
               │ db.py        SQLite via SQLModel (one file)                      │
@@ -100,22 +101,25 @@ Layers, from the bottom up:
 | `config.py` | ~190 | Pydantic models of `config.yaml`; `n/a` → None; validation (e.g. ≤ 5 papers); `ConfigError` with readable messages |
 | `db.py` | ~220 | SQLModel tables; reading levels; embedding storage as float32 bytes; additive migration; durable SQLite connection settings |
 | `ingest/bibtex.py` | ~180 | Paperpile BibTeX → `BibEntry`: LaTeX decoding, month/day parsing, DOI normalisation, folder/label split, duplicate keys |
-| `ingest/pipeline.py` | ~240 | Library sync, DOI resolution, OpenAlex and Semantic Scholar enrichment; per-source error isolation; `IngestReport` |
+| `ingest/pipeline.py` | ~260 | Library sync, DOI resolution, OpenAlex and Semantic Scholar enrichment; per-source error isolation; `IngestReport`; import history |
+| `ingest/check.py` | ~140 | Checks of a Paperpile export (required fields, coverage, duplicates) and export instructions |
 | `sources/http.py` | ~170 | JSON client: SQLite response cache with max age, per-host throttling, retries with `Retry-After`/exponential backoff, typed `HttpError` |
 | `sources/crossref.py` | ~70 | Title/author/year → DOI with verification (type, title similarity, year, author, prefix rule) |
 | `sources/openalex.py` | ~170 | Batched works/sources look-ups, title/abstract search, abstract reconstruction, tolerant parsing |
 | `sources/semanticscholar.py` | ~90 | Batched paper look-up (SPECTER2, TLDR, influential citations), recommendations |
 | `papers.py` | ~30 | Store OpenAlex works as papers without overwriting Paperpile metadata |
 | `recommend/engine.py` | ~330 | Candidate gathering with provenance, filters with funnel counts, embeddings, batch persistence with parameter snapshot |
-| `recommend/scoring.py` | ~440 | Eligibility, relevance (kNN + topic bonus), impact, timeliness, MMR, detail/skim, evidence tree |
+| `recommend/scoring.py` | ~450 | Eligibility, relevance (kNN without self-matches + topic bonus), impact, timeliness, MMR, evidence tree |
 | `recommend/text.py` | ~40 | Dependency-free TF-IDF fallback |
 | `reading.py` | ~330 | Paper references (`r1`, `q2`, DOI …), queue operations, reading log, notes, drop penalty |
-| `game.py` | ~560 | XP rules, anti-farming, streaks, weekly quest, levels, badges, weekly summaries, ledger, calendar, personal bests, hints |
-| `backup.py` | ~500 | Atomic writes, SQLite snapshots, rotation, restore, progress export/import with merge, automatic backup thread |
+| `rules.py` | ~500 | `GameRules` (every reward, penalty, quest, level ladder, badge targets), badge catalog, rule fingerprint |
+| `profile.py` | ~80 | Start the game profile, lock its rules, auto-start, active rules |
+| `game.py` | ~620 | Points (always with the profile's rules), anti-farming, streaks, quest, levels, badges and their statistics, weekly summaries, ledger, calendar, bests, hints |
+| `backup.py` | ~800 | Atomic writes, SQLite snapshots, rotation, restore, profile files (rules, progress, recommendations, checksum), load, merge, reset, comparison in an in-memory database, automatic backup thread |
 | `cli.py`, `cli_reading.py`, `cli_data.py` | ~880 | Typer commands; `run()` turns expected errors into messages |
 | `web/app.py` | ~860 | FastAPI routes, login and same-origin middleware, celebration tokens, downloads |
 | `web/auth.py` | ~80 | scrypt password hashes, HMAC-signed session cookies |
-| `web/settings.py` | ~470 | Settings schema (labels, help, ranges), form parsing, comment-preserving and atomic `config.yaml` writes |
+| `web/settings.py` | ~540 | Settings schema (labels, help, ranges), game-rule form, form parsing, comment-preserving and atomic `config.yaml` writes |
 | `web/templates/`, `web/static/` | ~1 800 | Jinja2 pages, CSS (themes, animations), JavaScript (toasts, confetti, rings) |
 
 ## 5. Data model
@@ -130,12 +134,16 @@ Layers, from the bottom up:
 | `statusevent` | every status change, including whether the paper was at the top of the queue |
 | `xpevent` | every point earned or lost, with kind and reason; the score is their sum |
 | `achievement` | unlocked badges |
+| `profile` | the game profile: name, start, a locked copy of the rules, fingerprint |
+| `ingestrun` | every import of the Paperpile export: time, source, file hash, counts, check results |
 
 Design choices:
 
 - **Event sourcing for progress.** `statusevent` and `xpevent` are
   append-only logs. Statistics, streaks, quests and the ledger are computed
-  from them, so the score is auditable and stays stable when rules change.
+  from them, so the score is auditable.
+- **Locked rules.** The profile stores its own copy of the rules; the config
+  only supplies defaults for the next profile.
 - **Timestamps** are naive local ISO 8601 (CUBI convention).
 - **Embeddings are tagged by model**, so vectors from different models are
   never compared.
@@ -204,7 +212,20 @@ Design choices:
   - The frog bonus is proportional to newly earned base points.
   - A randomised test checks these invariants over long random sessions.
 - **Drop penalty.** Picking a recommendation and abandoning it unread costs
-  XP; manual and library papers are free to drop.
+  XP; manual and library papers are free to drop. A library paper picked
+  from the recommendations counts as a recommendation.
+- **No prescribed depth.** Recommendations are a ranked list; the reader's
+  marking decides the points.
+- **Locked, configurable rules.** All rewards, the penalty, the quest, the
+  level ladder (20 levels) and badge targets (44 badges) form one
+  `GameRules` object. Starting a profile freezes a copy in the database with
+  a SHA-256-based fingerprint, so changing the config cannot inflate a
+  running game and profiles can be compared fairly.
+- **Profile files** contain the rules, all progress and all recommendation
+  batches, plus a SHA-256 checksum over the content. Loading or merging an
+  edited file is refused; merging progress earned under other rules too.
+  Comparisons load each file into a throw-away in-memory SQLite database and
+  compute the same statistics as the dashboard.
 - **Streaks** count weeks rather than days and survive until the end of the
   following week, so they motivate without guilt.
 
@@ -216,6 +237,8 @@ Design choices:
 - Config and export writes are atomic (temporary file, `fsync`, `os.replace`).
 - The portable JSON export merges idempotently by DOI, PMID, citation key or
   title. Details: [data-and-backups.md](data-and-backups.md).
+- Uploaded BibTeX files are checked in a temporary file first; an invalid
+  export never replaces the library, and the previous file is kept as `.bak`.
 
 ### Security of the web UI
 
@@ -245,7 +268,7 @@ Design choices:
 
 | Measure | Details |
 |---|---|
-| Test suite | 16 test modules plus shared fixtures (`conftest.py`), about 280 tests, run with `pytest` |
+| Test suite | 18 test modules plus shared fixtures (`conftest.py`), about 330 tests, run with `pytest` |
 | Coverage | about 97 % of statements; core logic (scoring, game, reading, config, auth) 100 % |
 | Offline by default | `FakeApis` serves recorded real API responses through `httpx.MockTransport`; a synthetic BibTeX fixture reproduces all Paperpile quirks |
 | Live tests | `pytest --network` runs ingest and recommendations against the real APIs |
@@ -261,6 +284,8 @@ Design choices:
 | `test_scoring.py`, `test_recommend.py` | scoring maths, evidence, filters, cooldown, funnel |
 | `test_reading.py`, `test_game.py` | queue, notes, penalty; XP, streaks, quests, badges, summaries |
 | `test_backup.py` | snapshots during writes, rotation, export/import merge, restore |
+| `test_profile.py` | rule validation, locking, custom rules, save/load/merge/reset, checksums, comparison, new badges, profile UI and CLI |
+| `test_paperpile.py` | export checks, import history, upload (check only, import, invalid), library browsing and filters, notices |
 | `test_cli.py`, `test_web.py`, `test_auth.py` | interfaces, settings round trip, login |
 | `test_robustness.py` | failure scenarios (see above) |
 | `test_live.py` | real APIs (opt-in) |

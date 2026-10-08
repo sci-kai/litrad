@@ -78,8 +78,7 @@ papers (to the Semantic Scholar recommendations service). Disable
 
 | Key | Default | Meaning |
 |---|---|---|
-| `n_detail` | 2 | papers to read in detail |
-| `n_skim` | 3 | papers to skim; `n_detail + n_skim` must be ≤ 5 |
+| `n_recommendations` | 5 | papers per weekly list (1–5); older configs with `n_detail`/`n_skim` are converted automatically |
 | `fresh_window_months` | 6 | how recent a paper must be to count as "current" |
 | `landmark_min_percentile` | 95 | field/year-normalised citation percentile for "important" papers |
 | `landmark_max_age_years` | 15 | landmark papers must be younger than this |
@@ -109,11 +108,13 @@ web UI (Settings).
 
 ## `game`
 
-| Key | Default | Meaning |
-|---|---|---|
-| `weekly_detail_goal` | 1 | weekly quest: papers read at least at `read` depth |
-| `weekly_skim_goal` | 2 | weekly quest: further papers at least skimmed |
-| `drop_penalty` | 15 | XP lost when a picked recommendation leaves the queue unread (0 = off) |
+The **defaults for a new game profile**: every reward, bonus, the penalty,
+the weekly quest, the level ladder (`levels`) and badge targets
+(`badge_targets`). When a profile starts, these rules are copied into the
+database and locked; changing this section afterwards only affects the
+*next* profile. All keys and defaults are listed in
+[gamification.md](gamification.md#rules-you-can-set-defaults). It is
+easier to set them on the Profile page when you start the game.
 
 ## `backup`
 

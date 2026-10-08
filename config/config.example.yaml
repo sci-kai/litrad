@@ -70,6 +70,10 @@ queue:
   max_size: 5
 
 game:
+  # DEFAULTS FOR A NEW GAME PROFILE. When your profile starts (Profile page or
+  # `litresearch profile start`), these rules are copied and locked; changing
+  # them later only affects the next profile. All keys (points per level,
+  # bonuses, levels, badge_targets, ...) are listed in docs/gamification.md.
   # weekly quest: papers read at least to depth "read" / at least "skimmed"
   weekly_detail_goal: 1
   weekly_skim_goal: 2

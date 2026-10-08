@@ -15,7 +15,7 @@ with it.
 ```
 topics ─► OpenAlex searches (fresh, landmark) ─┐
 library ─► Semantic Scholar recommendations ───┴─► candidates
-   ─► filters ─► fresh-or-landmark ─► score ─► score floor ─► diverse picks ─► detail / skim
+   ─► filters ─► fresh-or-landmark ─► score ─► score floor ─► diverse picks ─► ranked list
 ```
 
 One batch per week (Monday to Sunday). Rebuilding on the same day reuses
@@ -62,14 +62,18 @@ A candidate is removed (counted in the funnel) if it
 |---|---|
 | `wrong_type` | is not an article, review or preprint (editorial, erratum, letter, …) |
 | `meeting_abstract` | is a conference abstract from a journal supplement: titles like `0865 …`, `P-123: …`, `LB01. …` (but not `CD8 T cells…`, `53BP1…`, `1000 Genomes…`) |
-| `in_library` | is in your Paperpile library |
-| `read_or_dismissed` | has a reading status (any level) or was marked not relevant |
+| `read_or_dismissed` | was marked skimmed, read or thorough in litresearch, or not relevant (an abstract glance does **not** count as read) |
 | `queued` | is on your reading queue |
 | `recently_recommended` | was recommended in one of the last `selection.cooldown_weeks` (8) weeks; batches of the current week do not count, so a rebuild can show the same papers |
 | `excluded_term` | contains one of `excluded_terms` in title or abstract (case-insensitive) |
 
 Papers without a DOI are skipped, since the pipeline is keyed on DOIs
 (`without_doi` in the funnel).
+
+Papers in your **Paperpile library are not excluded**: adding a paper to
+Paperpile does not mean you have read it. Only your markings in litresearch
+count. A library paper that is recommended carries the note "in your
+Paperpile, not read yet".
 
 ## 3. Eligibility: current *or* important
 
@@ -105,7 +109,8 @@ relevance = s × similarity_rank + (1 − s) × topic_bonus        s = selection
   candidates: 0 = least similar, 1 = most similar. Candidates without an
   embedding use TF-IDF similarity of title + abstract instead. The ranking
   makes both methods comparable. The evidence tree lists the nearest library
-  papers.
+  papers. A library paper never counts as its own neighbour; otherwise its
+  similarity would trivially be 1.
 - **topic_bonus**: for papers found by a topic search, the topic's weight
   divided by the highest topic weight (the best topic counts if several
   found the paper); `selection.s2_only_topic_bonus` (0.5) for papers found
@@ -152,13 +157,16 @@ preprint servers count as journals in OpenAlex.
    With λ = 1 the picks are strictly the top scores; lower values spread the
    list over different subjects. Similarity uses SPECTER2 where both papers
    have it, TF-IDF otherwise.
-3. Up to `selection.n_detail + selection.n_skim` (≤ 5) papers are picked.
+3. Up to `selection.n_recommendations` (default 5) papers are picked and
+   shown ranked by score.
 
-## 6. Read in detail or skim
+## 6. How deeply to read is your choice
 
-Among the picks, the `selection.n_detail` (2) papers with the highest
-**relevance + impact** are "read in detail"; the rest are "skim". The list
-shows detail papers first, each group sorted by score.
+Recommendations do not prescribe a reading depth. After reading, you mark
+the paper (abstract, skimmed, read, thorough) and earn the points your game
+profile defines for that depth ([gamification.md](gamification.md)).
+Batches built before this change still show their old detail/skim labels in
+the data, but the UI ignores them.
 
 ## The evidence tree
 

@@ -1,8 +1,7 @@
 # litresearch
 
 A personal literature radar built on a Paperpile library. Every week it
-proposes **up to 5 papers**, split into **read in detail** and **skim**,
-ranked by:
+proposes **up to 5 papers**, ranked by:
 
 1. similarity to your Paperpile library (SPECTER2 embeddings),
 2. the topics you define,
@@ -15,7 +14,7 @@ ordered, with exactly one paper "up next". You can also add any paper by
 DOI or title. Reading levels (abstract / skimmed / read / thorough), ratings
 and notes are logged, and a **game layer** keeps you motivated: XP, streaks,
 weekly quests, career levels from *Curious Undergrad* to *Hallmarks Author*,
-badges and a weekly report card.
+badges and a weekly report card. You set all rewards and the penalty when you start your profile; after that they are locked, and profiles can be saved, loaded and compared.
 
 Everything is **transparent**: each recommendation shows an evidence tree,
 every criterion is documented, and every parameter can be changed in the UI.
@@ -50,7 +49,9 @@ Full instructions, including the Paperpile auto-export and Google Drive sync:
 | `db-init` | create the SQLite database | ✅ |
 | `ingest [--no-s2]` | import the Paperpile export; resolve DOIs; fetch metrics and embeddings | ✅ |
 | `status` | library summary: coverage, top folders | ✅ |
-| `recommend [--refresh] [--no-s2]` | this week's ≤ 5 papers (detail / skim) | ✅ |
+| `recommend [--refresh] [--no-s2]` | this week's ≤ 5 papers, ranked | ✅ |
+| `profile [show\|start\|save\|load\|compare\|reset]` | game profile with locked rules | ✅ |
+| `check-bib [FILE]` | check a Paperpile BibTeX export | ✅ |
 | `queue [add\|drop\|move]` | the short, ordered reading queue | ✅ |
 | `next`, `show REF` | top paper / any paper with abstract, status, notes | ✅ |
 | `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
@@ -97,7 +98,7 @@ auto-export is the interface.
 
 1. ✅ Skeleton: config, database, CLI
 2. ✅ Library ingest and enrichment
-3. ✅ Candidate search, scoring, weekly ≤ 5-paper detail/skim list
+3. ✅ Candidate search, scoring, weekly ≤ 5-paper list (unread library papers included)
 4. ✅ Reading queue, reading log, gamification, local web UI · ⏳ phone app (PWA)
 5. LLM summaries via an OpenAI-compatible endpoint (LM Studio / Ollama)
 6. Obsidian export/sync, Paperpile write-back file, systemd deployment

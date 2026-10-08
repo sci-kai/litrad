@@ -165,6 +165,7 @@ label { font-weight: 600; font-size: .9rem; }
 .tldr { border-left: 3px solid var(--accent-2); padding: .3rem .8rem; background: var(--surface-2); border-radius: 0 10px 10px 0; font-style: italic; }
 
 .up-next {
+  position: relative;
   border: 2px solid transparent;
   background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--gradient) border-box;
   animation: glow 3s ease-in-out infinite;

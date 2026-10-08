@@ -43,6 +43,18 @@
   API parsing; failure-scenario and randomised tests.
 - Documentation: `docs/implementation.md` (how it is built, credits),
   `docs/data-and-backups.md`.
+- Recommendations: unread papers from the Paperpile library are no longer
+  excluded (only papers marked skimmed/read/thorough or dismissed are); a
+  library paper never counts as its own neighbour; one ranked list
+  (`selection.n_recommendations`) instead of detail/skim, the reader
+  chooses the depth.
+- Game profiles: all rewards, the penalty, the quest, the level ladder and
+  badge targets are configurable and locked when the profile starts;
+  20 levels and 44 badges; profile files with recommendations and checksum;
+  load, merge (same rules only), reset and compare (web and CLI).
+- Paperpile page: library browser, last import and notices, upload with
+  checks (check only / check & import), re-import, import history, export
+  instructions; `check-bib` command.
 - Offline test suite with recorded API responses; live smoke test behind
   `--network`.
 - Documentation in `docs/`.

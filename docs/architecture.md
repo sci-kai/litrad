@@ -15,7 +15,7 @@ Paperpile ──auto-export──> Google Drive ──rclone──> library.bib
 
 ```
 topics ──> OpenAlex search (fresh, landmark) ─┐
-library ─> S2 recommendations ────────────────┼─> candidates ─> filter ─> score ─> MMR ─> ≤ 5 (detail/skim)
+library ─> S2 recommendations ────────────────┼─> candidates ─> filter ─> score ─> MMR ─> ≤ 5 ranked
                                               │                                       │
                                   S2 SPECTER2 / TF-IDF                        you pick ─> queue ─> read ─> XP
 ```
@@ -38,10 +38,13 @@ Obsidian export.
 | `sources/semanticscholar.py` | Batched lookups: SPECTER2 embeddings, TLDRs, influential citations; recommendations |
 | `papers.py` | Store OpenAlex works as papers (candidates, manual adds) |
 | `recommend/engine.py` | Candidate gathering, filtering, persistence of weekly batches |
-| `recommend/scoring.py` | Pure scoring: relevance, impact, timeliness, MMR, detail/skim split |
+| `recommend/scoring.py` | Pure scoring: relevance, impact, timeliness, MMR, evidence tree |
 | `recommend/text.py` | TF-IDF fallback similarity |
 | `reading.py` | Paper references, queue operations, reading log, notes |
-| `game.py` | XP rules, streaks, quests, levels, badges, statistics |
+| `rules.py` | `GameRules` (all rewards, penalty, quest, levels, badge targets), badge catalog, fingerprint |
+| `profile.py` | The game profile: start, locked rules, auto-start |
+| `game.py` | Points, streaks, quests, levels, badges, statistics (always with the profile's rules) |
+| `ingest/check.py` | Checks of a Paperpile BibTeX export and export instructions |
 | `cli_reading.py` | Queue/reading/score commands |
 | `backup.py` | Snapshots, rotation, restore, portable progress export/import, automatic backups |
 | `cli_data.py` | backup / export-progress / import-progress / restore / check commands |
@@ -94,7 +97,7 @@ in the report and the remaining steps still run.
      off-topic hits (e.g. `fastp` for "ctDNA"), so the tool does not use it;
    - Semantic Scholar recommendations for the library: positives are well-rated
      papers plus the most recent library papers, negatives are dismissed papers.
-2. **Filter**: drop papers in the library, read, dismissed, queued, recommended
+2. **Filter**: drop papers marked skimmed/read/thorough or dismissed, queued, recommended
    in earlier weeks within the cooldown, matching `excluded_terms`, editorials
    and other non-research types, and conference abstracts from journal
    supplements (titles like `0865 …`, `P-123: …`).
@@ -111,9 +114,8 @@ in the report and the remaining steps still run.
      landmark = 0.4;
    - score = weighted sum (`selection.weights`).
 4. **Select**: only candidates with at least 60 % of the best score; then MMR
-   (λ = `mmr_lambda`) picks `n_detail + n_skim` diverse papers. The
-   `n_detail` papers with the highest relevance + impact become "read in
-   detail", the rest "skim".
+   (λ = `mmr_lambda`) picks `n_recommendations` diverse papers, shown ranked
+   by score. The reader chooses the reading depth.
 5. **Persist**: one `RecommendationBatch` per week (keyed by its Monday), with
    the filter funnel and a snapshot of the settings, and its `Recommendation`
    rows with the score breakdown, the full evidence (shown as an evidence tree
@@ -128,7 +130,9 @@ All constants are settings; the full criteria are in
 |---|---|
 | `paper` | one row per paper, from the library or (later) a candidate; identifiers, metadata, metrics, folders/tags |
 | `embedding` | `(paper_id, model)` → float32 vector. Vectors from different models are never compared. |
-| `recommendationbatch`, `recommendation` | weekly batches; rank, category (detail/skim), score, breakdown, reason |
+| `recommendationbatch`, `recommendation` | weekly batches; rank, score, breakdown, reason (category is "open"; old batches have detail/skim) |
+| `profile` | the game profile: name, start, locked rules, fingerprint |
+| `ingestrun` | every import of the Paperpile export: time, source, file hash, counts, checks |
 | `queueitem` | the reading queue: paper, position (1 = up next), source, added time |
 | `reading` | current status (`abstract`, `skimmed`, `read`, `thorough`, `dismissed`), rating, notes |
 | `statusevent` | every status change, including whether the paper was at the top of the queue |

@@ -60,6 +60,8 @@ git branch -d feat-scoring
 | `test_auth.py` | password hashing, sessions, login/logout, network serving rules |
 | `test_backup.py` | snapshots during writes, rotation, export/import merge (idempotent, notes kept), restore, automatic backups |
 | `test_robustness.py` | crashes mid-action, concurrency, restarts, broken inputs, hostile content, calendar edges, scale, randomised sessions with invariants |
+| `test_profile.py` | game rules, locking, save/load/merge/reset, checksums, comparison, badges, profile UI and CLI |
+| `test_paperpile.py` | BibTeX export checks, import history, upload flows, library page, `check-bib` |
 | `test_config.py`, `test_db.py` | config validation, status history |
 | `test_live.py` | smoke test against the real APIs (`--network`) |
 

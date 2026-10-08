@@ -68,7 +68,12 @@ Every backup writes two files (file names follow `YYYYMMDD_HHMMSS`):
 | File | Content | Use |
 |---|---|---|
 | `litresearch_20261008_070000.sqlite` | complete database snapshot, made with SQLite's online backup API (consistent even while the server writes) and integrity-checked | full restore: `litresearch restore FILE` |
-| `litresearch_progress_20261008_070000.json` | only *your* data: statuses, ratings, notes, history, queue, XP, badges, plus enough paper metadata (DOI, PMID, citation key, title) to find each paper again | readable; merge into any installation: `litresearch import-progress FILE` |
+| `litresearch_progress_20261008_070000.json` | your whole **profile**: the profile with its locked game rules, statuses, ratings, notes, history, queue, XP, badges and all recommendation batches, plus enough paper metadata (DOI, PMID, citation key, title, …) to find each paper again, and a checksum | readable; load as your profile (`litresearch profile load`) or merge into another installation (`litresearch import-progress`) |
+
+Profiles you save yourself (Profile page, `litresearch profile save`) have the
+same content and are named `litresearch_profile_<name>_<date>_<time>.json`;
+they are never deleted by rotation. Files of format version 1 (before game
+profiles existed) can still be imported.
 
 The oldest files beyond `backup.keep` (default 14 of each) are deleted.
 
@@ -82,6 +87,16 @@ litresearch restore /path/to/backups/litresearch_20261008_070000.sqlite
 The current database is saved as `…_before_restore.sqlite` first, so a
 restore can itself be undone. Files that are not valid litresearch
 databases are refused.
+
+## Loading a profile, or starting over
+
+- `litresearch profile load FILE` (or Profile → Load) **replaces** your
+  progress with a saved profile, including its locked rules and its
+  recommendations; your current state is saved first.
+- `litresearch profile reset` (or Profile → Start over) saves the profile and
+  then deletes all progress, so you can start a new game with other rules. The
+  Paperpile library stays.
+- A file that was edited outside litresearch (checksum mismatch) is refused.
 
 ## Moving to another machine, or merging two
 
@@ -103,6 +118,10 @@ How the merge works:
 - notes: entries from both sides are kept, none are lost;
 - history, XP transactions and badges are added if they are not present yet;
 - queue entries are appended while there is room (`queue.max_size`);
+- recommendation batches are added if they are not present yet;
+- the profile is taken over if the target has none; if both have one, their
+  rules must be identical (same fingerprint), otherwise the merge is refused
+  so that points earned under different rules are never mixed;
 - **idempotent**: importing the same file twice changes nothing;
 - the target database is backed up before the merge; an invalid file
   changes nothing.

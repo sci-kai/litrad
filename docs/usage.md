@@ -27,7 +27,6 @@ Later calls that week show the same batch without any API requests.
 ```
 Recommendations for the week of 2026-10-05 (313 candidates checked)
 
-Read in detail
 r1  A single-cell lens into the co-evolution of genotypes and phenotypes in cancer
      Franco Izzo et al. (2026-09-08) · Nature reviews. Cancer
      fresh · Nature reviews. Cancer · topic: tumor-evolution
@@ -35,13 +34,14 @@ r1  A single-cell lens into the co-evolution of genotypes and phenotypes in canc
 r2  Identifying structural variants using linked-read sequencing data
      ...
      landmark · top 2.9% cited · 92 citations · Bioinformatics · topic: long-read-sv
-Skim
 r3  ...
 ```
 
 Every paper is either **fresh** (published within `fresh_window_months`) or a
 **landmark** (top `100 - landmark_min_percentile` % cited in its field and
-year). Papers you have read, dismissed or queued never show up. A paper that
+year). The list is ranked by score; how deeply you read each paper is your
+choice. Papers you marked skimmed, read or thorough, dismissed or queued
+never show up; unread papers from your Paperpile library can. A paper that
 was recommended but not picked can come back after `cooldown_weeks`.
 
 To run it automatically every Monday morning, add a cron job
@@ -67,7 +67,7 @@ litresearch queue drop q3             # remove (costs XP for picked recommendati
 When the queue is full (`queue.max_size`, default 5) nothing can be added
 until you read or drop something. That limit is intentional. Removing a paper
 you picked from the recommendations before at least skimming it costs
-`game.drop_penalty` XP (default 15); papers you added yourself are free to
+the penalty set in your game profile (default 15 XP); papers you added yourself are free to
 remove.
 
 ### Referring to papers

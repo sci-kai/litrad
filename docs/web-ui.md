@@ -54,8 +54,10 @@ phone app (PWA) is planned.
 | Page | What you can do |
 |---|---|
 | 🏠 **Dashboard** | your up-next paper with a one-click reading log, the weekly quest, hints for what to do next, this week's picks, queue, recent XP |
-| ✨ **This week** | the weekly recommendations with score bars, an **evidence tree** per paper, the filter **funnel** and the settings used; add a paper to your queue or mark it not relevant; build or rebuild the batch; browse earlier weeks |
+| ✨ **This week** | the weekly recommendations, ranked by score (you choose the reading depth), with score bars, an **evidence tree** per paper, the filter **funnel** and the settings used; add a paper to your queue or mark it not relevant; build or rebuild the batch; browse earlier weeks |
 | 📚 **Reading queue** | the ordered queue (q1 = up next): log a reading (level, star rating, notes), reorder, remove; add papers by DOI, PubMed ID, citation key, title words or title only |
+| 📁 **Paperpile** | your library without PDFs (search, folder and read-status filters, queue buttons), last import and notices when it is outdated, upload of a new BibTeX export with checks, re-import, export instructions, import history |
+| 🎮 **Profile** | set up your game (all rewards, penalty, levels, badge targets), then see the locked rules; save, download, load, compare profiles; start over |
 | 🔍 **Find & add** | search your library and all known papers (title, author, citation key, DOI, folder) and queue them; add any DOI |
 | 📄 **Paper** | abstract, TL;DR, metrics, notes (timestamped), status, every recommendation of it with its evidence tree, the XP it earned |
 | 🏆 **Progress** | level ring, streak, Reading Impact Factor, discipline and depth, XP per week (12 weeks), reading calendar (26 weeks), personal bests, badge gallery with progress, career ladder |
@@ -81,7 +83,7 @@ recommendations, `p` progress.
 ## Removing papers from the queue
 
 Removing is free for papers you added yourself or from your library. A paper
-you picked **from the recommendations** costs `game.drop_penalty` XP
+you picked **from the recommendations** costs the penalty of your game profile
 (default 15) if it leaves the queue before you at least skimmed it: removed,
 or marked not relevant. The queue shows this as a red chip, and the remove
 button names the cost.

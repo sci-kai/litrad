@@ -17,12 +17,19 @@ python3 -m venv .venv
 Paperpile has no public API, so the tool reads a BibTeX file that Paperpile
 keeps up to date automatically:
 
-1. In Paperpile open *Settings → Workflows and Integrations* and add a
-   **BibTeX export** of the whole library (or of a folder/label) to
-   **Google Drive**.
-2. Make sure the export includes **DOI** and **PMID** fields. Without them every
-   paper has to be matched by title, which is slower and less reliable.
+1. In Paperpile, click your profile picture (top right) → *Workflows and
+   Integrations* and add a **BibTeX export** of the whole library (or of a
+   folder/label) to **Google Drive**. A one-off manual export (Export →
+   BibTeX) works as well.
+2. In the export options, include **DOI**, **PMID**, **abstract**, **URL** and
+   **keywords** (keywords carry your folders and labels). The option names can
+   differ between Paperpile versions. Without DOIs every paper has to be
+   matched by title, which is slower and less reliable.
 3. Prefer a file name without spaces, e.g. `library.bib`.
+4. Check what arrived: `litresearch check-bib FILE`, or upload the file on the
+   **Paperpile** page of the web UI (with *Check only* first, if you like).
+   Errors (e.g. an empty or broken file) block the import; warnings name the
+   missing fields.
 
 What the tool uses from the export:
 
