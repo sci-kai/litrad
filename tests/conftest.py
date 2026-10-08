@@ -26,6 +26,22 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+@pytest.fixture(autouse=True)
+def isolated(tmp_path, monkeypatch):
+    """Keep every test away from the real data folders.
+
+    Relative default paths (data/, config/) resolve inside a temporary working
+    directory, and `serve` never starts the real backup thread.
+    """
+    monkeypatch.chdir(tmp_path)
+    started = []
+    monkeypatch.setattr(
+        "litresearch.backup.start_backup_thread",
+        lambda config_path, log=print: started.append(config_path) or (None, None),
+    )
+    return started
+
+
 def _bare_doi(url):
     return (url or "").lower().removeprefix("https://doi.org/")
 

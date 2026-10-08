@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import stat
 import threading
 from datetime import datetime, timedelta
 
@@ -116,6 +117,7 @@ def test_snapshot_is_consistent_and_checked(source, tmp_path):
     cfg, _ = source
     copy = snapshot(cfg.paths.database, tmp_path / "copy.sqlite")
     assert integrity_ok(copy)
+    assert stat.S_IMODE(copy.stat().st_mode) == 0o600
     connection = sqlite3.connect(copy)
     assert connection.execute("select count(*) from reading").fetchone()[0] == 3
     connection.close()

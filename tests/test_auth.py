@@ -157,10 +157,11 @@ def test_serve_refuses_network_without_password(tmp_path, no_server):
     assert no_server["host"] == "0.0.0.0"
 
 
-def test_serve_on_network_with_password(tmp_path, no_server):
+def test_serve_on_network_with_password(tmp_path, no_server, isolated):
     config = str(write_config(tmp_path, password_hash=hash_password("lab-meeting-42")))
     result = runner.invoke(cli.app, ["serve", "--no-browser", "-c", config])
     assert result.exit_code == 0, result.stdout
+    assert len(isolated) == 1 and "Backups every 24 h" in result.stdout  # backup thread started
     assert "http://192.168.1.23:8080/" in result.stdout and "login required" in result.stdout
     assert no_server == {"host": "0.0.0.0", "port": 8080, "log_level": "warning"}
 

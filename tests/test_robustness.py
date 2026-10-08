@@ -195,12 +195,14 @@ def test_concurrent_writers_do_not_fail(db):
     cfg, engine, _, papers = db
     second = init_db(cfg.paths.database)  # e.g. the CLI while the web UI runs
     errors = []
+    # ORM objects are not thread-safe: threads only share plain ids
+    ids = [paper.id for paper in papers]
 
     def worker(engine_, offset):
         try:
             with Session(engine_) as session:
                 for i in range(25):
-                    paper = session.get(Paper, papers[(offset + i) % len(papers)].id)
+                    paper = session.get(Paper, ids[(offset + i) % len(ids)])
                     session.add(
                         XpEvent(
                             paper_id=paper.id, points=1, kind="test", reason=f"{offset}-{i}", at=AT

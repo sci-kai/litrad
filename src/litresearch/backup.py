@@ -100,6 +100,7 @@ def snapshot(database: Path, destination: Path) -> Path:
     if not integrity_ok(tmp):
         tmp.unlink(missing_ok=True)
         raise BackupError("The snapshot failed the integrity check")
+    tmp.chmod(0o600)  # contains your notes: readable only by you
     os.replace(tmp, destination)
     return destination
 

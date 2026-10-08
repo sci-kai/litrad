@@ -39,6 +39,11 @@ git branch -d feat-scoring
 - Warnings are turned into errors (`filterwarnings = ["error"]`), which catches
   e.g. unclosed SQLite connections.
 - Tests marked `@pytest.mark.network` only run with `--network`.
+- Every test runs in its own temporary working directory (autouse fixture
+  `isolated` in `conftest.py`), so relative default paths such as
+  `data/backups` can never touch your real data, and `serve` never starts the
+  real backup thread in tests.
+- Never share ORM objects between threads in tests; pass plain ids.
 
 | Test module | Covers |
 |---|---|
