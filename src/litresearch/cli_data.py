@@ -125,6 +125,13 @@ def check(config: Path = ConfigOpt):
         _fail("The database does not exist yet; run 'litresearch ingest'.")
     healthy = integrity_ok(database)
     console.print(f"Integrity: {'[green]ok[/green]' if healthy else '[red]FAILED[/red]'}")
+    if not healthy:
+        last = latest_backup(cfg)
+        hint = f" (latest from {last.isoformat()})" if last else ""
+        _fail(
+            f"The database is damaged. Restore a snapshot from {cfg.backup.dir}{hint} "
+            "with 'litresearch restore'."
+        )
     engine = init_db(database)
     with Session(engine) as session:
 
@@ -144,5 +151,3 @@ def check(config: Path = ConfigOpt):
         age = (datetime.now() - last).days
         colour = "yellow" if age >= BACKUP_WARN_DAYS else "green"
         console.print(f"Last backup: [{colour}]{last.isoformat()} ({age} days ago)[/{colour}]")
-    if not healthy:
-        _fail("Restore the latest snapshot with 'litresearch restore'.")

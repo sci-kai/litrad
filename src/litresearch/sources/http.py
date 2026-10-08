@@ -141,7 +141,10 @@ class HttpClient:
                 raise HttpError(
                     f"{method} {url}: HTTP {response.status_code} {response.text[:200]}"
                 )
-            body = response.json()
+            try:
+                body = response.json()
+            except ValueError as error:  # e.g. an HTML error page with status 200
+                raise HttpError(f"{method} {url}: response is not JSON") from error
             if use_cache and self.cache is not None:
                 self.cache.put(key, body)
             return body

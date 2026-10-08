@@ -35,6 +35,17 @@ def make_http(cfg: Config) -> HttpClient:
     )
 
 
+def run() -> None:
+    """Console entry point: expected problems become messages, not tracebacks."""
+    from litresearch.config import ConfigError
+
+    try:
+        app()
+    except ConfigError as error:
+        console.print(f"[red]Configuration problem:[/red] {error}")
+        raise SystemExit(2) from None
+
+
 @app.callback()
 def main(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show HTTP retries etc.")):
     logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(message)s")
@@ -68,6 +79,12 @@ def ingest(
     from litresearch.ingest.pipeline import ingest_library
 
     cfg = load_config(config)
+    if not cfg.paths.bibtex.exists():
+        console.print(
+            f"[red]No BibTeX file at {cfg.paths.bibtex}.[/red] Export your Paperpile library "
+            "(see docs/setup.md) or fix paths.bibtex."
+        )
+        raise typer.Exit(code=1)
     engine = init_db(cfg.paths.database)
     http = make_http(cfg)
     try:
@@ -302,4 +319,4 @@ from litresearch import cli_data, cli_reading  # noqa: E402, F401, I001
 
 
 if __name__ == "__main__":
-    app()
+    run()

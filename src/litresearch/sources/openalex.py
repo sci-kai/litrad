@@ -99,6 +99,17 @@ def parse_work(raw: dict) -> Work:
     )
 
 
+def parse_all(raws):
+    """Parse records, skipping malformed ones (no id or broken fields)."""
+    for raw in raws:
+        if not isinstance(raw, dict) or not raw.get("id"):
+            continue
+        try:
+            yield parse_work(raw)
+        except (KeyError, TypeError, ValueError):
+            continue
+
+
 class OpenAlex:
     def __init__(
         self, http: HttpClient, api_key: str | None = None, contact_email: str | None = None
@@ -124,13 +135,11 @@ class OpenAlex:
             yield from body.get("results", [])
 
     def works_by_doi(self, dois: list[str]) -> dict[str, Work]:
-        works = (parse_work(raw) for raw in self._filter_batches("works", "doi", dois, WORK_FIELDS))
+        works = parse_all(self._filter_batches("works", "doi", dois, WORK_FIELDS))
         return {work.doi: work for work in works if work.doi}
 
     def works_by_pmid(self, pmids: list[str]) -> dict[str, Work]:
-        works = (
-            parse_work(raw) for raw in self._filter_batches("works", "pmid", pmids, WORK_FIELDS)
-        )
+        works = parse_all(self._filter_batches("works", "pmid", pmids, WORK_FIELDS))
         return {work.pmid: work for work in works if work.pmid}
 
     def venue_mean_citedness(self, source_ids: list[str]) -> dict[str, float]:
@@ -161,4 +170,4 @@ class OpenAlex:
             "select": WORK_FIELDS,
         }
         body = self.http.get(f"{API}/works", params=params, max_age=timedelta(days=1))
-        return [parse_work(raw) for raw in body.get("results", [])]
+        return list(parse_all(body.get("results", [])))

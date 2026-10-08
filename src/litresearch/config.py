@@ -169,7 +169,23 @@ class Config(_Base):
     web: Web = Web()
 
 
+class ConfigError(ValueError):
+    """A missing or invalid config file, with a message for humans."""
+
+
 def load_config(path: Path) -> Config:
-    with open(path, encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle) or {}
-    return Config.model_validate(raw)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            raw = yaml.safe_load(handle) or {}
+    except FileNotFoundError as error:
+        raise ConfigError(
+            f"No config file at {path}. Copy config/config.example.yaml to config/config.yaml."
+        ) from error
+    except yaml.YAMLError as error:
+        raise ConfigError(f"{path} is not valid YAML: {error}") from error
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{path} must contain settings (key: value), not {type(raw).__name__}")
+    try:
+        return Config.model_validate(raw)
+    except ValueError as error:
+        raise ConfigError(f"{path} has invalid settings:\n{error}") from error
