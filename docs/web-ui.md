@@ -1,17 +1,53 @@
 # Web UI
 
 ```bash
-litresearch serve                 # opens http://127.0.0.1:8080/ in your browser
-litresearch serve --port 8765 --no-browser
+litresearch serve                 # host and port from web.host / web.port in the config
+litresearch serve --host 127.0.0.1 --port 8765 --no-browser
 ```
 
-The UI runs on your own computer and loads nothing from the internet (no
-fonts, CDNs or trackers). It listens on `127.0.0.1` only, because it has
-no login yet. `--host 0.0.0.0` makes it reachable from other machines, which
-is not recommended until a login exists. POST requests from other websites
-are rejected. Stop the server with Ctrl+C.
+The UI loads nothing from the internet (no fonts, CDNs or trackers). POST
+requests from other websites are rejected. Stop the server with Ctrl+C.
 
-The phone version (PWA) will build on the same app later.
+## Using it from your laptop (local network)
+
+Run the UI on one machine (e.g. the Raspberry Pi) and open it from any device
+in the same network:
+
+1. Set a password once (stored only as a salted scrypt hash in
+   `web.password_hash`):
+
+   ```bash
+   litresearch set-password
+   ```
+
+2. Listen on the whole network: `web.host: 0.0.0.0` in `config/config.yaml`,
+   or `litresearch serve --host 0.0.0.0`.
+3. Start it; the server prints the address for other devices:
+
+   ```
+   litresearch UI on this computer: http://127.0.0.1:8080/
+     from other devices in your network: http://192.168.178.47:8080/
+     login required (password set with litresearch set-password)
+   ```
+
+4. Open that address on the laptop and log in. The login stays valid for 30
+   days (HttpOnly cookie); **Log out** is at the bottom of the sidebar.
+
+Safety rules:
+
+- Without a password the server refuses to listen on the network. `--no-login`
+  overrides this, which is not recommended.
+- Changing the password (`set-password` again) signs out all devices;
+  `set-password --remove` removes it, after which the UI only starts locally.
+- A wrong password costs a one-second delay, which slows down guessing.
+- The connection is plain HTTP. That is fine in your own home network, but do
+  not expose the port to the internet; use a VPN such as Tailscale or
+  WireGuard for access from outside.
+- To keep it running in the background, start it with `nohup` or a systemd
+  user service (planned: deployment files).
+
+The pages also work on a phone browser in the same network; an installable
+phone app (PWA) is planned.
 
 ## Pages
 

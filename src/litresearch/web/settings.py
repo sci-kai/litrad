@@ -427,6 +427,18 @@ def _topics_node(topics: list[dict], existing):
     return result
 
 
+def write_values(config_path: Path, updates: dict) -> None:
+    """Write plain values (no validation) keeping comments, with a backup."""
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    with open(config_path, encoding="utf-8") as handle:
+        document = yaml.load(handle) or {}
+    _apply(document, updates, document.get("topics"))
+    shutil.copy2(config_path, config_path.with_name(config_path.name + ".bak"))
+    with open(config_path, "w", encoding="utf-8") as handle:
+        yaml.dump(document, handle)
+
+
 def save_settings(config_path: Path, updates: dict) -> Config:
     """Validate and write; raises SettingsError without touching the file on errors."""
     yaml = YAML()

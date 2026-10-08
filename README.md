@@ -56,7 +56,8 @@ Full instructions, including the Paperpile auto-export and Google Drive sync:
 | `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant | ✅ |
 | `score`, `history` | level, streak, weekly grade, badges / reading log | ✅ |
-| `serve [--port] [--no-browser]` | local web UI | ✅ |
+| `serve [--host] [--port] [--no-browser]` | web UI, on this computer or for your local network | ✅ |
+| `set-password [--remove]` | password for network access to the UI | ✅ |
 | `export`, `sync-notes` | Obsidian export and note round-trip | milestone 6 |
 | `export-paperpile` | BibTeX with reading-status keywords, for import into Paperpile | milestone 6 |
 

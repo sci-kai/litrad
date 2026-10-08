@@ -33,7 +33,9 @@
       <a href="/how" class="{{ 'active' if active == 'how' }}"><span class="icon">🔎</span>How it works</a>
       <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="icon">⚙️</span>Settings</a>
     </nav>
-    <div class="footer">v{{ version }} · keys: <code>n</code> next, <code>r</code> recs, <code>p</code> progress</div>
+    <div class="footer">v{{ version }} · keys: <code>n</code> next, <code>r</code> recs, <code>p</code> progress
+      {% if cfg.web.password_hash %}<form method="post" action="/logout" style="margin-top:.5rem"><button class="small ghost">🔒 Log out</button></form>{% endif %}
+    </div>
   </aside>
   <main class="main">
     <div class="topbar">

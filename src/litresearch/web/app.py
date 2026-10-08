@@ -4,6 +4,7 @@ Single-user and meant for 127.0.0.1. POST requests from other origins are
 rejected so that other websites cannot trigger actions in the background.
 """
 
+import asyncio
 import csv
 import io
 import secrets
@@ -68,6 +69,14 @@ from litresearch.reading import (
 from litresearch.recommend.engine import batch_items, build_recommendations, latest_batch
 from litresearch.sources.http import HttpError
 from litresearch.sources.openalex import OpenAlex
+from litresearch.web.auth import (
+    COOKIE,
+    SESSION_DAYS,
+    check_session,
+    load_secret,
+    make_session,
+    verify_password,
+)
 from litresearch.web.settings import GROUPS, SettingsError, parse_form, save_settings
 
 HERE = Path(__file__).parent
@@ -199,6 +208,24 @@ def create_app(config_path: Path) -> FastAPI:
         engine = init_db(cfg.paths.database)
         return cfg, engine
 
+    def secret() -> bytes:
+        cfg = load_config(config_path)
+        return load_secret(cfg.paths.database.parent / "web_secret")
+
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        """With web.password_hash set, every page needs a valid session cookie."""
+        password_hash = load_config(config_path).web.password_hash
+        path = request.url.path
+        if not password_hash or path == "/login" or path.startswith("/static/"):
+            return await call_next(request)
+        if check_session(request.cookies.get(COOKIE), secret(), password_hash):
+            return await call_next(request)
+        if request.method == "GET":
+            target = path + (f"?{request.url.query}" if request.url.query else "")
+            return RedirectResponse(f"/login?{urlencode({'next': target})}", status_code=303)
+        return PlainTextResponse("Login required", status_code=401)
+
     @app.middleware("http")
     async def same_origin_only(request: Request, call_next):
         if request.method == "POST":
@@ -236,6 +263,40 @@ def create_app(config_path: Path) -> FastAPI:
 
     def error(url: str, message: str) -> RedirectResponse:
         return back(url, {"kind": "error", "message": message, "events": [], "points": 0})
+
+    # --- login -------------------------------------------------------------------
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(request: Request, next: str = "/", failed: bool = False):
+        return templates.TemplateResponse(
+            request, "login.html", {"next": safe(next), "failed": failed}
+        )
+
+    @app.post("/login")
+    async def login(password: str = Form(...), next: str = Form("/")):
+        password_hash = load_config(config_path).web.password_hash
+        if not password_hash:
+            return RedirectResponse("/", status_code=303)
+        if not verify_password(password, password_hash):
+            await asyncio.sleep(1)  # slows down guessing
+            return RedirectResponse(
+                f"/login?{urlencode({'next': safe(next), 'failed': 'true'})}", status_code=303
+            )
+        response = RedirectResponse(safe(next), status_code=303)
+        response.set_cookie(
+            COOKIE,
+            make_session(secret(), password_hash),
+            max_age=SESSION_DAYS * 86400,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
+
+    @app.post("/logout")
+    def logout():
+        response = RedirectResponse("/login", status_code=303)
+        response.delete_cookie(COOKIE)
+        return response
 
     # --- pages -------------------------------------------------------------------
 

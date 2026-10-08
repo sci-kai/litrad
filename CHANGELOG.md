@@ -31,6 +31,9 @@
   (`game.drop_penalty`).
 - Additive schema migration for existing databases.
 - Documentation: `docs/recommendation-criteria.md`, `docs/web-ui.md`.
+- Local network access: `serve` uses `web.host`; password login (scrypt hash,
+  signed 30-day session cookie) via `set-password`; the server refuses to
+  listen on the network without a password and prints the LAN address.
 - Offline test suite with recorded API responses; live smoke test behind
   `--network`.
 - Documentation in `docs/`.

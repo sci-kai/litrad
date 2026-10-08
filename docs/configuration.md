@@ -123,6 +123,8 @@ Any OpenAI-compatible endpoint (LM Studio, Ollama, an institutional server):
 ## `schedule` *(planned)* / `web`
 
 `schedule.cron`: when to build a new list (cron syntax).
-`web.port` is the default port of `litresearch serve`. `web.host` and
-`web.password_hash` are not used yet: the server listens on 127.0.0.1 unless
-you pass `--host`.
+`web.host` is where `litresearch serve` listens: `127.0.0.1` (this computer
+only, no login needed) or `0.0.0.0` (whole local network; requires a
+password). `web.port` is the port. `web.password_hash` is set by
+`litresearch set-password`; never edit it by hand. See
+[web-ui.md](web-ui.md#using-it-from-your-laptop-local-network).

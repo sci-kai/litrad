@@ -175,16 +175,36 @@ def show_batch(batch, items) -> None:
         console.print("\nPut one on your reading queue with: [bold]litresearch queue add r1[/bold]")
 
 
+LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def lan_address() -> str | None:
+    """This machine's address in the local network (no packets are sent)."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        try:
+            probe.connect(("192.0.2.1", 9))  # TEST-NET address, never routed
+            return probe.getsockname()[0]
+        except OSError:
+            return None
+
+
 @app.command()
 def serve(
     config: Path = ConfigOpt,
     host: str = typer.Option(
-        "127.0.0.1", help="Interface to listen on. The UI has no login: keep it local."
+        None,
+        help="Interface to listen on (default: web.host from the config). "
+        "127.0.0.1 = this computer only, 0.0.0.0 = whole local network.",
     ),
     port: int = typer.Option(None, help="Port (default: web.port from the config)"),
     browser: bool = typer.Option(True, help="Open the UI in your browser"),
+    no_login: bool = typer.Option(
+        False, "--no-login", help="Allow network access without a password (not recommended)"
+    ),
 ):
-    """Start the web UI on this computer."""
+    """Start the web UI (on this computer or for your local network)."""
     import threading
     import webbrowser
 
@@ -193,17 +213,62 @@ def serve(
     from litresearch.web.app import create_app
 
     cfg = load_config(config)
+    host = host or cfg.web.host
     port = port or cfg.web.port
-    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
-    if host not in ("127.0.0.1", "localhost", "::1"):
+    local_only = host in LOCAL_HOSTS
+    if not local_only and not cfg.web.password_hash and not no_login:
         console.print(
-            f"[yellow]WARNING: listening on {host}. Anyone who can reach this port can "
-            "use and change your data.[/yellow]"
+            f"[red]Refusing to listen on {host} without a password:[/red] anyone in your "
+            "network could read and change your data.\n"
+            "Set one with [bold]litresearch set-password[/bold], or use --host 127.0.0.1."
         )
-    console.print(f"litresearch UI: [bold]{url}[/bold]  (stop with Ctrl+C)")
+        raise typer.Exit(code=1)
+    if not local_only and not cfg.web.password_hash:
+        console.print(f"[yellow]WARNING: listening on {host} without a login.[/yellow]")
+    url = (
+        f"http://127.0.0.1:{port}/"
+        if host in ("0.0.0.0", "::") or local_only
+        else (f"http://{host}:{port}/")
+    )
+    console.print(f"litresearch UI on this computer: [bold]{url}[/bold]")
+    if host in ("0.0.0.0", "::"):
+        address = lan_address()
+        if address:
+            console.print(
+                f"  from other devices in your network: [bold]http://{address}:{port}/[/bold]"
+            )
+    if not local_only and cfg.web.password_hash:
+        console.print("  login required (password set with litresearch set-password)")
+    console.print("Stop with Ctrl+C.")
     if browser:
         threading.Timer(1.2, webbrowser.open, args=(url,)).start()
     uvicorn.run(create_app(config.resolve()), host=host, port=port, log_level="warning")
+
+
+@app.command("set-password")
+def set_password(
+    config: Path = ConfigOpt,
+    remove: bool = typer.Option(False, "--remove", help="Remove the password (no login)"),
+):
+    """Set the password for the web UI (stored as a salted hash in config.yaml)."""
+    from litresearch.web.auth import hash_password
+    from litresearch.web.settings import write_values
+
+    if remove:
+        write_values(config, {"web": {"password_hash": "n/a"}})
+        console.print("Password removed. The UI now only starts on this computer (127.0.0.1).")
+        return
+    password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
+    try:
+        stored = hash_password(password)
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from None
+    write_values(config, {"web": {"password_hash": stored}})
+    console.print(
+        "Password set; existing logins are signed out. Start the UI for your network with "
+        "[bold]litresearch serve --host 0.0.0.0[/bold] (or set web.host: 0.0.0.0)."
+    )
 
 
 @app.command()

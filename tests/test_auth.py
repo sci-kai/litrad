@@ -1,0 +1,191 @@
+import shutil
+import stat
+
+import pytest
+import uvicorn
+import yaml
+from fastapi.testclient import TestClient
+from typer.testing import CliRunner
+
+import litresearch.cli as cli
+from conftest import SAMPLE_BIB
+from litresearch.config import load_config
+from litresearch.web.app import create_app
+from litresearch.web.auth import (
+    COOKIE,
+    check_session,
+    hash_password,
+    load_secret,
+    make_session,
+    verify_password,
+)
+
+runner = CliRunner()
+
+
+# --- hashing and sessions ---------------------------------------------------------
+
+
+def test_password_hash_round_trip():
+    stored = hash_password("correct horse")
+    assert stored.startswith("scrypt$") and "correct horse" not in stored
+    assert verify_password("correct horse", stored)
+    assert not verify_password("wrong horse!", stored)
+    assert hash_password("correct horse") != stored  # salted
+
+
+@pytest.mark.parametrize("stored", [None, "", "n/a", "md5$x", "scrypt$1$2$3$zz$yy", "a$b$c$d$e$f"])
+def test_malformed_hashes_never_verify(stored):
+    assert not verify_password("anything", stored)
+
+
+def test_short_passwords_are_rejected():
+    with pytest.raises(ValueError, match="at least 8"):
+        hash_password("short")
+
+
+def test_sessions(tmp_path):
+    secret = load_secret(tmp_path / "web_secret")
+    assert stat.S_IMODE((tmp_path / "web_secret").stat().st_mode) == 0o600
+    assert load_secret(tmp_path / "web_secret") == secret  # stable across restarts
+    token = make_session(secret, "hash-1", now=1000)
+    assert check_session(token, secret, "hash-1", now=2000)
+    assert not check_session(token, secret, "hash-1", now=1000 + 31 * 86400)  # expired
+    assert not check_session(token, secret, "hash-2", now=2000)  # password changed
+    assert not check_session(token, b"other-secret", "hash-1", now=2000)
+    expires, signature = token.split(".")
+    assert not check_session(f"{int(expires) + 999}.{signature}", secret, "hash-1", now=2000)
+    for broken in (None, "", "garbage", "x.y"):
+        assert not check_session(broken, secret, "hash-1", now=2000)
+
+
+# --- web login ----------------------------------------------------------------------
+
+
+def write_config(tmp_path, **web):
+    bib = tmp_path / "library.bib"
+    shutil.copy(SAMPLE_BIB, bib)
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "# my settings\n"
+        + yaml.safe_dump(
+            {
+                "paths": {
+                    "bibtex": str(bib),
+                    "database": str(tmp_path / "db.sqlite"),
+                    "cache_dir": str(tmp_path / "cache"),
+                },
+                "web": {"host": "0.0.0.0", "port": 8080, **web},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+@pytest.fixture
+def protected(tmp_path):
+    path = write_config(tmp_path, password_hash=hash_password("lab-meeting-42"))
+    client = TestClient(create_app(path))
+    yield client
+    client.close()
+
+
+def test_pages_require_login(protected):
+    response = protected.get("/queue?x=1", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login?next=%2Fqueue%3Fx%3D1"
+    assert protected.get("/static/app.css").status_code == 200
+    assert protected.get("/login").status_code == 200
+    assert protected.post("/queue/add", data={"title": "x"}).status_code == 401
+    assert protected.get("/ledger.tsv", follow_redirects=False).status_code == 303
+
+
+def test_wrong_password(protected):
+    response = protected.post("/login", data={"password": "nope", "next": "/queue"})
+    assert "Wrong password" in response.text
+    assert COOKIE not in protected.cookies
+
+
+def test_login_and_logout(protected):
+    response = protected.post(
+        "/login", data={"password": "lab-meeting-42", "next": "/queue"}, follow_redirects=False
+    )
+    assert response.status_code == 303 and response.headers["location"] == "/queue"
+    cookie = response.headers["set-cookie"]
+    assert "HttpOnly" in cookie and "samesite=lax" in cookie.lower()
+    page = protected.get("/queue")
+    assert page.status_code == 200 and "Reading queue" in page.text and "Log out" in page.text
+    protected.post("/logout")
+    assert protected.get("/", follow_redirects=False).status_code == 303
+
+
+def test_login_does_not_redirect_elsewhere(protected):
+    response = protected.post(
+        "/login",
+        data={"password": "lab-meeting-42", "next": "https://evil.example"},
+        follow_redirects=False,
+    )
+    assert response.headers["location"] == "/"
+
+
+def test_no_password_means_no_login(tmp_path):
+    client = TestClient(create_app(write_config(tmp_path)))
+    assert client.get("/").status_code == 200
+    assert "Log out" not in client.get("/").text
+    client.close()
+
+
+# --- serve and set-password ---------------------------------------------------------------
+
+
+@pytest.fixture
+def no_server(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
+    monkeypatch.setattr(cli, "lan_address", lambda: "192.168.1.23")
+    return calls
+
+
+def test_serve_refuses_network_without_password(tmp_path, no_server):
+    config = str(write_config(tmp_path))
+    result = runner.invoke(cli.app, ["serve", "--no-browser", "-c", config])
+    assert result.exit_code == 1 and "Refusing to listen on 0.0.0.0" in result.stdout
+    assert no_server == {}
+    result = runner.invoke(cli.app, ["serve", "--no-browser", "--no-login", "-c", config])
+    assert result.exit_code == 0 and "without a login" in result.stdout
+    assert no_server["host"] == "0.0.0.0"
+
+
+def test_serve_on_network_with_password(tmp_path, no_server):
+    config = str(write_config(tmp_path, password_hash=hash_password("lab-meeting-42")))
+    result = runner.invoke(cli.app, ["serve", "--no-browser", "-c", config])
+    assert result.exit_code == 0, result.stdout
+    assert "http://192.168.1.23:8080/" in result.stdout and "login required" in result.stdout
+    assert no_server == {"host": "0.0.0.0", "port": 8080, "log_level": "warning"}
+
+
+def test_serve_local_only_needs_no_password(tmp_path, no_server):
+    config = str(write_config(tmp_path))
+    result = runner.invoke(cli.app, ["serve", "--no-browser", "--host", "127.0.0.1", "-c", config])
+    assert result.exit_code == 0 and no_server["host"] == "127.0.0.1"
+    assert "192.168.1.23" not in result.stdout
+
+
+def test_set_password_keeps_comments(tmp_path):
+    path = write_config(tmp_path)
+    result = runner.invoke(
+        cli.app, ["set-password", "-c", str(path)], input="lab-meeting-42\nlab-meeting-42\n"
+    )
+    assert result.exit_code == 0, result.stdout
+    assert "# my settings" in path.read_text()
+    stored = load_config(path).web.password_hash
+    assert verify_password("lab-meeting-42", stored)
+    assert path.with_name("config.yaml.bak").exists()
+
+    result = runner.invoke(cli.app, ["set-password", "-c", str(path)], input="short\nshort\n")
+    assert result.exit_code == 1 and "at least 8" in result.stdout
+    assert load_config(path).web.password_hash == stored
+
+    result = runner.invoke(cli.app, ["set-password", "--remove", "-c", str(path)])
+    assert result.exit_code == 0 and load_config(path).web.password_hash is None
