@@ -34,6 +34,15 @@
 - Local network access: `serve` uses `web.host`; password login (scrypt hash,
   signed 30-day session cookie) via `set-password`; the server refuses to
   listen on the network without a password and prints the LAN address.
+- Backups: consistent SQLite snapshots plus portable progress exports in
+  `backup.dir` (rotated; automatic while `serve` runs); `restore`,
+  `export-progress`, `import-progress` (idempotent merge by DOI/PMID/key/title,
+  notes kept), `check`; data & backups card in the settings page.
+- Robustness: durable commits, busy timeout for concurrent writers, atomic
+  config writes, readable errors for broken config/BibTeX/database, tolerant
+  API parsing; failure-scenario and randomised tests.
+- Documentation: `docs/implementation.md` (how it is built, credits),
+  `docs/data-and-backups.md`.
 - Offline test suite with recorded API responses; live smoke test behind
   `--network`.
 - Documentation in `docs/`.

@@ -52,6 +52,9 @@ git branch -d feat-scoring
 | `test_game.py` | XP rules, anti-farming, bonuses, streaks, quests, badges, levels, statistics |
 | `test_cli.py` | all CLI commands (plain console, fake APIs) |
 | `test_web.py` | every page, actions, celebrations, penalties, settings round trip (comments kept), same-origin and redirect checks, TSV export |
+| `test_auth.py` | password hashing, sessions, login/logout, network serving rules |
+| `test_backup.py` | snapshots during writes, rotation, export/import merge (idempotent, notes kept), restore, automatic backups |
+| `test_robustness.py` | crashes mid-action, concurrency, restarts, broken inputs, hostile content, calendar edges, scale, randomised sessions with invariants |
 | `test_config.py`, `test_db.py` | config validation, status history |
 | `test_live.py` | smoke test against the real APIs (`--network`) |
 

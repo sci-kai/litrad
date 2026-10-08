@@ -7,3 +7,43 @@ license-url: "https://commonsclause.com"
 authors:
   - family-names: Horny
     given-names: Kai
+references:
+  - type: article
+    title: "OpenAlex: A fully-open index of scholarly works, authors, venues, institutions, and concepts"
+    authors:
+      - family-names: Priem
+        given-names: Jason
+      - family-names: Piwowar
+        given-names: Heather
+      - family-names: Orr
+        given-names: Richard
+    year: 2022
+    identifiers:
+      - type: other
+        value: "arXiv:2205.01833"
+  - type: article
+    title: "The Semantic Scholar Open Data Platform"
+    authors:
+      - family-names: Kinney
+        given-names: Rodney
+    year: 2023
+    identifiers:
+      - type: other
+        value: "arXiv:2301.10140"
+  - type: conference-paper
+    title: "SciRepEval: A Multi-Format Benchmark for Scientific Document Representations"
+    authors:
+      - family-names: Singh
+        given-names: Amanpreet
+      - family-names: D'Arcy
+        given-names: Mike
+      - family-names: Cohan
+        given-names: Arman
+      - family-names: Downey
+        given-names: Doug
+      - family-names: Feldman
+        given-names: Sergey
+    year: 2023
+    identifiers:
+      - type: other
+        value: "arXiv:2211.13308"

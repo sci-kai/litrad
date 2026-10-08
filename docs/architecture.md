@@ -43,6 +43,9 @@ Obsidian export.
 | `reading.py` | Paper references, queue operations, reading log, notes |
 | `game.py` | XP rules, streaks, quests, levels, badges, statistics |
 | `cli_reading.py` | Queue/reading/score commands |
+| `backup.py` | Snapshots, rotation, restore, portable progress export/import, automatic backups |
+| `cli_data.py` | backup / export-progress / import-progress / restore / check commands |
+| `web/auth.py` | Password hashing and session cookies for network access |
 | `web/app.py` | FastAPI routes, celebration tokens, same-origin check |
 | `web/settings.py` | Settings schema (labels, help, ranges) and comment-preserving save |
 | `web/templates/`, `web/static/` | Jinja2 pages, CSS and JS (no external assets) |

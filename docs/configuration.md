@@ -115,6 +115,16 @@ web UI (Settings).
 | `weekly_skim_goal` | 2 | weekly quest: further papers at least skimmed |
 | `drop_penalty` | 15 | XP lost when a picked recommendation leaves the queue unread (0 = off) |
 
+## `backup`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `dir` | `data/backups` | where snapshots and progress exports go; a cloud-synced folder is ideal |
+| `keep` | 14 | snapshots (and exports) to keep |
+| `interval_hours` | 24 | `litresearch serve` backs up at start and then every N hours; 0 = off |
+
+See [data-and-backups.md](data-and-backups.md).
+
 ## `llm` *(planned, milestone 5)*
 
 Any OpenAI-compatible endpoint (LM Studio, Ollama, an institutional server):

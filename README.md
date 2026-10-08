@@ -58,6 +58,9 @@ Full instructions, including the Paperpile auto-export and Google Drive sync:
 | `score`, `history` | level, streak, weekly grade, badges / reading log | ✅ |
 | `serve [--host] [--port] [--no-browser]` | web UI, on this computer or for your local network | ✅ |
 | `set-password [--remove]` | password for network access to the UI | ✅ |
+| `backup`, `restore FILE` | database snapshot + progress export / restore a snapshot | ✅ |
+| `export-progress FILE`, `import-progress FILE` | move or merge your progress between machines | ✅ |
+| `check` | database integrity, contents, last backup | ✅ |
 | `export`, `sync-notes` | Obsidian export and note round-trip | milestone 6 |
 | `export-paperpile` | BibTeX with reading-status keywords, for import into Paperpile | milestone 6 |
 
@@ -65,14 +68,19 @@ Global option: `-v/--verbose` shows HTTP requests and retries.
 
 ## Documentation
 
-- [Setup](docs/setup.md): installation, Paperpile export, sync, first ingest, troubleshooting
-- [Usage](docs/usage.md): the weekly loop of recommend, queue, read and score
-- [Web UI](docs/web-ui.md): pages, rewards, removing papers, settings
-- [Recommendation criteria](docs/recommendation-criteria.md): every rule and formula, with the evidence tree
-- [Gamification](docs/gamification.md): points, bonuses, levels, badges, metrics
-- [Configuration](docs/configuration.md): every config key
-- [Architecture](docs/architecture.md): pipeline, data model, external services and their limits
-- [Development](docs/development.md): git workflow, tests, lint, fixtures
+| Document | For |
+|---|---|
+| [Setup](docs/setup.md) | installation, Paperpile export, sync, first ingest, troubleshooting |
+| [Usage](docs/usage.md) | the weekly loop of recommend, queue, read and score |
+| [Web UI](docs/web-ui.md) | pages, rewards, network access with login |
+| [Recommendation criteria](docs/recommendation-criteria.md) | every rule and formula, the evidence tree |
+| [Gamification](docs/gamification.md) | points, bonuses, penalty, levels, badges, metrics |
+| [Data & backups](docs/data-and-backups.md) | where your progress lives, backups, moving machines |
+| [Configuration](docs/configuration.md) | every config key |
+| [How it is built](docs/implementation.md) | development, modules, algorithms, tests, **credits for all packages, services and literature** |
+| [Architecture](docs/architecture.md) | pipeline, data model, external services |
+| [Development](docs/development.md) | git workflow, tests, lint, fixtures |
+
 
 ## Data sources
 
