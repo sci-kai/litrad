@@ -10,3 +10,4 @@ config/config.yaml
 /*.bib
 .coverage
 *.swp
+config/*.bak

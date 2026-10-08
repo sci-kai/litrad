@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta, read_form %}
+{% set active = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Good to see you 👋{% endblock %}
+{% block content %}
+{% if waiting is not none and waiting >= nudge_days %}
+<div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>. Read it today, or drop it if it no longer matters.</div>
+{% endif %}
+
+<div class="grid two">
+  <div class="card {{ 'up-next paper-card' if up_next }}">
+    {% if up_next %}
+    {% set item, paper = up_next %}
+    <span class="badge-next">▶ UP NEXT</span>
+    <div class="paper">
+      <div class="title"><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></div>
+      {{ paper_meta(paper) }}
+      {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
+    </div>
+    <div class="actions">
+      <button class="primary" type="button" data-toggle="dash-read">🐸 I read it</button>
+      <a class="button" href="/papers/{{ paper.id }}">Details &amp; abstract</a>
+    </div>
+    {{ read_form(paper, "/", "dash-read") }}
+    <p class="muted" style="margin-top:.6rem">Reading your top paper first earns the 🐸 frog bonus: +50 % XP.</p>
+    {% else %}
+    <h2>📭 Your queue is empty</h2>
+    <p>Pick one of this week's recommendations or add a paper you want to read.</p>
+    <a class="button primary" href="/recommendations">✨ See this week's picks</a>
+    <a class="button" href="/library">🔍 Add a paper</a>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>🗓️ Weekly quest</h2><span class="grade {{ 'S' if week.done and week.thorough else ('A' if week.done else '') }}">{{ "S" if week.done and week.thorough else ("A" if week.done else (week.fraction * 100) | int ~ "%") }}</span></div>
+    <p class="muted">Week from {{ week.week_start.isoformat() }}: {{ week.goal_detail }} deep read + {{ week.goal_skim }} more skims · +50 XP</p>
+    <div class="quest-track">
+      {% for i in range(week.goal_detail) %}<div class="slot deep {{ 'done' if i < week.detail }}" title="deep read"></div>{% endfor %}
+      {% set extra = week.total - [week.detail, week.goal_detail] | min %}
+      {% for i in range(week.goal_skim) %}<div class="slot {{ 'done' if i < extra }}" title="skim"></div>{% endfor %}
+    </div>
+    <p><b>{{ week.xp }}</b> XP this week · streak <b>{{ stats.streak }}</b> week(s) <span class="flame {{ 'on' if stats.streak }}">🔥</span> · next reads ×{{ "%.2f" | format(multiplier) }}</p>
+    {% for hint in hints %}<div class="hint">💡 <span>{{ hint }}</span></div>{% endfor %}
+  </div>
+</div>
+
+<div class="grid two" style="margin-top:1rem">
+  <div class="card">
+    <div class="head"><h2>✨ This week's picks</h2><a href="/recommendations">all details →</a></div>
+    {% if recs %}
+    {% for rec, paper in recs %}
+    <div class="row" style="margin:.35rem 0; flex-wrap: nowrap">
+      <span class="rank">r{{ rec.rank }}</span>
+      <span class="chip {{ rec.category.value }}">{{ "📖 detail" if rec.category.value == "detail" else "📄 skim" }}</span>
+      <a class="grow" href="/papers/{{ paper.id }}" style="flex:1 1 auto">{{ paper.title | truncate(80) }}</a>
+      {% if rec_status.get(paper.id) %}<span class="chip queued">{{ rec_status[paper.id] }}</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p>No recommendations yet.</p>
+    <form method="post" action="/recommendations/build" data-loading="Searching OpenAlex and Semantic Scholar… this takes about a minute.">
+      <button class="primary">✨ Build this week's list</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>📚 Queue ({{ queue | length }}/{{ cfg.queue.max_size }})</h2><a href="/queue">manage →</a></div>
+    {% for item, paper in queue %}
+    <div class="row" style="margin:.35rem 0; flex-wrap: nowrap">
+      <span class="rank">q{{ item.position }}</span>
+      <a href="/papers/{{ paper.id }}" style="flex:1 1 auto">{{ paper.title | truncate(80) }}</a>
+    </div>
+    {% else %}
+    <p class="muted">Empty.</p>
+    {% endfor %}
+    <h3 style="margin-top:1rem">💰 Recent XP</h3>
+    {% for row in recent %}
+    <div class="row" style="flex-wrap:nowrap; font-size:.88rem">
+      <span>{{ kind_icons.get(row.event.kind, "✨") }}</span>
+      <span style="flex:1 1 auto">{{ row.event.reason | truncate(60) }}</span>
+      <span class="{{ 'pos' if row.event.points >= 0 else 'neg' }}">{{ "%+d" | format(row.event.points) }}</span>
+    </div>
+    {% else %}
+    <p class="muted">Read your first paper to earn XP.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

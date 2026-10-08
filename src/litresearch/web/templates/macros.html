@@ -1,0 +1,153 @@
+{% macro paper_meta(paper) -%}
+<div class="meta">
+  {{ paper.authors | authors }}
+  ({{ paper.pub_date.isoformat() if paper.pub_date else (paper.year or "n.d.") }})
+  {% if paper.venue %}· {{ paper.venue }}{% endif %}
+  {% if paper.citation_count is not none %}· {{ "{:,}".format(paper.citation_count) }} citations{% endif %}
+  {% if paper.in_library %}· <span class="chip">📁 in Paperpile</span>{% endif %}
+  {% if paper_link(paper) %}· <a href="{{ paper_link(paper) }}" target="_blank" rel="noopener">open ↗</a>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro score_bars(b) -%}
+<div class="bars">
+  {% for key, label in [("relevance", "Relevance"), ("impact", "Impact"), ("timeliness", "Timeliness")] %}
+  <span>{{ label }}</span>
+  <div class="bar {{ key }}"><span style="width: {{ (b[key] * 100) | round(1) }}%"></span></div>
+  <b>{{ "%.2f" | format(b[key]) }}</b>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro read_form(paper, next_url, id) -%}
+<form class="read-form" method="post" action="/papers/{{ paper.id }}/read" id="{{ id }}" hidden>
+  <input type="hidden" name="next_url" value="{{ next_url }}">
+  <div class="levels">
+    {% for level in ["abstract", "skimmed", "read", "thorough"] %}
+    <label><input type="radio" name="level" value="{{ level }}" {{ "checked" if level == "read" }}>
+      <span>{{ status_icons[level] }} {{ level }} <span class="xp">+{{ base_xp[level] }}</span></span></label>
+    {% endfor %}
+  </div>
+  <div class="row">
+    <span class="stars" title="Rating">
+      {% for star in [5, 4, 3, 2, 1] %}
+      <input type="radio" name="rating" id="{{ id }}-s{{ star }}" value="{{ star }}"><label for="{{ id }}-s{{ star }}">★</label>
+      {% endfor %}
+    </span>
+    <small>optional rating</small>
+  </div>
+  <textarea name="note" placeholder="Notes: key findings, methods to reuse, open questions… (140+ characters earn ✍️ +10 XP)"></textarea>
+  <div><button class="primary" type="submit">✔ Log reading</button></div>
+</form>
+{%- endmacro %}
+
+{% macro funnel_view(funnel) -%}
+{% if funnel %}
+{% set top = [funnel.gathered, 1] | max %}
+<div class="funnel">
+  {% set steps = [
+    ("Found by searches & recommendations", funnel.gathered),
+    ("Passed the filters", funnel.scored),
+    ("Fresh or landmark", funnel.eligible),
+    ("Above the score floor", funnel.above_floor),
+    ("Picked (diverse)", funnel.picked)] %}
+  {% for label, n in steps %}
+  <div class="step"><div class="fbar" style="width: {{ [n / top * 100, 6] | max }}%">{{ n }}</div><small>{{ label }}</small></div>
+  {% if loop.index == 1 %}
+  <div class="removed">removed:
+    {% for reason, count in funnel.removed.items() if count %}{{ reason.replace("_", " ") }} {{ count }}{{ ", " if not loop.last }}{% else %}nothing{% endfor %}
+  </div>
+  {% elif loop.index == 2 %}
+  <div class="removed">not fresh and not a landmark: {{ funnel.not_fresh_or_landmark }}</div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro evidence_tree(rec, paper, batch) -%}
+{% set b = rec.breakdown %}
+{% set ev = b.evidence if b.evidence is defined else none %}
+<details class="evidence">
+  <summary>🌳 Why was this recommended? (evidence tree)</summary>
+  {% if not ev %}
+  <p class="muted">This batch was built before detailed evidence was recorded. Build a new batch to see the full tree.</p>
+  {% else %}
+  {% set w = ev.weights %}
+  {% set c = ev.contributions %}
+  <ul class="tree">
+    <li><span class="node">Score {{ "%.3f" | format(rec.score) }}</span>
+      <span class="formula">= {{ w.relevance }}×{{ "%.3f" | format(b.relevance) }} + {{ w.impact }}×{{ "%.3f" | format(b.impact) }} + {{ w.timeliness }}×{{ "%.3f" | format(b.timeliness) }}
+      ({{ "%.3f" | format(c.relevance) }} + {{ "%.3f" | format(c.impact) }} + {{ "%.3f" | format(c.timeliness) }})</span>
+      <ul>
+        <li><span class="node">🔭 Found by</span>
+          <ul>
+            {% for f in ev.found_by %}
+            <li>
+              {% if f.source == "s2-recs" %}Semantic Scholar recommendations for your library{% if f.position %} (#{{ f.position }}){% endif %}
+              {% else %}OpenAlex {{ "fresh" if f.source.endswith("fresh") else "landmark" }} search
+                “{{ f.query }}” (topic <b>{{ f.topic }}</b>){% if f.position %}, result #{{ f.position }}{% endif %}
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </li>
+        <li><span class="node">✅ Eligible as {{ ev.eligibility.kind }}</span>
+          <ul>
+            {% if ev.eligibility.kind == "fresh" %}
+            <li class="ok">published {{ ev.eligibility.age_days }} days ago ≤ fresh window {{ ev.eligibility.fresh_window_days }} days</li>
+            {% else %}
+            <li class="ok">citation percentile {{ ev.eligibility.citation_percentile }} ≥ {{ ev.eligibility.landmark_min_percentile }}</li>
+            <li class="ok">age {{ (ev.eligibility.age_days / 365.25) | round(1) }} years ≤ {{ ev.eligibility.landmark_max_age_years }} years</li>
+            {% endif %}
+            <li class="ok">not in your library, not read/dismissed, not queued, not recommended in the cooldown, no excluded term, research article (not a meeting abstract)</li>
+          </ul>
+        </li>
+        {% set r = ev.relevance %}
+        <li><span class="node">🎯 Relevance <span class="val">{{ "%.3f" | format(b.relevance) }}</span></span>
+          <span class="formula">= {{ r.similarity_share }} × similarity rank {{ "%.2f" | format(r.similarity_rank) }} + {{ (1 - r.similarity_share) | round(2) }} × topic bonus {{ "%.2f" | format(r.topic_bonus) }}</span>
+          <ul>
+            <li>Library similarity ({{ r.method }}): mean of the {{ r.neighbours | length }} closest library papers = {{ "%.3f" | format(r.knn_mean_similarity) }},
+              which ranks at {{ (r.similarity_rank * 100) | round(0) | int }} % among {{ r.rank_among }} candidates
+              <ul>
+                {% for n in r.neighbours %}
+                <li><a href="/papers/{{ n.paper_id }}">{{ n.title }}</a> <span class="muted">similarity {{ "%.3f" | format(n.similarity) }}</span></li>
+                {% endfor %}
+              </ul>
+            </li>
+            <li>Topic bonus {{ "%.2f" | format(r.topic_bonus) }}: {{ r.topic_bonus_reason }}</li>
+          </ul>
+        </li>
+        {% set im = ev.impact %}
+        <li><span class="node">🏛️ Impact <span class="val">{{ "%.3f" | format(b.impact) }}</span></span> <span class="formula">basis: {{ im.basis }}</span>
+          <ul>
+            {% if im.basis == "journal" %}
+            <li>Journal {{ im.venue or "unknown" }}: 2-year mean citedness {{ im.venue_mean_citedness | round(1) if im.venue_mean_citedness is not none else "unknown" }}
+              → {{ "%.3f" | format(im.venue_score) }} (log scale, {{ im.top_venue_citedness }} = 1.0)</li>
+            <li>Early citations: {{ im.citations }} → +{{ "%.3f" | format(im.early_citation_bonus) }}</li>
+            {% elif im.basis == "citation percentile" %}
+            <li>Cited more than {{ im.citation_percentile }} % of papers of the same field and year ({{ "{:,}".format(im.citations or 0) }} citations)</li>
+            {% else %}
+            <li>{{ im.citations_per_year }} citations per year (log scale, {{ im.saturation }} = 1.0)</li>
+            {% endif %}
+          </ul>
+        </li>
+        {% set t = ev.timeliness %}
+        <li><span class="node">⏱️ Timeliness <span class="val">{{ "%.3f" | format(b.timeliness) }}</span></span>
+          <span class="formula">{% if t.basis == "fresh" %}= 0.5 + 0.5 × (1 − {{ t.age_days }} / {{ t.fresh_window_days }}){% else %}landmark constant{% endif %}</span></li>
+        {% set s = ev.selection %}
+        <li><span class="node">🧮 Selection</span>
+          <ul>
+            <li>Score rank {{ s.score_rank }} of {{ s.eligible }} eligible papers; best score {{ "%.3f" | format(s.best_score) }}, floor {{ "%.3f" | format(s.floor) }} ({{ (s.min_relative_score * 100) | int }} % of best) → {{ s.above_floor }} papers in the running</li>
+            <li>Diversity (MMR, λ = {{ s.mmr_lambda }}): picked as #{{ s.mmr_pick }}{% if s.most_similar_pick %}; most similar earlier pick “{{ s.most_similar_pick }}” (similarity {{ "%.2f" | format(s.redundancy) }}){% endif %}</li>
+          </ul>
+        </li>
+        {% set cat = ev.category %}
+        <li><span class="node">{{ "📖 Read in detail" if cat.category == "detail" else "📄 Skim" }}</span>
+          relevance + impact = {{ "%.3f" | format(cat.relevance_plus_impact) }}, position {{ cat.position }} among the picks; the top {{ cat.n_detail }} are “read in detail”</li>
+      </ul>
+    </li>
+  </ul>
+  {% endif %}
+</details>
+{%- endmacro %}

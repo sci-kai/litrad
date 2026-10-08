@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view %}
+{% set active = "recommendations" %}
+{% block title %}This week{% endblock %}
+{% block heading %}✨ Recommendations{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:1rem">
+  <div class="row" style="justify-content: space-between">
+    <div>
+      {% if batch %}
+      <b>Week of {{ batch.week_start.isoformat() }}</b>
+      <span class="muted">· built {{ batch.created_at.isoformat() }} · {{ batch.n_candidates }} candidates checked</span>
+      {% else %}<b>No recommendations yet.</b>{% endif %}
+    </div>
+    <div class="row">
+      {% if batches | length > 1 %}
+      <form method="get" class="row">
+        <select name="batch" onchange="this.form.submit()">
+          {% for b in batches %}<option value="{{ b.id }}" {{ "selected" if batch and b.id == batch.id }}>{{ b.week_start.isoformat() }} (#{{ b.id }})</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      <form method="post" action="/recommendations/build" data-loading="Searching OpenAlex and Semantic Scholar… this takes about a minute.">
+        <button class="{{ 'primary' if not this_week_has_batch }}">{{ "🔄 Rebuild with current settings" if this_week_has_batch else "✨ Build this week's list" }}</button>
+      </form>
+    </div>
+  </div>
+  {% for warning in (batch.warnings if batch else []) %}<div class="notice warn" style="margin:.6rem 0 0">⚠️ {{ warning }}</div>{% endfor %}
+  {% if this_week_has_batch %}<p class="muted" style="margin:.5rem 0 0">Rebuilding the same day reuses cached searches, so it is quick and costs no extra API budget.</p>{% endif %}
+</div>
+
+{% if queue_full %}<div class="notice warn">📚 Your queue is full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}). Read or drop a paper before picking new ones.</div>{% endif %}
+
+<div class="grid" style="grid-template-columns: 1fr 300px; align-items: start">
+  <div class="grid">
+    {% for category, label, intro in [("detail", "📖 Read in detail", "Highest relevance + impact."), ("skim", "📄 Skim", "Worth a quick look.")] %}
+    {% set group = recs | selectattr("0.category", "equalto", category) | list %}
+    {% if group %}
+    <h2 style="margin:.4rem 0 0">{{ label }} <small class="muted">{{ intro }}</small></h2>
+    {% for rec, paper in group %}
+    <div class="card paper-card">
+      <div class="paper">
+        <div class="row" style="flex-wrap: nowrap; align-items: baseline">
+          <span class="rank">r{{ rec.rank }}</span>
+          <div class="title"><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></div>
+        </div>
+        {{ paper_meta(paper) }}
+        <div class="row">
+          <span class="chip {{ rec.breakdown.kind }}">{{ "🆕 fresh" if rec.breakdown.kind == "fresh" else "🏛️ landmark" }}</span>
+          {% for t in rec.breakdown.topics %}<span class="chip">🏷️ {{ t }}</span>{% endfor %}
+          {% if "s2-recs" in rec.breakdown.sources %}<span class="chip">📁 similar to your library</span>{% endif %}
+          {% if rec_status.get(paper.id) %}<span class="chip queued">{{ "📚 on your queue" if rec_status[paper.id] == "queued" else status_icons.get(rec_status[paper.id], "") ~ " " ~ rec_status[paper.id] }}</span>{% endif %}
+        </div>
+        {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
+        <div class="row" style="align-items: start">
+          <div style="flex: 1 1 260px">{{ score_bars(rec.breakdown) }}</div>
+          <div style="flex: 0 0 auto; text-align: right"><small class="muted">score</small><br><b style="font-size:1.4rem">{{ "%.2f" | format(rec.score) }}</b></div>
+        </div>
+      </div>
+      <div class="actions">
+        {% if not rec_status.get(paper.id) %}
+        <form class="inline" method="post" action="/queue/add">
+          <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="/recommendations{{ '?batch=' ~ batch.id if batch }}">
+          <button class="primary small" {{ "disabled" if queue_full }}>➕ Add to my queue</button>
+        </form>
+        <form class="inline" method="post" action="/papers/{{ paper.id }}/dismiss">
+          <input type="hidden" name="next_url" value="/recommendations">
+          <button class="small ghost" title="Not relevant: also teaches the recommender">🚫 Not relevant</button>
+        </form>
+        {% endif %}
+        <a class="button small ghost" href="/papers/{{ paper.id }}">Abstract</a>
+      </div>
+      {{ evidence_tree(rec, paper, batch) }}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+    {% if batch and not recs %}<div class="card">No eligible papers this time. Check your topics in <a href="/settings">Settings</a>.</div>{% endif %}
+  </div>
+
+  <div class="grid" style="position: sticky; top: 1rem">
+    <div class="card">
+      <h2>🔬 How this list was made</h2>
+      {% if batch and batch.funnel %}{{ funnel_view(batch.funnel) }}
+      <p class="muted" style="margin-top:.6rem">Library: {{ batch.funnel.library_papers }} papers, {{ batch.funnel.library_embedded }} with SPECTER2 embeddings.</p>
+      {% else %}<p class="muted">Funnel data is available for batches built from now on.</p>{% endif %}
+      <a href="/how">Full criteria →</a>
+    </div>
+    {% if batch and batch.params %}
+    <div class="card">
+      <h3>⚙️ Settings used</h3>
+      {% set p = batch.params.selection %}
+      <small>
+        weights relevance {{ p.weights.relevance }} / impact {{ p.weights.impact }} / timeliness {{ p.weights.timeliness }}<br>
+        fresh ≤ {{ p.fresh_window_months }} months · landmark ≥ {{ p.landmark_min_percentile }}th percentile, ≤ {{ p.landmark_max_age_years }} years<br>
+        diversity λ {{ p.mmr_lambda }} · floor {{ p.min_relative_score }} · cooldown {{ p.cooldown_weeks }} weeks<br>
+        topics: {% for t in batch.params.topics %}{{ t.name }} ({{ t.weight }}){{ ", " if not loop.last }}{% endfor %}
+      </small>
+      <p><a href="/settings">Adjust →</a></p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

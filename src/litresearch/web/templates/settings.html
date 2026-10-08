@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% set active = "settings" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}⚙️ Settings{% endblock %}
+{% block content %}
+<p class="muted">Changes are written to <code>{{ config_path }}</code> (comments are kept; the previous version is saved as <code>{{ config_path.name }}.bak</code>) and apply to the next recommendation batch.
+  What each setting does in detail: <a href="/how">How it works</a>. File paths, API keys and the web server are only editable in the file.</p>
+<form method="post" action="/settings" class="grid">
+  <div class="card">
+    <h2>🏷️ Topics</h2>
+    <p class="muted">Each query runs two OpenAlex searches per batch (fresh and landmark papers). Papers found by a topic get a relevance bonus of weight ÷ highest weight.</p>
+    <div id="topics" class="grid" style="gap:.6rem">
+      {% for topic in cfg.topics %}
+      <div class="topic-row grid" style="grid-template-columns: 1fr 110px 2fr auto; gap:.5rem; align-items: start">
+        <input type="text" name="topic_name" value="{{ topic.name }}" placeholder="name">
+        <input type="number" name="topic_weight" value="{{ topic.weight }}" step="0.05" min="0" title="weight">
+        <textarea name="topic_queries" placeholder="one search query per line">{{ topic.queries | join("\n") }}</textarea>
+        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
+      </div>
+      {% endfor %}
+    </div>
+    <template id="topic-template">
+      <div class="topic-row grid" style="grid-template-columns: 1fr 110px 2fr auto; gap:.5rem; align-items: start">
+        <input type="text" name="topic_name" placeholder="name">
+        <input type="number" name="topic_weight" value="1.0" step="0.05" min="0" title="weight">
+        <textarea name="topic_queries" placeholder="one search query per line"></textarea>
+        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
+      </div>
+    </template>
+    <p><button type="button" class="small" id="add-topic">➕ Add topic</button></p>
+    <div class="field">
+      <label for="excluded_terms">Excluded terms</label>
+      <textarea id="excluded_terms" name="excluded_terms" placeholder="one per line">{{ cfg.excluded_terms | join("\n") }}</textarea>
+      <span class="help">Papers whose title or abstract contains one of these (case-insensitive) are never recommended.</span>
+    </div>
+  </div>
+
+  {% for group in groups %}
+  <details class="card" {{ "open" if not group.advanced }}>
+    <summary><h2 style="display:inline">{{ "🧪 " if group.advanced }}{{ group.title }}</h2></summary>
+    <p class="muted">{{ group.intro }}</p>
+    <div class="grid two">
+      {% for s in group.settings %}
+      <div class="field">
+        {% if s.kind == "bool" %}
+        <label class="row"><input type="checkbox" name="{{ s.key }}" {{ "checked" if s.value(cfg) }} style="width:auto"> {{ s.label }}</label>
+        {% else %}
+        <label for="{{ s.key }}">{{ s.label }}</label>
+        <input type="number" id="{{ s.key }}" name="{{ s.key }}" value="{{ s.value(cfg) }}"
+          {% if s.minimum is not none %}min="{{ s.minimum }}"{% endif %} {% if s.maximum is not none %}max="{{ s.maximum }}"{% endif %}
+          step="{{ s.step or 'any' }}" {% if s.path[1] == "weights" %}data-weight="share-{{ s.path[2] }}"{% endif %} required>
+        {% if s.path | length > 2 and s.path[1] == "weights" %}<small id="share-{{ s.path[2] }}" class="muted"></small>{% endif %}
+        {% endif %}
+        <span class="help">{{ s.help }} <code>{{ s.key }}</code></span>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+  <div><button class="primary">💾 Save settings</button> <a class="button ghost" href="/settings">Discard changes</a></div>
+</form>
+{% endblock %}

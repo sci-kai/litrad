@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree %}
+{% block title %}{{ paper.title | truncate(40) }}{% endblock %}
+{% block heading %}📄 Paper{% endblock %}
+{% block content %}
+<div class="grid" style="grid-template-columns: 1fr 320px; align-items: start">
+  <div class="grid">
+    <div class="card paper">
+      <h2 style="font-size:1.35rem">{{ paper.title }}</h2>
+      {{ paper_meta(paper) }}
+      {% if paper.authors | length > 1 %}<p class="muted" style="font-size:.85rem">{{ paper.authors | join("; ") | truncate(400) }}</p>{% endif %}
+      <div class="row">
+        {% if paper.citation_percentile is not none %}<span class="chip">📈 top {{ "%.2g" | format(100 - paper.citation_percentile) }} % cited</span>{% endif %}
+        {% if paper.fwci %}<span class="chip">FWCI {{ "%.1f" | format(paper.fwci) }}</span>{% endif %}
+        {% for t in paper.topics[:3] %}<span class="chip">🏷️ {{ t }}</span>{% endfor %}
+        {% for f in paper.folders[:3] %}<span class="chip">📁 {{ f }}</span>{% endfor %}
+      </div>
+      {% if paper.tldr %}<div class="tldr" style="margin-top:.6rem"><b>TL;DR</b> {{ paper.tldr }}</div>{% endif %}
+      {% if paper.abstract %}<h3 style="margin-top:1rem">Abstract</h3><div class="abstract">{{ paper.abstract }}</div>
+      {% else %}<p class="muted">No abstract available{{ " — open the paper via the link above" if paper_link(paper) }}.</p>{% endif %}
+    </div>
+
+    <div class="card">
+      <h2>✍️ Notes</h2>
+      {% if reading and reading.notes %}<div class="abstract">{{ reading.notes }}</div>{% else %}<p class="muted">No notes yet.</p>{% endif %}
+      {% if reading %}
+      <form method="post" action="/papers/{{ paper.id }}/note" class="grid" style="gap:.5rem; margin-top:.6rem">
+        <textarea name="text" placeholder="Add a note (timestamped). Notes of 140+ characters in total earn ✍️ +10 XP once."></textarea>
+        <div><button>💾 Save note</button></div>
+      </form>
+      {% else %}<p class="muted">Log your reading first; then you can add further notes here.</p>{% endif %}
+    </div>
+
+    {% for rec, batch in recs %}
+    <div class="card">
+      <h2>✨ Recommended in the week of {{ batch.week_start.isoformat() }} as r{{ rec.rank }} ({{ rec.category.value }})</h2>
+      <p class="muted">{{ rec.reason }}</p>
+      {{ score_bars(rec.breakdown) }}
+      {{ evidence_tree(rec, paper, batch) }}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="grid" style="position: sticky; top: 1rem">
+    <div class="card">
+      <h3>📌 Status</h3>
+      {% if reading %}
+      <p style="font-size:1.1rem">{{ status_icons[reading.status.value] }} <b>{{ reading.status.value }}</b>
+        {% if reading.rating %}<br><span style="color: var(--gold)">{{ "★" * reading.rating }}</span>{% endif %}</p>
+      <small class="muted">updated {{ reading.updated_at.isoformat() }}</small>
+      {% else %}<p>Not read yet.</p>{% endif %}
+      {% if queue_item %}<p><span class="chip queued">📚 queue position q{{ queue_item.position }}</span></p>{% endif %}
+      {% if not reading or reading.status.value != "thorough" %}
+      <button class="primary" type="button" data-toggle="paper-read">📖 Log reading</button>
+      {{ read_form(paper, "/papers/" ~ paper.id, "paper-read") }}
+      {% endif %}
+      <div class="row" style="margin-top:.6rem">
+        {% if not queue_item and (not reading or depth(reading.status) < 2) %}
+        <form class="inline" method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="/papers/{{ paper.id }}"><button class="small">➕ Queue</button></form>
+        {% endif %}
+        {% if queue_item %}
+        <form class="inline" method="post" action="/queue/{{ paper.id }}/drop" {% if drop_cost %}data-confirm="Remove this picked recommendation unread? This costs {{ drop_cost }} XP."{% endif %}><button class="small ghost danger">✖ Remove from queue{{ " (−" ~ drop_cost ~ " XP)" if drop_cost }}</button></form>
+        {% endif %}
+        {% if not reading or reading.status.value != "dismissed" %}
+        <form class="inline" method="post" action="/papers/{{ paper.id }}/dismiss"><input type="hidden" name="next_url" value="/papers/{{ paper.id }}"><button class="small ghost">🚫 Not relevant</button></form>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <h3>💰 XP from this paper</h3>
+      {% for e in xp_events %}
+      <div class="row" style="flex-wrap: nowrap; font-size:.86rem"><span>{{ kind_icons.get(e.kind, "✨") }}</span><span style="flex:1 1 auto">{{ kind_labels.get(e.kind, e.kind) }}</span><span class="{{ 'pos' if e.points >= 0 else 'neg' }}">{{ "%+d" | format(e.points) }}</span></div>
+      {% else %}<p class="muted">None yet.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

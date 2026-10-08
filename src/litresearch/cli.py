@@ -176,9 +176,34 @@ def show_batch(batch, items) -> None:
 
 
 @app.command()
-def serve(config: Path = ConfigOpt):
-    """Start the web app."""
-    _not_yet(4)
+def serve(
+    config: Path = ConfigOpt,
+    host: str = typer.Option(
+        "127.0.0.1", help="Interface to listen on. The UI has no login: keep it local."
+    ),
+    port: int = typer.Option(None, help="Port (default: web.port from the config)"),
+    browser: bool = typer.Option(True, help="Open the UI in your browser"),
+):
+    """Start the web UI on this computer."""
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from litresearch.web.app import create_app
+
+    cfg = load_config(config)
+    port = port or cfg.web.port
+    url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}/"
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        console.print(
+            f"[yellow]WARNING: listening on {host}. Anyone who can reach this port can "
+            "use and change your data.[/yellow]"
+        )
+    console.print(f"litresearch UI: [bold]{url}[/bold]  (stop with Ctrl+C)")
+    if browser:
+        threading.Timer(1.2, webbrowser.open, args=(url,)).start()
+    uvicorn.run(create_app(config.resolve()), host=host, port=port, log_level="warning")
 
 
 @app.command()

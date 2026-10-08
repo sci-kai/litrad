@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set active = "ledger" %}
+{% block title %}XP ledger{% endblock %}
+{% block heading %}💰 XP ledger{% endblock %}
+{% block content %}
+<div class="grid four">
+  <div class="card stat"><div class="value">{{ header.xp }}</div><div class="label">balance</div></div>
+  <div class="card stat"><div class="value pos">+{{ earned }}</div><div class="label">earned</div></div>
+  <div class="card stat"><div class="value neg">{{ lost }}</div><div class="label">penalties</div></div>
+  <div class="card stat"><div class="value">{{ total }}</div><div class="label">transactions{{ " (filtered)" if kind }}</div></div>
+</div>
+
+<div class="grid" style="grid-template-columns: 260px 1fr; align-items: start; margin-top:1rem">
+  <div class="card">
+    <h3>By kind</h3>
+    <a class="row {{ 'active' if not kind }}" href="/ledger" style="flex-wrap: nowrap"><span style="flex:1 1 auto">All</span></a>
+    {% for k, (count, points) in totals.items() %}
+    <a class="row" href="/ledger?kind={{ k }}" style="flex-wrap: nowrap; margin:.2rem 0; {{ 'font-weight:700' if k == kind }}">
+      <span>{{ kind_icons.get(k, "✨") }}</span><span style="flex:1 1 auto">{{ kind_labels.get(k, k) }} <small class="muted">×{{ count }}</small></span>
+      <span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span>
+    </a>
+    {% endfor %}
+    <p style="margin-top:1rem"><a class="button small" href="/ledger.tsv">⬇ Export as TSV</a></p>
+  </div>
+  <div class="card">
+    <table>
+      <thead><tr><th>When</th><th></th><th>Reason</th><th class="num">Points</th><th class="num">Balance</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+      <tr>
+        <td style="white-space: nowrap">{{ row.event.at.isoformat() }}</td>
+        <td>{{ kind_icons.get(row.event.kind, "✨") }}</td>
+        <td>{{ row.event.reason }}{% if row.paper %}<br><a href="/papers/{{ row.paper.id }}"><small>{{ row.paper.title | truncate(70) }}</small></a>{% endif %}</td>
+        <td class="num {{ 'pos' if row.event.points >= 0 else 'neg' }}">{{ "%+d" | format(row.event.points) }}</td>
+        <td class="num">{{ row.balance }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No transactions yet. Log your first reading to earn XP.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if pages > 1 %}
+    <div class="row" style="margin-top:.8rem; justify-content: center">
+      {% if page > 1 %}<a class="button small" href="/ledger?kind={{ kind }}&page={{ page - 1 }}">← newer</a>{% endif %}
+      <span class="muted">page {{ page }}/{{ pages }}</span>
+      {% if page < pages %}<a class="button small" href="/ledger?kind={{ kind }}&page={{ page + 1 }}">older →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

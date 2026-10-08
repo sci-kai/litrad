@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% set active = "progress" %}
+{% block title %}Progress{% endblock %}
+{% block heading %}🏆 Progress{% endblock %}
+{% block content %}
+<div class="grid two">
+  <div class="card level-card">
+    <div class="ring">
+      <svg width="132" height="132"><circle class="track" cx="66" cy="66" r="55"/><circle class="fill" cx="66" cy="66" r="55" data-ring="{{ level.progress(stats.xp) }}"/></svg>
+      <div class="center"><div><span style="font-size:2rem">{{ level_icons[level.number - 1] }}</span><b>Lv {{ level.number }}</b></div></div>
+    </div>
+    <div>
+      <div class="title">{{ level.title }}</div>
+      <p><b>{{ stats.xp }}</b> XP{% if level.next_floor %} · {{ level.next_floor - stats.xp }} XP to <b>{{ levels[level.number][1] }}</b>{% else %} · maximum level reached 🎉{% endif %}</p>
+      {% for hint in hints %}<div class="hint">💡 <span>{{ hint }}</span></div>{% endfor %}
+    </div>
+  </div>
+  <div class="grid two">
+    <div class="card stat"><div class="emoji"><span class="flame {{ 'on' if stats.streak }}">🔥</span></div><div class="value">{{ stats.streak }}</div><div class="label">week streak (best {{ stats.best_streak }}) · ×{{ "%.2f" | format(multiplier) }}</div></div>
+    <div class="card stat"><div class="emoji">📈</div><div class="value">{{ "%.1f" | format(rif) }}</div><div class="label">Reading Impact Factor<br><small>avg XP / week, last 4 weeks</small></div></div>
+    <div class="card stat"><div class="emoji">🐸</div><div class="value">{{ (stats.frogs / stats.papers_read * 100) | round | int if stats.papers_read else 0 }}%</div><div class="label">discipline: top paper read first</div></div>
+    <div class="card stat"><div class="emoji">🔬</div><div class="value">{{ (stats.deep_reads / stats.papers_read * 100) | round | int if stats.papers_read else 0 }}%</div><div class="label">depth: read or thorough</div></div>
+  </div>
+</div>
+
+<div class="grid two" style="margin-top:1rem">
+  <div class="card">
+    <h2>📊 XP per week</h2>
+    {% set max_xp = [weeks | map(attribute="xp") | max, 1] | max %}
+    <svg class="chart" viewBox="0 0 {{ weeks | length * 40 }} 170" preserveAspectRatio="none" role="img" aria-label="XP per week">
+      {% for w in weeks %}
+      {% set h = ([w.xp, 0] | max) / max_xp * 130 %}
+      <rect class="bar-rect {{ 'current' if w.current }}" x="{{ loop.index0 * 40 + 6 }}" y="{{ 145 - h }}" width="28" height="{{ [h, 1] | max }}" rx="5"><title>{{ w.week_start.isoformat() }}: {{ w.xp }} XP, grade {{ w.grade }}</title></rect>
+      <text x="{{ loop.index0 * 40 + 20 }}" y="162" text-anchor="middle">{{ w.week_start.strftime("%m-%d") }}</text>
+      {% if w.xp %}<text x="{{ loop.index0 * 40 + 20 }}" y="{{ 140 - h }}" text-anchor="middle">{{ w.xp }}</text>{% endif %}
+      {% endfor %}
+    </svg>
+  </div>
+  <div class="card">
+    <h2>🗓️ Reading calendar <small class="muted">last 26 weeks</small></h2>
+    <div class="calendar">
+      {% for week in calendar %}<div class="week">{% for day in week %}
+        {% set level = 0 if day.count == 0 else (1 if day.count == 1 else (2 if day.count <= 3 else 3)) %}
+        <div class="day l{{ level }} {{ 'future' if day.future }}" title="{{ day.date.isoformat() }}: {{ day.count }} logged, {{ day.xp }} XP"></div>
+      {% endfor %}</div>{% endfor %}
+    </div>
+    <div class="legend">less <span class="day" style="width:11px;height:11px;border-radius:3px;background:var(--surface-2)"></span><span class="day l1" style="width:11px;height:11px;border-radius:3px;background:#c7bdfb"></span><span class="day l2" style="width:11px;height:11px;border-radius:3px;background:#9a83f7"></span><span class="day l3" style="width:11px;height:11px;border-radius:3px;background:#6c4bf4"></span> more</div>
+    <h3 style="margin-top:1rem">🥇 Personal bests</h3>
+    <div class="grid two" style="gap:.4rem; font-size:.9rem">
+      <div>Best week: <b>{{ bests.best_week_xp }} XP</b>{% if bests.best_week %} <small class="muted">({{ bests.best_week.isoformat() }})</small>{% endif %}</div>
+      <div>Busiest week: <b>{{ bests.busiest_week_papers }} papers</b></div>
+      <div>Longest streak: <b>{{ bests.longest_streak }} weeks</b></div>
+      <div>Weekly quests: <b>{{ bests.quests }}</b></div>
+      <div>Papers read: <b>{{ bests.papers_read }}</b></div>
+      <div>Thorough reads: <b>{{ bests.thorough }}</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  {% set owned = badges | selectattr("2") | list %}
+  <h2>🏅 Badges <small class="muted">{{ owned | length }}/{{ badges | length }} · +25 XP each</small></h2>
+  <div class="badges">
+    {% for badge, value, unlocked in badges %}
+    <div class="badge {{ 'unlocked' if unlocked else 'locked' }}" title="{{ badge.description }}">
+      <span class="emoji">{{ badge_icons.get(badge.code, "🏅") }}</span>
+      <div class="name">{{ badge.name }}</div>
+      <div class="desc">{{ badge.description }}</div>
+      {% if not unlocked %}<div class="mini-bar"><span style="width: {{ (value / badge.target * 100) | round(1) }}%"></span></div><small class="muted">{{ value }}/{{ badge.target }}</small>{% else %}<small style="color: var(--gold); font-weight: 700">unlocked</small>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>🪜 Career ladder</h2>
+  <div class="row" style="gap:.4rem">
+    {% for floor, title in levels %}
+    <span class="chip {{ 'queued' if loop.index == level.number }}" title="{{ floor }} XP">{{ level_icons[loop.index0] }} {{ title }} <small>{{ floor }}</small></span>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:.6rem">How points work: <a href="/how#game">rules</a> · every point: <a href="/ledger">XP ledger</a></p>
+</div>
+{% endblock %}

@@ -13,6 +13,11 @@ authors = [{ name = "Kai Horny" }]
 requires-python = ">=3.11"
 dependencies = [
     "bibtexparser>=2.0.0b7",
+    "fastapi>=0.110",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    "ruamel.yaml>=0.18",
+    "uvicorn>=0.29",
     "httpx>=0.27",
     "numpy>=1.26",
     "pydantic>=2.6",
@@ -31,10 +36,17 @@ litresearch = "litresearch.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"litresearch.web" = ["templates/*.html", "static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["network: calls real web APIs (enable with --network)"]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # fastapi's TestClient still uses httpx; harmless deprecation notice
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.ruff]
 line-length = 100

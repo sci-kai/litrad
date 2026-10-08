@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta, read_form %}
+{% set active = "queue" %}
+{% block title %}Reading queue{% endblock %}
+{% block heading %}📚 Reading queue <small class="muted">{{ queue | length }}/{{ cfg.queue.max_size }}</small>{% endblock %}
+{% block content %}
+<p class="muted">Short and ordered on purpose: there is always exactly one paper up next. Reading it first earns the 🐸 frog bonus.
+  Removing a paper you picked from the recommendations before at least skimming it costs <b>{{ cfg.game.drop_penalty }} XP</b>.</p>
+
+<div class="grid">
+  {% for item, paper in queue %}
+  {% set waiting = (today - item.added_at.date()).days %}
+  <div class="card paper-card queue-item {{ 'top up-next' if item.position == 1 }}" {% if item.position == 1 %}id="top"{% endif %}>
+    {% if item.position == 1 %}<span class="badge-next">▶ UP NEXT</span>{% endif %}
+    <div class="queue-pos">q{{ item.position }}</div>
+    <div class="paper">
+      <div class="title"><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></div>
+      {{ paper_meta(paper) }}
+      <div class="row">
+        <span class="chip">{{ {"recommendation": "✨ from recommendations", "library": "📁 from your library", "manual": "✍️ added by you"}[item.source] | default(item.source) }}</span>
+        <span class="chip {{ 'penalty' if waiting >= nudge_days }}">⏳ waiting {{ waiting }} d</span>
+        {% if readings[paper.id] %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>{% endif %}
+        {% if costs[paper.id] %}<span class="chip penalty" title="Removing it unread costs XP">⚠️ −{{ costs[paper.id] }} XP if removed unread</span>{% endif %}
+      </div>
+      <div class="actions">
+        <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🐸 " if item.position == 1 }}Log reading</button>
+        <a class="button small ghost" href="/papers/{{ paper.id }}">Abstract &amp; notes</a>
+        <form class="inline" method="post" action="/queue/{{ paper.id }}/drop"
+          {% if costs[paper.id] %}data-confirm="Remove this picked recommendation unread? This costs {{ costs[paper.id] }} XP."{% endif %}>
+          <button class="small ghost danger">✖ Remove{{ " (−" ~ costs[paper.id] ~ " XP)" if costs[paper.id] }}</button>
+        </form>
+      </div>
+      {{ read_form(paper, "/queue", "read-" ~ paper.id) }}
+    </div>
+    <div class="mover">
+      {% if item.position > 1 %}
+      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="1"><button class="small ghost" title="Make it the next paper">⤒</button></form>
+      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="{{ item.position - 1 }}"><button class="small ghost" title="Move up">▲</button></form>
+      {% endif %}
+      {% if not loop.last %}
+      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="{{ item.position + 1 }}"><button class="small ghost" title="Move down">▼</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card"><h2>📭 Inbox zero!</h2><p>Your queue is empty. Pick from <a href="/recommendations">this week's recommendations</a> or add a paper below.</p></div>
+  {% endfor %}
+
+  <div class="card">
+    <h2>➕ Add a paper you want to read</h2>
+    {% if queue | length >= cfg.queue.max_size %}
+    <p class="notice warn">The queue is full. Read or remove a paper first: a short queue gets read, a long one gets ignored.</p>
+    {% else %}
+    <form method="post" action="/queue/add" class="grid" style="gap:.6rem">
+      <div class="field" style="margin:0">
+        <label for="ref">DOI, PubMed ID, recommendation (r1), Paperpile key or title words</label>
+        <input type="text" id="ref" name="ref" placeholder="10.1038/s41586-024-07894-z · pmid:35931863 · r2 · Barkley2022-ri">
+        <span class="help">Unknown DOIs are looked up on OpenAlex (title, authors, journal, metrics).</span>
+      </div>
+      <details>
+        <summary>…or add by title only (no DOI, e.g. a preprint from a colleague)</summary>
+        <div class="grid two" style="margin-top:.5rem">
+          <input type="text" name="title" placeholder="Title">
+          <input type="text" name="url" placeholder="Link (optional)">
+        </div>
+      </details>
+      <label class="row"><input type="checkbox" name="top" value="true" style="width:auto"> Read it next (put it at q1)</label>
+      <div><button class="primary">➕ Add to queue</button> <a class="button ghost" href="/library">🔍 Search your library</a></div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

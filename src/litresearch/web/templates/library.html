@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta %}
+{% set active = "library" %}
+{% block title %}Find & add{% endblock %}
+{% block heading %}🔍 Find &amp; add papers{% endblock %}
+{% block content %}
+<div class="grid two">
+  <div class="card">
+    <h2>Search your library and known papers</h2>
+    <form method="get" class="row">
+      <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title words, author, citation key, DOI, Paperpile folder…" autofocus>
+      <button class="primary">Search</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Add any paper by DOI</h2>
+    <form method="post" action="/queue/add" class="row">
+      <input type="hidden" name="next_url" value="/library">
+      <input class="grow" type="text" name="ref" placeholder="10.1038/…" required>
+      <button class="primary">➕ Queue it</button>
+    </form>
+    <p class="muted" style="margin:.4rem 0 0">Queue: {{ header.queue }}/{{ cfg.queue.max_size }}. Titles without a DOI can be added on the <a href="/queue">queue page</a>.</p>
+  </div>
+</div>
+
+{% if q %}
+<h2 style="margin-top:1.2rem">{{ n_results }} result{{ "s" if n_results != 1 }} for “{{ q }}”{% if n_results > results | length %} (first {{ results | length }}){% endif %}</h2>
+<div class="grid">
+  {% for paper in results %}
+  <div class="card paper-card">
+    <div class="paper">
+      <div class="title"><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></div>
+      {{ paper_meta(paper) }}
+      {% if paper.folders %}<div class="row">{% for f in paper.folders[:3] %}<span class="chip">📁 {{ f }}</span>{% endfor %}</div>{% endif %}
+    </div>
+    <div class="actions">
+      {% if paper.id in queued %}<span class="chip queued">📚 on your queue</span>
+      {% elif readings.get(paper.id) and depth(readings[paper.id].status) >= 2 %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>
+      {% else %}
+      <form class="inline" method="post" action="/queue/add">
+        <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="/library?q={{ q | urlencode }}">
+        <button class="small primary">➕ Add to queue</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

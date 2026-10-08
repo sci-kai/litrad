@@ -27,7 +27,9 @@ class ResponseCache:
 
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(path)
+        # the web UI may create and close the cache in different worker threads;
+        # each cache object is still only used by one request at a time
+        self._db = sqlite3.connect(path, check_same_thread=False)
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, stored REAL, body TEXT)"
         )
@@ -47,7 +49,9 @@ class ResponseCache:
         self._db.commit()
 
     def close(self) -> None:
-        self._db.close()
+        if self._db is not None:
+            self._db.close()
+            self._db = None
 
 
 class HttpClient:

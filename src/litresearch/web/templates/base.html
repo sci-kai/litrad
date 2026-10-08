@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}litresearch{% endblock %} · litresearch</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ringGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6c4bf4"/><stop offset="100%" stop-color="#12b5a5"/>
+    </linearGradient>
+    <linearGradient id="barGradient" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#6c4bf4"/><stop offset="100%" stop-color="#12b5a5"/>
+    </linearGradient>
+  </defs>
+</svg>
+{% set active = active | default("") %}
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">📡</span> litresearch</div>
+    <nav class="nav">
+      <a href="/" class="{{ 'active' if active == 'dashboard' }}"><span class="icon">🏠</span>Dashboard</a>
+      <a href="/recommendations" class="{{ 'active' if active == 'recommendations' }}"><span class="icon">✨</span>This week</a>
+      <a href="/queue" class="{{ 'active' if active == 'queue' }}"><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
+      <a href="/library" class="{{ 'active' if active == 'library' }}"><span class="icon">🔍</span>Find &amp; add</a>
+      <a href="/progress" class="{{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress</a>
+      <a href="/weekly" class="{{ 'active' if active == 'weekly' }}"><span class="icon">🗓️</span>Weekly reports</a>
+      <a href="/ledger" class="{{ 'active' if active == 'ledger' }}"><span class="icon">💰</span>XP ledger</a>
+      <a href="/how" class="{{ 'active' if active == 'how' }}"><span class="icon">🔎</span>How it works</a>
+      <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="icon">⚙️</span>Settings</a>
+    </nav>
+    <div class="footer">v{{ version }} · keys: <code>n</code> next, <code>r</code> recs, <code>p</code> progress</div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h1>{% block heading %}{% endblock %}</h1>
+      <a class="player" href="/progress" title="{{ header.xp }} XP">
+        <span class="avatar">{{ header.level_icon }}</span>
+        <span>
+          <span class="lvl">Lv {{ header.level.number }} · {{ header.level.title }}</span><br>
+          <span class="xpbar"><span style="width: {{ (header.progress * 100) | round(1) }}%"></span></span>
+        </span>
+        <span class="xp-value"><b>{{ header.xp }}</b> <small>XP</small></span>
+        <span class="streak" title="weekly reading streak"><span class="flame {{ 'on' if header.streak >= 1 }}">🔥</span> {{ header.streak }}</span>
+      </a>
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<div class="toasts" aria-live="polite"></div>
+<div class="overlay" id="loading"><div class="modal"><div class="spinner"></div><h2>Working…</h2><p></p></div></div>
+{% if celebration %}<script id="celebration" type="application/json">{{ celebration | tojson }}</script>{% endif %}
+<script src="/static/app.js"></script>
+</body>
+</html>

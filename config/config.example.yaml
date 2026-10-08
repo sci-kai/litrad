@@ -86,6 +86,7 @@ schedule:
   cron: "0 6 * * 1"
 
 web:
-  host: 0.0.0.0
+  # the UI has no login yet; `litresearch serve` listens on 127.0.0.1 unless --host is given
+  host: 127.0.0.1
   port: 8080
   password_hash: n/a

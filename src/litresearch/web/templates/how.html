@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% from "macros.html" import funnel_view %}
+{% set active = "how" %}
+{% set s = cfg.selection %}
+{% set w = s.weights %}
+{% set wsum = w.relevance + w.impact + w.timeliness %}
+{% block title %}How it works{% endblock %}
+{% block heading %}🔎 How recommendations are made{% endblock %}
+{% block content %}
+<p class="muted">This page shows the exact rules with <b>your current settings</b> (highlighted). Change them in <a href="/settings">Settings</a>.
+  Each recommendation also has an <b>evidence tree</b> with the numbers for that paper. The same rules are documented in <code>docs/recommendation-criteria.md</code>.</p>
+
+<div class="grid" style="grid-template-columns: 1fr 300px; align-items: start">
+<div class="grid">
+
+<div class="card">
+  <h2>🧭 Overview</h2>
+  <ol>
+    <li><b>Collect candidates</b> from OpenAlex topic searches and Semantic Scholar recommendations for your library.</li>
+    <li><b>Filter</b> out what you know, have handled, or what is not a research paper.</li>
+    <li><b>Eligibility</b>: keep only papers that are <i>fresh</i> or <i>landmarks</i>.</li>
+    <li><b>Score</b> each paper on relevance, impact and timeliness.</li>
+    <li><b>Select</b> up to {{ s.n_detail + s.n_skim }} papers that are strong <i>and</i> diverse.</li>
+    <li><b>Split</b> into {{ s.n_detail }} “read in detail” and {{ s.n_skim }} “skim”.</li>
+  </ol>
+  <p>One batch per week (Monday–Sunday). You decide which papers go on your reading queue.</p>
+</div>
+
+<div class="card">
+  <h2>1 · 🔭 Where candidates come from</h2>
+  <h3>OpenAlex topic searches {{ "✅" if cfg.sources.openalex else "❌ (disabled)" }}</h3>
+  <p>For every query of every topic, two searches in titles and abstracts, sorted by relevance, <code>{{ s.results_per_query }}</code> results each:</p>
+  <ul>
+    <li><b>fresh</b>: articles, reviews and preprints published within the last <code>{{ s.fresh_window_months }}</code> months;</li>
+    <li><b>landmark</b>: papers above the <code>{{ s.landmark_min_percentile }}</code>th citation percentile, published within the last <code>{{ s.landmark_max_age_years }}</code> years.</li>
+  </ul>
+  <table>
+    <thead><tr><th>Topic</th><th class="num">Weight</th><th class="num">Topic bonus</th><th>Queries</th></tr></thead>
+    {% set maxw = cfg.topics | map(attribute="weight") | max if cfg.topics else 1 %}
+    {% for t in cfg.topics %}
+    <tr><td><b>{{ t.name }}</b></td><td class="num">{{ t.weight }}</td><td class="num">{{ "%.2f" | format(t.weight / maxw if maxw else 0) }}</td><td>{{ t.queries | join(" · ") }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">No topics defined.</td></tr>{% endfor %}
+  </table>
+  <h3 style="margin-top:1rem">Semantic Scholar recommendations {{ "✅" if cfg.sources.semanticscholar else "❌ (disabled)" }}</h3>
+  <p>Semantic Scholar suggests recently published papers similar to a set of <i>positive</i> papers and unlike <i>negative</i> ones:</p>
+  <ul>
+    <li>positives: papers you rated ≥ 4 stars or read thoroughly, then your most recent library papers (up to 100);</li>
+    <li>negatives: papers you marked “not relevant” (up to 50). <b>Your feedback steers future batches here.</b></li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>2 · 🧹 Filters</h2>
+  <p>A candidate is removed if it is</p>
+  <ul>
+    <li>already in your Paperpile library;</li>
+    <li>already read (any level) or marked not relevant;</li>
+    <li>on your reading queue;</li>
+    <li>recommended in one of the last <code>{{ s.cooldown_weeks }}</code> weeks (earlier weeks only; it may come back afterwards);</li>
+    <li>containing an excluded term: {% for t in cfg.excluded_terms %}<code>{{ t }}</code>{{ ", " if not loop.last }}{% else %}<i>none set</i>{% endfor %};</li>
+    <li>not a research article, review or preprint (editorials, errata, letters…);</li>
+    <li>a conference abstract from a journal supplement (titles like <code>0865 …</code>, <code>P-123: …</code>).</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>3 · ✅ Eligibility: current <i>or</i> important</h2>
+  <ul>
+    <li><b>fresh</b>: published within <code>{{ s.fresh_window_months }}</code> months (≈ {{ (s.fresh_window_months * 30.5) | round | int }} days);</li>
+    <li><b>landmark</b>: older, but cited more than <code>{{ s.landmark_min_percentile }}</code> % of papers of the same field and year (OpenAlex citation percentile), and at most <code>{{ s.landmark_max_age_years }}</code> years old.</li>
+  </ul>
+  <p>Everything else is ignored, so you are never shown papers that are neither current nor important.</p>
+</div>
+
+<div class="card">
+  <h2>4 · 🧮 Score</h2>
+  <p class="tree"><span class="formula" style="font-size:1rem">score = <b>{{ w.relevance }}</b> × relevance + <b>{{ w.impact }}</b> × impact + <b>{{ w.timeliness }}</b> × timeliness</span></p>
+  <p>Shares of the score: relevance {{ (w.relevance / wsum * 100) | round | int }} %, impact {{ (w.impact / wsum * 100) | round | int }} %, timeliness {{ (w.timeliness / wsum * 100) | round | int }} %. Each component is between 0 and 1.</p>
+
+  <h3>🎯 Relevance</h3>
+  <p class="tree"><span class="formula">relevance = <b>{{ s.similarity_share }}</b> × similarity rank + <b>{{ (1 - s.similarity_share) | round(2) }}</b> × topic bonus</span></p>
+  <ul>
+    <li><b>Library similarity</b>: SPECTER2 embeddings (scientific-paper vectors from Semantic Scholar) of the candidate are compared with your library; the mean cosine similarity to the <code>{{ s.knn }}</code> most similar library papers is turned into a rank among all candidates (0 = least, 1 = most similar). Papers without an embedding use TF-IDF text similarity of title + abstract instead.</li>
+    <li><b>Topic bonus</b>: topic weight ÷ highest topic weight for papers found by a topic search; <code>{{ s.s2_only_topic_bonus }}</code> for papers found only by Semantic Scholar's library-based recommendations; 0 otherwise.</li>
+  </ul>
+
+  <h3>🏛️ Impact</h3>
+  <ul>
+    <li><b>Landmark papers</b>: citation percentile ÷ 100 (field- and year-normalised, OpenAlex). Without a percentile: citations per year on a log scale, <code>{{ s.citations_per_year_saturation }}</code>/year = 1.0.</li>
+    <li><b>Fresh papers</b> cannot have citations yet, so the journal counts: log-scaled 2-year mean citedness of the journal (an open impact-factor proxy), where <code>{{ s.top_venue_citedness }}</code> = 1.0; unknown journal = <code>{{ s.unknown_venue_impact }}</code>. Plus up to <code>{{ s.early_citation_bonus }}</code> for early citations (full at <code>{{ s.early_citation_saturation }}</code> citations).</li>
+  </ul>
+  <p class="muted">Caveat: journal citedness can be distorted, e.g. by supplements full of meeting abstracts. That is why landmark papers use paper-level percentiles.</p>
+
+  <h3>⏱️ Timeliness</h3>
+  <ul>
+    <li><b>fresh</b>: 0.5 + 0.5 × (1 − age ÷ fresh window): from 1.0 on publication day to 0.5 at the end of the window;</li>
+    <li><b>landmark</b>: constant <code>{{ s.landmark_timeliness }}</code>.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>5 · 🎲 Selection</h2>
+  <ul>
+    <li><b>Score floor</b>: only candidates with at least <code>{{ (s.min_relative_score * 100) | int }} %</code> of the best score are considered, so diversity never pulls in weak papers.</li>
+    <li><b>Diversity (maximal marginal relevance)</b>: papers are picked one by one, each time maximising
+      <span class="formula" style="font-family: monospace">{{ s.mmr_lambda }} × score − {{ (1 - s.mmr_lambda) | round(2) }} × similarity to the most similar paper already picked</span>.
+      With λ = 1 the list is strictly by score; lower λ spreads it across subjects.</li>
+    <li>Up to <code>{{ s.n_detail + s.n_skim }}</code> papers are picked.</li>
+  </ul>
+  <h2 style="margin-top:1rem">6 · 📖 Detail or skim?</h2>
+  <p>The <code>{{ s.n_detail }}</code> picks with the highest <b>relevance + impact</b> are “read in detail”; the others are “skim”.</p>
+</div>
+
+<div class="card" id="game">
+  <h2>🎮 Points, penalties and levels</h2>
+  <table>
+    <thead><tr><th>Action</th><th class="num">XP</th></tr></thead>
+    {% for level, xp in base_xp.items() %}<tr><td>{{ status_icons[level.value] }} {{ level.value }}</td><td class="num">+{{ xp }}</td></tr>{% endfor %}
+    <tr><td>🐸 the paper was up next (q1), read ≥ skimmed</td><td class="num">+50 % of base</td></tr>
+    <tr><td>🔥 weekly streak</td><td class="num">+5 % per week, max +50 %</td></tr>
+    <tr><td>🏛️ classic (top 1 % cited) read ≥ read</td><td class="num">+20</td></tr>
+    <tr><td>📰 read within 30 days of publication</td><td class="num">+10</td></tr>
+    <tr><td>🎯 recommendation followed at its suggested depth</td><td class="num">+15</td></tr>
+    <tr><td>✍️ notes reach 140 characters · ⭐ first rating</td><td class="num">+10 · +2</td></tr>
+    <tr><td>📭 queue emptied by reading</td><td class="num">+10</td></tr>
+    <tr><td>🗓️ weekly quest ({{ cfg.game.weekly_detail_goal }} deep read + {{ cfg.game.weekly_skim_goal }} more skims)</td><td class="num">+50</td></tr>
+    <tr><td>🏅 badge unlocked</td><td class="num">+25</td></tr>
+    <tr><td>⚠️ a paper you picked <b>from the recommendations</b> leaves the queue (removed or marked not relevant) before you at least skimmed it</td><td class="num neg">−{{ cfg.game.drop_penalty }}</td></tr>
+  </table>
+  <p class="muted" style="margin-top:.6rem">Papers you added yourself or from your library can be removed for free. Upgrading a paper pays only the difference; re-logging pays nothing. Penalties can lower your level.</p>
+</div>
+
+<div class="card">
+  <h2>🔐 Data &amp; privacy</h2>
+  <p>Only free services are used, within their free limits; no personal data is sent{{ " (a contact e-mail is configured and sent as mailto)" if cfg.api.contact_email }}. Leaves your machine: topic queries and DOIs (OpenAlex), DOIs of library / liked / dismissed papers (Semantic Scholar, if enabled), titles of library papers without DOI (Crossref, during ingest).</p>
+</div>
+</div>
+
+<div class="grid" style="position: sticky; top: 1rem">
+  <div class="card">
+    <h2>Latest batch</h2>
+    {% if batch %}<p class="muted">Week of {{ batch.week_start.isoformat() }}</p>{{ funnel_view(batch.funnel) }}
+    {% if not batch.funnel %}<p class="muted">Rebuild to see the funnel.</p>{% endif %}
+    <p><a href="/recommendations">See the picks and their evidence trees →</a></p>
+    {% else %}<p class="muted">No batch yet.</p>{% endif %}
+  </div>
+</div>
+</div>
+{% endblock %}
