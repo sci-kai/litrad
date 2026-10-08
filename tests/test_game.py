@@ -174,30 +174,32 @@ def test_classic_requires_a_real_read(db):
     assert "classic" not in kinds(award)
 
 
-def test_recommendation_bonus_matches_category(db):
+def test_recommendation_bonus_at_any_real_reading_depth(db):
     cfg, session = db
-    detail, skim = add_paper(session, "Detail"), add_paper(session, "Skim")
+    first, second = add_paper(session, "First"), add_paper(session, "Second")
     batch = RecommendationBatch(week_start=MONDAY.date())
     session.add(batch)
     session.flush()
-    session.add(
-        Recommendation(
-            batch_id=batch.id, paper_id=detail.id, rank=1, category=Category.detail, score=1
+    for rank, paper in enumerate((first, second), start=1):
+        session.add(
+            Recommendation(
+                batch_id=batch.id, paper_id=paper.id, rank=rank, category=Category.open, score=1
+            )
         )
-    )
-    session.add(
-        Recommendation(batch_id=batch.id, paper_id=skim.id, rank=2, category=Category.skim, score=1)
-    )
     session.commit()
-    # a detail recommendation only skimmed does not count yet
+    # an abstract glance is not enough; any real read is, at the depth you choose
     assert "recommended" not in kinds(
-        record_reading(session, cfg, detail, ReadStatus.skimmed, at=MONDAY).award
+        record_reading(session, cfg, first, ReadStatus.abstract, at=MONDAY).award
     )
     assert "recommended" in kinds(
-        record_reading(session, cfg, detail, ReadStatus.read, at=MONDAY).award
+        record_reading(session, cfg, first, ReadStatus.skimmed, at=MONDAY).award
     )
     assert "recommended" in kinds(
-        record_reading(session, cfg, skim, ReadStatus.skimmed, at=MONDAY).award
+        record_reading(session, cfg, second, ReadStatus.thorough, at=MONDAY).award
+    )
+    # paid once per paper
+    assert "recommended" not in kinds(
+        record_reading(session, cfg, first, ReadStatus.thorough, at=MONDAY).award
     )
 
 

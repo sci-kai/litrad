@@ -170,7 +170,7 @@ def queue_add_cmd(
                 paper = fetch_by_doi(cfg, session, normalize_doi(ref))
         else:
             raise ReadingError("Give a reference or --title")
-        item = queue_add(session, cfg, paper, source_of(session, paper), 1 if top else at)
+        item = queue_add(session, cfg, paper, source_of(session, paper, ref), 1 if top else at)
         console.print(f"Added to the queue at q{item.position}: [bold]{paper.title}[/bold]")
         show_next(session)
 

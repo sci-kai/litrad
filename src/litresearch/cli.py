@@ -169,27 +169,24 @@ def recommend(
 
 
 def show_batch(batch, items) -> None:
-    from litresearch.db import Category
-
     console.print(
         f"[bold]Recommendations for the week of {batch.week_start.isoformat()}[/bold] "
         f"[dim]({batch.n_candidates} candidates checked)[/dim]"
     )
     if not items:
         console.print("No eligible papers found. Check your topics or try --refresh later.")
-    for category, label in ((Category.detail, "Read in detail"), (Category.skim, "Skim")):
-        group = [(r, p) for r, p in items if r.category == category]
-        if group:
-            console.print(f"\n[bold underline]{label}[/bold underline]")
-        for rec, paper in group:
-            console.print(f"[bold cyan]r{rec.rank}[/bold cyan]  [bold]{paper.title}[/bold]")
-            console.print(f"     {paper_line(paper)}")
-            console.print(f"     [dim]{rec.reason}[/dim]")
-            console.print(f"     [blue]{paper_link(paper)}[/blue]")
+    for rec, paper in items:
+        console.print(f"\n[bold cyan]r{rec.rank}[/bold cyan]  [bold]{paper.title}[/bold]")
+        console.print(f"     {paper_line(paper)}")
+        console.print(f"     [dim]{rec.reason}[/dim]")
+        console.print(f"     [blue]{paper_link(paper)}[/blue]")
     for warning in batch.warnings:
         console.print(f"[yellow]WARNING: {warning}[/yellow]")
     if items:
-        console.print("\nPut one on your reading queue with: [bold]litresearch queue add r1[/bold]")
+        console.print(
+            "\nPut one on your reading queue with: [bold]litresearch queue add r1[/bold]. "
+            "How deeply you read it is up to you; deeper reads earn more XP."
+        )
 
 
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")

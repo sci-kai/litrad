@@ -112,7 +112,9 @@ def test_batch_contents(setup):
     assert dois(items) == {"10.9/fresh-good", "10.9/fresh-two", "10.9/landmark", "10.9/s2-rec"}
     ranks = [r.rank for r, _ in items]
     assert ranks == list(range(1, len(items) + 1))
-    assert sum(r.category == "detail" for r, _ in items) == 2
+    assert all(r.category == "open" for r, _ in items)  # no prescribed depth
+    scores = [r.score for r, _ in items]
+    assert scores == sorted(scores, reverse=True)
     landmark = next(r for r, p in items if p.doi == "10.9/landmark")
     assert landmark.breakdown["kind"] == "landmark" and "top 0.5% cited" in landmark.reason
     s2_only = next(r for r, p in items if p.doi == "10.9/s2-rec")
@@ -128,16 +130,16 @@ def test_batch_records_funnel_params_and_provenance(setup):
     assert funnel["removed"] == {
         "wrong_type": 1,
         "meeting_abstract": 1,
-        "in_library": 1,
         "read_or_dismissed": 0,
         "queued": 0,
         "recently_recommended": 0,
         "excluded_term": 1,
     }
-    assert funnel["scored"] == 5 and funnel["not_fresh_or_landmark"] == 1
+    # the library paper (2022) passes the filters but is neither fresh nor a landmark
+    assert funnel["scored"] == 6 and funnel["not_fresh_or_landmark"] == 2
     assert funnel["picked"] == len(items) == 4
     assert funnel["library_papers"] == 7 and funnel["library_embedded"] == 3
-    assert batch.params["selection"]["n_detail"] == 2
+    assert batch.params["selection"]["n_recommendations"] == 5
     assert batch.params["topics"][0]["queries"] == ["clonal evolution"]
     rec = next(r for r, p in items if p.doi == "10.9/fresh-good")
     found = rec.breakdown["evidence"]["found_by"]
@@ -225,3 +227,35 @@ def test_failures_become_warnings(cfg, make_http):
         warnings = " | ".join(batch.warnings)
     engine.dispose()
     assert "OpenAlex search 'q'" in warnings and "Semantic Scholar recommendations" in warnings
+
+
+def test_unread_library_papers_can_be_recommended(setup):
+    _, engine, _, _ = setup
+    library_doi = "10.1038/s41588-022-01141-9"
+    with Session(engine) as session:
+        paper = session.exec(select(Paper).where(Paper.doi == library_doi)).one()
+        paper.pub_date = TODAY - timedelta(days=10)  # make it fresh
+        session.add(paper)
+        session.commit()
+        paper_id = paper.id
+    _, items = build(setup)
+    rec = next(r for r, p in items if p.doi == library_doi)
+    assert "in your Paperpile, not read yet" in rec.reason
+    # a library paper is never its own nearest neighbour
+    neighbours = rec.breakdown["evidence"]["relevance"]["neighbours"]
+    assert paper_id not in [n["paper_id"] for n in neighbours]
+
+    # an abstract glance keeps it eligible ...
+    with Session(engine) as session:
+        session.add(Reading(paper_id=paper_id, status=ReadStatus.abstract))
+        session.commit()
+    _, items = build(setup)
+    assert library_doi in dois(items)
+    # ... reading it removes it
+    with Session(engine) as session:
+        reading = session.get(Reading, paper_id)
+        reading.status = ReadStatus.skimmed
+        session.add(reading)
+        session.commit()
+    _, items = build(setup)
+    assert library_doi not in dois(items)

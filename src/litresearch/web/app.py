@@ -683,6 +683,7 @@ def create_app(config_path: Path) -> FastAPI:
         ref: str = Form(""),
         title: str = Form(""),
         url: str = Form(""),
+        source: str = Form(""),
         top: bool = Form(False),
         next_url: str = Form("/queue"),
     ):
@@ -700,7 +701,8 @@ def create_app(config_path: Path) -> FastAPI:
                             paper = fetch_by_doi(cfg, session, normalize_doi(ref))
                     else:
                         raise ReadingError("Enter a DOI, a reference or a title")
-                    queue_add(session, cfg, paper, source_of(session, paper), 1 if top else None)
+                    origin = source_of(session, paper, ref, source or None)
+                    queue_add(session, cfg, paper, origin, 1 if top else None)
                 except ReadingError as exc:
                     session.rollback()
                     return error(safe(next_url), str(exc))

@@ -179,12 +179,14 @@ def rank(candidates, library=LIBRARY, sel=SEL):
     return rank_candidates(candidates, library, WEIGHTS, sel, TODAY)
 
 
-def test_rank_selects_at_most_five_and_puts_detail_first():
+def test_rank_selects_at_most_five_ranked_by_score():
     candidates = [candidate(f"Paper {i}", [1.0, i / 10, 0, 0], topics=["evo"]) for i in range(8)]
     result = rank(candidates)
     assert len(result.picks) == 5
-    categories = [r.category for r in result.picks]
-    assert categories == [Category.detail] * 2 + [Category.skim] * 3
+    assert all(r.category == Category.open for r in result.picks)  # no prescribed depth
+    scores = [r.score for r in result.picks]
+    assert scores == sorted(scores, reverse=True)
+    assert len(rank(candidates, sel=Selection(n_recommendations=2)).picks) == 2
     assert result.funnel == {
         "scored": 8,
         "not_fresh_or_landmark": 0,
@@ -269,7 +271,7 @@ def test_evidence_tree_contents():
     assert second.evidence["selection"]["mmr_pick"] + selection["mmr_pick"] == 3
     later = max(result.picks, key=lambda r: r.evidence["selection"]["mmr_pick"])
     assert later.evidence["selection"]["most_similar_pick"] is not None
-    assert ev["category"]["n_detail"] == 2 and ev["category"]["category"] == "detail"
+    assert "category" not in ev
     assert first.breakdown()["evidence"] is ev
 
 
@@ -287,3 +289,29 @@ def test_describe():
     text = {r.paper.title: describe(r) for r in rank([landmark, fresh]).picks}
     assert text["L"] == "landmark · top 0.5% cited · 1,234 citations · Nature · topic: evo"
     assert text["F"] == "fresh · 1 citation · similar to your library"
+
+
+def test_library_paper_is_not_its_own_neighbour():
+    own = candidate("Clonal evolution of tumours", [1.0, 0, 0, 0], topics=["evo"])
+    own.paper.id = 11  # the same paper as library entry 11
+    other = candidate("Something new", [1.0, 0, 0, 0], topics=["evo"])
+    other.paper.id = 99
+    result = rank([own, other], sel=Selection(min_relative_score=0))
+    by_title = {r.paper.title: r for r in result.picks}
+    own_neighbours = [
+        n["paper_id"]
+        for n in by_title["Clonal evolution of tumours"].evidence["relevance"]["neighbours"]
+    ]
+    assert 11 not in own_neighbours and own_neighbours
+    other_neighbours = [
+        n["paper_id"] for n in by_title["Something new"].evidence["relevance"]["neighbours"]
+    ]
+    assert other_neighbours[0] == 11
+    # with self excluded, the library paper is not more similar than an identical new paper
+    assert by_title["Clonal evolution of tumours"].relevance <= by_title["Something new"].relevance
+
+
+def test_knn_with_self_masking_and_tiny_library():
+    library = np.array([[1.0, 0.0]])
+    mean, top, _ = knn(np.array([[1.0, 0.0]]), library, k=5, self_columns=[0])
+    assert mean.tolist() == [0.0] and top.shape == (1, 0)

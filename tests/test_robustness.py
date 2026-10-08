@@ -266,7 +266,7 @@ def test_progress_survives_a_web_restart(cfg, tmp_path):
     [
         ("paths: [unclosed", "not valid YAML"),
         ("- just\n- a list\n", "must contain settings"),
-        ("paths:\n  bibtex: x.bib\nselection:\n  n_detail: 9\n", "invalid settings"),
+        ("paths:\n  bibtex: x.bib\nselection:\n  n_recommendations: 9\n", "invalid settings"),
         ("paths:\n  bibtex: x.bib\nunknown_key: 1\n", "invalid settings"),
     ],
 )

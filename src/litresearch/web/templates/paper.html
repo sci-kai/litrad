@@ -33,7 +33,7 @@
 
     {% for rec, batch in recs %}
     <div class="card">
-      <h2>✨ Recommended in the week of {{ batch.week_start.isoformat() }} as r{{ rec.rank }} ({{ rec.category.value }})</h2>
+      <h2>✨ Recommended in the week of {{ batch.week_start.isoformat() }} as r{{ rec.rank }}</h2>
       <p class="muted">{{ rec.reason }}</p>
       {{ score_bars(rec.breakdown) }}
       {{ evidence_tree(rec, paper, batch) }}

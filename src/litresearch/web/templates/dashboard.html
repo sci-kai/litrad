@@ -52,7 +52,6 @@
     {% for rec, paper in recs %}
     <div class="row" style="margin:.35rem 0; flex-wrap: nowrap">
       <span class="rank">r{{ rec.rank }}</span>
-      <span class="chip {{ rec.category.value }}">{{ "📖 detail" if rec.category.value == "detail" else "📄 skim" }}</span>
       <a class="grow" href="/papers/{{ paper.id }}" style="flex:1 1 auto">{{ paper.title | truncate(80) }}</a>
       {% if rec_status.get(paper.id) %}<span class="chip queued">{{ rec_status[paper.id] }}</span>{% endif %}
     </div>

@@ -29,8 +29,7 @@ topics:
     mesh_terms: ["Clonal Evolution"]
 
 selection:
-  n_detail: 2  # two careful reads per week
-  n_skim: 3
+  n_recommendations: 5  # a full week of papers
 """
 
 
@@ -327,7 +326,7 @@ def test_settings_round_trip_keeps_comments(app_env):
     assert "Settings saved" in celebration(response)["message"]
     text = path.read_text()
     assert "# my litresearch config" in text and "# tumour evolution is my main topic" in text
-    assert "# two careful reads per week" in text
+    assert "# a full week of papers" in text
     cfg = load_config(path)
     assert cfg.selection.mmr_lambda == 0.55 and cfg.game.drop_penalty == 25
     assert [t.name for t in cfg.topics] == ["evo", "ctdna"]
@@ -343,7 +342,7 @@ def test_invalid_settings_change_nothing(app_env):
     client, path, _ = app_env
     before = path.read_text()
     data = settings_form(client)
-    data["selection.n_detail"] = "4"  # 4 + 3 > 5
+    data["selection.n_recommendations"] = "6"  # more than 5
     payload = celebration(post(client, "/settings", data))
     assert payload["kind"] == "error" and "Not saved" in payload["message"]
     data = settings_form(client)
@@ -357,7 +356,7 @@ def test_invalid_settings_change_nothing(app_env):
 
 
 def test_parse_form_units():
-    form = {s: "1" for s in ("selection.n_detail",)}
+    form = {s: "1" for s in ("selection.n_recommendations",)}
     with pytest.raises(SettingsError, match="is empty"):
         parse_form(form)
 
@@ -378,3 +377,20 @@ def test_xp_events_unchanged_by_page_views(app_env):
         assert session.exec(select(XpEvent)).all() == []
         assert session.exec(select(QueueItem)).all() == []
     engine.dispose()
+
+
+def test_saving_settings_removes_old_detail_skim_keys(tmp_path):
+    path = tmp_path / "c.yaml"
+    path.write_text("paths:\n  bibtex: x.bib\nselection:\n  n_detail: 2  # old\n  n_skim: 3\n")
+    save_settings(path, {"selection": {"n_recommendations": 4}})
+    text = path.read_text()
+    assert "n_detail" not in text and "n_skim" not in text and "n_recommendations: 4" in text
+
+
+def test_library_paper_picked_from_recommendations_keeps_penalty(app_env):
+    client, path, _ = app_env
+    pid = paper_id(path, bibtex_key="Cheung2016-vl")  # a library paper
+    post(client, "/queue/add", {"ref": f"#{pid}", "source": "recommendation"})
+    assert "−15 XP if removed unread" in client.get("/queue").text
+    payload = celebration(post(client, f"/queue/{pid}/drop"))
+    assert payload["points"] == -15

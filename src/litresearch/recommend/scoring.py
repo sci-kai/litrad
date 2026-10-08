@@ -64,7 +64,7 @@ class Scored:
     impact: float
     timeliness: float
     score: float
-    category: Category = Category.skim
+    category: Category = Category.open
     evidence: dict = field(default_factory=dict)
 
     @property
@@ -187,9 +187,11 @@ def normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
-def knn(candidates: np.ndarray, library: np.ndarray, k: int):
+def knn(candidates: np.ndarray, library: np.ndarray, k: int, self_columns=None):
     """Mean cosine similarity to the k most similar library rows.
 
+    ``self_columns[i]`` is the library row of candidate ``i`` itself (or -1);
+    a library paper must not count as its own neighbour.
     Returns ``(mean, top_indices, top_similarities)``, the latter two sorted
     from most to least similar.
     """
@@ -197,7 +199,15 @@ def knn(candidates: np.ndarray, library: np.ndarray, k: int):
     if n == 0 or len(library) == 0:
         return np.zeros(n), np.zeros((n, 0), dtype=int), np.zeros((n, 0))
     sims = normalize_rows(candidates) @ normalize_rows(library).T
-    k = min(k, sims.shape[1])
+    excluded = 0
+    if self_columns is not None:
+        for row, column in enumerate(self_columns):
+            if column >= 0:
+                sims[row, column] = -np.inf
+                excluded = 1
+    k = min(k, sims.shape[1] - excluded)
+    if k <= 0:
+        return np.zeros(n), np.zeros((n, 0), dtype=int), np.zeros((n, 0))
     top = np.argsort(-sims, axis=1, kind="stable")[:, :k]
     top_sims = np.take_along_axis(sims, top, axis=1)
     return top_sims.mean(axis=1), top, top_sims
@@ -253,14 +263,21 @@ def relevance_scores(
                 ],
             }
 
+    def own_rows(indices, ids):
+        position = {paper_id: row for row, paper_id in enumerate(ids)}
+        return [position.get(candidates[i].paper.id, -1) for i in indices]
+
     embedded = [i for i, c in enumerate(candidates) if c.vector is not None]
     use_vectors = bool(embedded) and len(library.vectors) > 0
     if use_vectors:
         vectors = np.stack([candidates[i].vector for i in embedded])
-        fill(embedded, *knn(vectors, library.vectors, sel.knn), "SPECTER2", library.vector_ids)
+        result = knn(vectors, library.vectors, sel.knn, own_rows(embedded, library.vector_ids))
+        fill(embedded, *result, "SPECTER2", library.vector_ids)
     text_only = [i for i in range(n) if not use_vectors or candidates[i].vector is None]
     if text_only:
-        mean, top, top_sims = knn(candidate_tfidf[text_only], library_tfidf, sel.knn)
+        mean, top, top_sims = knn(
+            candidate_tfidf[text_only], library_tfidf, sel.knn, own_rows(text_only, library.ids)
+        )
         fill(text_only, mean, top, top_sims, "TF-IDF", library.ids)
 
     max_weight = max(topic_weights.values(), default=1.0) or 1.0
@@ -387,7 +404,7 @@ def rank_candidates(
     picks = mmr_select(
         np.array([scored[i].score for i in strong]),
         sims[np.ix_(strong, strong)],
-        sel.n_detail + sel.n_skim,
+        sel.n_recommendations,
         sel.mmr_lambda,
     )
     chosen = []
@@ -408,21 +425,9 @@ def rank_candidates(
             else None,
         }
         chosen.append(item)
-
-    # the most relevant *and* impactful papers deserve a careful read
-    by_depth = sorted(chosen, key=lambda s: s.relevance + s.impact, reverse=True)
-    for position, item in enumerate(by_depth, start=1):
-        if position <= sel.n_detail:
-            item.category = Category.detail
-        item.evidence["category"] = {
-            "relevance_plus_impact": round(item.relevance + item.impact, 4),
-            "position": position,
-            "n_detail": sel.n_detail,
-            "category": item.category.value,
-        }
     funnel.update({"eligible": len(scored), "above_floor": len(strong), "picked": len(chosen)})
-    picks_sorted = sorted(chosen, key=lambda s: (s.category != Category.detail, -s.score))
-    return RankResult(picks_sorted, funnel)
+    # how deeply to read is the reader's choice: the list is simply ranked by score
+    return RankResult(sorted(chosen, key=lambda s: -s.score), funnel)
 
 
 def describe(item: Scored) -> str:
@@ -436,6 +441,8 @@ def describe(item: Scored) -> str:
         parts.append(f"{paper.citation_count:,} {noun}")
     if paper.venue:
         parts.append(paper.venue)
+    if paper.in_library:
+        parts.append("in your Paperpile, not read yet")
     if item.candidate.topics:
         parts.append("topic: " + ", ".join(sorted(item.candidate.topics)))
     elif "s2-recs" in item.candidate.sources:

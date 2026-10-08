@@ -20,8 +20,8 @@
     <li><b>Filter</b> out what you know, have handled, or what is not a research paper.</li>
     <li><b>Eligibility</b>: keep only papers that are <i>fresh</i> or <i>landmarks</i>.</li>
     <li><b>Score</b> each paper on relevance, impact and timeliness.</li>
-    <li><b>Select</b> up to {{ s.n_detail + s.n_skim }} papers that are strong <i>and</i> diverse.</li>
-    <li><b>Split</b> into {{ s.n_detail }} “read in detail” and {{ s.n_skim }} “skim”.</li>
+    <li><b>Select</b> up to {{ s.n_recommendations }} papers that are strong <i>and</i> diverse, ranked by score.</li>
+    <li><b>You decide</b> how deeply to read each one; your marking (abstract → thorough) sets the XP.</li>
   </ol>
   <p>One batch per week (Monday–Sunday). You decide which papers go on your reading queue.</p>
 </div>
@@ -105,10 +105,8 @@
     <li><b>Diversity (maximal marginal relevance)</b>: papers are picked one by one, each time maximising
       <span class="formula" style="font-family: monospace">{{ s.mmr_lambda }} × score − {{ (1 - s.mmr_lambda) | round(2) }} × similarity to the most similar paper already picked</span>.
       With λ = 1 the list is strictly by score; lower λ spreads it across subjects.</li>
-    <li>Up to <code>{{ s.n_detail + s.n_skim }}</code> papers are picked.</li>
+    <li>Up to <code>{{ s.n_recommendations }}</code> papers are picked and shown ranked by score.</li>
   </ul>
-  <h2 style="margin-top:1rem">6 · 📖 Detail or skim?</h2>
-  <p>The <code>{{ s.n_detail }}</code> picks with the highest <b>relevance + impact</b> are “read in detail”; the others are “skim”.</p>
 </div>
 
 <div class="card" id="game">

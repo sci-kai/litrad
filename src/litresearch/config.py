@@ -73,8 +73,8 @@ class Weights(_Base):
 
 
 class Selection(_Base):
-    n_detail: int = Field(2, ge=0)
-    n_skim: int = Field(3, ge=0)
+    # papers per weekly list; how deeply to read them is your choice
+    n_recommendations: int = Field(5, ge=1, le=5)
     fresh_window_months: int = Field(6, ge=1)
     landmark_min_percentile: float = Field(95, ge=0, le=100)
     mmr_lambda: float = Field(0.7, ge=0, le=1)
@@ -106,11 +106,15 @@ class Selection(_Base):
     # picks need at least this share of the best score (diversity must not pull in weak papers)
     min_relative_score: float = Field(0.6, ge=0, le=1)
 
-    @model_validator(mode="after")
-    def _max_five(self):
-        if self.n_detail + self.n_skim > 5:
-            raise ValueError("selection.n_detail + selection.n_skim must be <= 5")
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _old_split_keys(cls, data):
+        """Configs before v0.1.0 had n_detail + n_skim instead of n_recommendations."""
+        if isinstance(data, dict) and ("n_detail" in data or "n_skim" in data):
+            data = dict(data)
+            old = (data.pop("n_detail", None) or 0) + (data.pop("n_skim", None) or 0)
+            data.setdefault("n_recommendations", min(max(old, 1), 5))
+        return data
 
 
 class Queue(_Base):

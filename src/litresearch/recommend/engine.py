@@ -146,7 +146,12 @@ def exclusion_sets(session: Session, cfg: Config, today: date) -> dict[str, set[
     this_week = week_start(today)
     since = this_week - timedelta(weeks=cfg.selection.cooldown_weeks)
     return {
-        "read_or_dismissed": set(session.exec(select(Reading.paper_id)).all()),
+        # an abstract glance does not count as read; library papers are fine
+        "read_or_dismissed": set(
+            session.exec(
+                select(Reading.paper_id).where(Reading.status != ReadStatus.abstract)
+            ).all()
+        ),
         "queued": set(session.exec(select(QueueItem.paper_id)).all()),
         "recently_recommended": set(
             session.exec(
@@ -213,9 +218,7 @@ def build_recommendations(
         gather_s2_candidates(session, s2, openalex, gathered)
 
     exclusions = exclusion_sets(session, cfg, today)
-    removed = dict.fromkeys(
-        ["wrong_type", "meeting_abstract", "in_library", *exclusions, "excluded_term"], 0
-    )
+    removed = dict.fromkeys(["wrong_type", "meeting_abstract", *exclusions, "excluded_term"], 0)
     candidates: list[Candidate] = []
     for doi, work in gathered.works.items():
         if work.type not in ALLOWED_TYPES:
@@ -226,8 +229,7 @@ def build_recommendations(
             continue
         paper = upsert_work(session, work)
         session.flush()
-        reason = "in_library" if paper.in_library else None
-        reason = reason or next((r for r, ids in exclusions.items() if paper.id in ids), None)
+        reason = next((r for r, ids in exclusions.items() if paper.id in ids), None)
         if reason is None and has_excluded_term(paper, cfg.excluded_terms):
             reason = "excluded_term"
         if reason:

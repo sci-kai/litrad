@@ -33,11 +33,8 @@
 
 <div class="grid" style="grid-template-columns: 1fr 300px; align-items: start">
   <div class="grid">
-    {% for category, label, intro in [("detail", "📖 Read in detail", "Highest relevance + impact."), ("skim", "📄 Skim", "Worth a quick look.")] %}
-    {% set group = recs | selectattr("0.category", "equalto", category) | list %}
-    {% if group %}
-    <h2 style="margin:.4rem 0 0">{{ label }} <small class="muted">{{ intro }}</small></h2>
-    {% for rec, paper in group %}
+    {% if recs %}<p class="muted" style="margin:0">Ranked by score. How deeply you read is your choice: abstract +{{ base_xp["abstract"] }}, skimmed +{{ base_xp["skimmed"] }}, read +{{ base_xp["read"] }}, thorough +{{ base_xp["thorough"] }} XP.</p>{% endif %}
+    {% for rec, paper in recs %}
     <div class="card paper-card">
       <div class="paper">
         <div class="row" style="flex-wrap: nowrap; align-items: baseline">
@@ -48,7 +45,8 @@
         <div class="row">
           <span class="chip {{ rec.breakdown.kind }}">{{ "🆕 fresh" if rec.breakdown.kind == "fresh" else "🏛️ landmark" }}</span>
           {% for t in rec.breakdown.topics %}<span class="chip">🏷️ {{ t }}</span>{% endfor %}
-          {% if "s2-recs" in rec.breakdown.sources %}<span class="chip">📁 similar to your library</span>{% endif %}
+          {% if "s2-recs" in rec.breakdown.sources %}<span class="chip">🧲 similar to your library</span>{% endif %}
+          {% if paper.in_library %}<span class="chip">📁 in your Paperpile</span>{% endif %}
           {% if rec_status.get(paper.id) %}<span class="chip queued">{{ "📚 on your queue" if rec_status[paper.id] == "queued" else status_icons.get(rec_status[paper.id], "") ~ " " ~ rec_status[paper.id] }}</span>{% endif %}
         </div>
         {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
@@ -60,7 +58,7 @@
       <div class="actions">
         {% if not rec_status.get(paper.id) %}
         <form class="inline" method="post" action="/queue/add">
-          <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="/recommendations{{ '?batch=' ~ batch.id if batch }}">
+          <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="recommendation"><input type="hidden" name="next_url" value="/recommendations{{ '?batch=' ~ batch.id if batch }}">
           <button class="primary small" {{ "disabled" if queue_full }}>➕ Add to my queue</button>
         </form>
         <form class="inline" method="post" action="/papers/{{ paper.id }}/dismiss">
@@ -72,8 +70,6 @@
       </div>
       {{ evidence_tree(rec, paper, batch) }}
     </div>
-    {% endfor %}
-    {% endif %}
     {% endfor %}
     {% if batch and not recs %}<div class="card">No eligible papers this time. Check your topics in <a href="/settings">Settings</a>.</div>{% endif %}
   </div>

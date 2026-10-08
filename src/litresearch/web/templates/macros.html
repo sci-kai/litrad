@@ -142,9 +142,6 @@
             <li>Diversity (MMR, λ = {{ s.mmr_lambda }}): picked as #{{ s.mmr_pick }}{% if s.most_similar_pick %}; most similar earlier pick “{{ s.most_similar_pick }}” (similarity {{ "%.2f" | format(s.redundancy) }}){% endif %}</li>
           </ul>
         </li>
-        {% set cat = ev.category %}
-        <li><span class="node">{{ "📖 Read in detail" if cat.category == "detail" else "📄 Skim" }}</span>
-          relevance + impact = {{ "%.3f" | format(cat.relevance_plus_impact) }}, position {{ cat.position }} among the picks; the top {{ cat.n_detail }} are “read in detail”</li>
       </ul>
     </li>
   </ul>

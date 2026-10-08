@@ -219,7 +219,18 @@ def queue_move(session: Session, paper: Paper, position: int) -> None:
     session.commit()
 
 
-def source_of(session: Session, paper: Paper) -> str:
+def source_of(
+    session: Session, paper: Paper, ref: str | None = None, hint: str | None = None
+) -> str:
+    """Where a queued paper came from; decides whether dropping it costs XP.
+
+    A paper picked from the recommendations counts as "recommendation" even
+    when it is also in the Paperpile library.
+    """
+    if hint in ("recommendation", "library", "manual"):
+        return hint
+    if ref and re.fullmatch(r"\s*[rR]\d+\s*", ref):
+        return "recommendation"
     if paper.in_library:
         return "library"
     if session.exec(select(Recommendation).where(Recommendation.paper_id == paper.id)).first():

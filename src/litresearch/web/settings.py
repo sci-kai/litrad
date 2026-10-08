@@ -47,23 +47,15 @@ class Group:
 GROUPS = (
     Group(
         "Weekly list",
-        "How many papers you get and how they are split.",
+        "How many papers you get. How deeply you read each one is up to you; "
+        "deeper reads earn more XP.",
         (
             Setting(
-                ("selection", "n_detail"),
-                "Papers to read in detail",
-                "The papers with the highest relevance + impact among the picks.",
+                ("selection", "n_recommendations"),
+                "Papers per week",
+                "Size of the weekly list, ranked by score (1-5).",
                 "int",
-                0,
-                5,
                 1,
-            ),
-            Setting(
-                ("selection", "n_skim"),
-                "Papers to skim",
-                "The remaining picks. Detail + skim must not exceed 5.",
-                "int",
-                0,
                 5,
                 1,
             ),
@@ -411,6 +403,10 @@ def _apply(node, updates: dict, existing_topics) -> None:
             if key not in node or node[key] is None:
                 node[key] = {}
             _apply(node[key], value, existing_topics)
+            if key == "selection":
+                # replaced by n_recommendations
+                for old in ("n_detail", "n_skim"):
+                    node[key].pop(old, None)
         else:
             node[key] = value
 

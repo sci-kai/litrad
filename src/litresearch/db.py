@@ -35,8 +35,11 @@ def depth(status: ReadStatus | None) -> int:
 
 
 class Category(StrEnum):
+    # "detail" and "skim" were used by batches built before v0.1.0; new
+    # recommendations leave the reading depth to the reader ("open")
     detail = "detail"
     skim = "skim"
+    open = "open"
 
 
 class Paper(SQLModel, table=True):

@@ -52,8 +52,8 @@ embeddings:
   local_url: http://embed-server:8100/v1/embeddings
 
 selection:
-  n_detail: 2
-  n_skim: 3
+  # papers per weekly list (1-5); how deeply you read them is your choice
+  n_recommendations: 5
   fresh_window_months: 6
   landmark_min_percentile: 95
   mmr_lambda: 0.7

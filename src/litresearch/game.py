@@ -330,11 +330,9 @@ def award_reading(
     if new_depth >= 2 and not _already(session, "recommended", paper.id):
         recommended = session.exec(
             select(Recommendation).where(Recommendation.paper_id == paper.id)
-        ).all()
-        if any(new_depth >= (3 if r.category == "detail" else 2) for r in recommended):
-            add(
-                RECOMMENDATION_XP, "recommended", "Followed a recommendation at the suggested depth"
-            )
+        ).first()
+        if recommended:
+            add(RECOMMENDATION_XP, "recommended", "Read a paper from your recommendations")
     if rated and not _already(session, "rating", paper.id):
         add(RATING_XP, "rating", "Rated a paper")
     reading = session.get(Reading, paper.id)
