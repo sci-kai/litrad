@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "litresearch"
-version = "0.1.0-alpha.1"
+version = "0.2.0-dev"
 description = "Personal literature radar: paper recommendations, a reading queue and a reading game on top of a Paperpile library"
 readme = "README.md"
 license = "LicenseRef-MIT-Commons-Clause"

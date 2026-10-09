@@ -3,6 +3,10 @@
 All notable changes are listed here. Versions follow
 [semantic versioning](https://semver.org); dates are ISO 8601.
 
+## 0.2.0-dev (unreleased)
+
+Nothing yet.
+
 ## 0.1.0-alpha.1 (2026-10-09)
 
 The first release, for testing. Expect rough edges and report them as issues.
