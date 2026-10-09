@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 import litresearch.web.app as web
-from conftest import SAMPLE_BIB, FakeApis, make_work
+from conftest import SAMPLE_BIB, FakeApis, enter_profile, make_work, profile_cfg
 from litresearch.config import load_config
 from litresearch.db import Paper, QueueItem, XpEvent, init_db
 from litresearch.ingest.pipeline import ingest_library
@@ -58,6 +58,7 @@ def app_env(tmp_path, monkeypatch, make_http):
         ingest_library(cfg, session, make_http(apis), use_s2=False)
     engine.dispose()
     client = TestClient(web.create_app(path))
+    enter_profile(client)
     yield client, path, apis
     client.close()
 
@@ -74,8 +75,7 @@ def post(client, url, data=None):
 
 
 def db(path):
-    cfg = load_config(path)
-    return init_db(cfg.paths.database)
+    return init_db(profile_cfg(path).paths.database)
 
 
 def paper_id(path, **where) -> int:
@@ -315,6 +315,9 @@ def settings_form(client) -> dict:
 
 def test_settings_round_trip_keeps_comments(app_env):
     client, path, _ = app_env
+    settings_file = profile_cfg(path).paths.database.with_name("settings.yaml")
+    settings_file.write_text("# my profile notes\n" + settings_file.read_text())
+    config_before = path.read_text()
     data = settings_form(client)
     data["selection.mmr_lambda"] = "0.55"
     data["queue.max_size"] = "4"
@@ -325,19 +328,20 @@ def test_settings_round_trip_keeps_comments(app_env):
     data["excluded_terms"] = "veterinary\nmouse only"
     response = post(client, "/settings", data)
     assert "Settings saved" in celebration(response)["message"]
-    text = path.read_text()
-    assert "# my litresearch config" in text and "# tumour evolution is my main topic" in text
-    assert "# a full week of papers" in text
-    cfg = load_config(path)
+    # settings belong to the profile: config.yaml is not touched
+    assert path.read_text() == config_before
+    assert "# my profile notes" in settings_file.read_text()
+    assert settings_file.with_name("settings.yaml.bak").exists()
+    cfg = profile_cfg(path)
     assert cfg.selection.mmr_lambda == 0.55 and cfg.queue.max_size == 4
-    assert cfg.game.drop_penalty == 15  # only the profile page sets game rules
+    assert cfg.game.drop_penalty == 15  # game rules are locked in the profile
     assert [t.name for t in cfg.topics] == ["evo", "ctdna"]
     assert cfg.topics[0].mesh_terms == ["Clonal Evolution"]  # untouched field kept
     assert cfg.topics[0].queries == ["clonal evolution", "tumour phylogeny"]
     assert cfg.excluded_terms == ["veterinary", "mouse only"]
-    assert path.with_name("config.yaml.bak").exists()
-    how = client.get("/how").text
+    how = client.get("/recommendations").text
     assert "0.55" in how and "ctdna" in how
+    assert load_config(path).selection.mmr_lambda == 0.7
 
 
 def test_invalid_settings_change_nothing(app_env):

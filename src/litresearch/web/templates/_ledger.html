@@ -1,8 +1,4 @@
-{% extends "base.html" %}
-{% set active = "ledger" %}
-{% block title %}XP ledger{% endblock %}
-{% block heading %}💰 XP ledger{% endblock %}
-{% block content %}
+{# XP ledger: every transaction; needs rows, total, kind, page, pages, totals, earned, lost #}
 <div class="grid four">
   <div class="card stat"><div class="value">{{ header.xp }}</div><div class="label">balance</div></div>
   <div class="card stat"><div class="value pos">+{{ earned }}</div><div class="label">earned</div></div>
@@ -13,9 +9,9 @@
 <div class="grid" style="grid-template-columns: 260px 1fr; align-items: start; margin-top:1rem">
   <div class="card">
     <h3>By kind</h3>
-    <a class="row {{ 'active' if not kind }}" href="/ledger" style="flex-wrap: nowrap"><span style="flex:1 1 auto">All</span></a>
+    <a class="row {{ 'active' if not kind }}" href="/progress#ledger" style="flex-wrap: nowrap"><span style="flex:1 1 auto">All</span></a>
     {% for k, (count, points) in totals.items() %}
-    <a class="row" href="/ledger?kind={{ k }}" style="flex-wrap: nowrap; margin:.2rem 0; {{ 'font-weight:700' if k == kind }}">
+    <a class="row" href="/progress?kind={{ k }}#ledger" style="flex-wrap: nowrap; margin:.2rem 0; {{ 'font-weight:700' if k == kind }}">
       <span>{{ kind_icons.get(k, "✨") }}</span><span style="flex:1 1 auto">{{ kind_labels.get(k, k) }} <small class="muted">×{{ count }}</small></span>
       <span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span>
     </a>
@@ -41,11 +37,10 @@
     </table>
     {% if pages > 1 %}
     <div class="row" style="margin-top:.8rem; justify-content: center">
-      {% if page > 1 %}<a class="button small" href="/ledger?kind={{ kind }}&page={{ page - 1 }}">← newer</a>{% endif %}
+      {% if page > 1 %}<a class="button small" href="/progress?kind={{ kind }}&page={{ page - 1 }}#ledger">← newer</a>{% endif %}
       <span class="muted">page {{ page }}/{{ pages }}</span>
-      {% if page < pages %}<a class="button small" href="/ledger?kind={{ kind }}&page={{ page + 1 }}">older →</a>{% endif %}
+      {% if page < pages %}<a class="button small" href="/progress?kind={{ kind }}&page={{ page + 1 }}#ledger">older →</a>{% endif %}
     </div>
     {% endif %}
   </div>
 </div>
-{% endblock %}

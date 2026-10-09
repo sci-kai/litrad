@@ -189,3 +189,38 @@ def make_work(
         "abstract_inverted_index": {w: [i] for i, w in enumerate(words)} or None,
         "topics": [],
     }
+
+
+# --- profiles ------------------------------------------------------------------------
+
+
+def rules_form(rules=None) -> dict:
+    """The fields of the rules form, filled with ``rules`` (default rules)."""
+    from litresearch.rules import GameRules
+    from litresearch.web.settings import RULE_GROUPS, levels_text
+
+    rules = rules or GameRules()
+    data = {name: str(getattr(rules, name)) for _, _, fields in RULE_GROUPS for name, *_ in fields}
+    data["levels"] = levels_text(rules)
+    return data
+
+
+def enter_profile(client, name: str = "Tester", adopt: bool = True, **fields):
+    """Create a profile in the web UI (adopting existing data) and select it."""
+    response = client.post(
+        "/welcome/adopt" if adopt else "/welcome/create",
+        data={"name": name, **rules_form(), **fields},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303, response.text
+    assert response.headers["location"] != "/welcome", "profile not created"
+    return response
+
+
+def profile_cfg(config_path, slug: str | None = None):
+    """The effective configuration of the current (or given) profile."""
+    from litresearch import profiles
+    from litresearch.config import load_config
+
+    base = load_config(config_path)
+    return profiles.profile_config(base, slug or profiles.get_current(base))

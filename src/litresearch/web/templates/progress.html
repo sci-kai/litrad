@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% set active = "progress" %}
 {% block title %}Progress{% endblock %}
-{% block heading %}🏆 Progress{% endblock %}
+{% block heading %}🏆 Progress &amp; XP{% endblock %}
 {% block content %}
-<div class="grid two">
+<nav class="tabs">
+  <a href="#overview">Overview</a><a href="#badges">Badges</a><a href="#ledger">XP ledger</a><a href="#game">How points work</a>
+</nav>
+<div class="grid two" id="overview">
   <div class="card level-card">
     <div class="ring">
       <svg width="132" height="132"><circle class="track" cx="66" cy="66" r="55"/><circle class="fill" cx="66" cy="66" r="55" data-ring="{{ level.progress(stats.xp) }}"/></svg>
@@ -57,9 +60,22 @@
   </div>
 </div>
 
-<div class="card" style="margin-top:1rem">
+<div class="card" style="margin-top:1rem" id="badges">
   {% set owned = badges | selectattr("2") | list %}
   <h2>🏅 Badges <small class="muted">{{ owned | length }}/{{ badges | length }} · +{{ rules.badge_xp }} XP each</small></h2>
+  <h3 style="margin:.4rem 0">{{ "Unlocked" if owned else "Closest to unlock" }}</h3>
+  <div class="badges">
+    {% for badge, value, unlocked in (owned if owned else closest) %}
+    <div class="badge {{ 'unlocked' if unlocked else 'locked' }}" title="{{ badge.description }}">
+      <span class="emoji">{{ badge.icon }}</span>
+      <div class="name">{{ badge.name }}</div>
+      <div class="desc">{{ badge.description }}</div>
+      {% if not unlocked %}<div class="mini-bar"><span style="width: {{ (value / badge.target * 100) | round(1) }}%"></span></div><small class="muted">{{ value }}/{{ badge.target }}</small>{% else %}<small style="color: var(--gold); font-weight: 700">unlocked</small>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <details style="margin-top:.8rem">
+    <summary>All {{ badges | length }} badges by theme</summary>
   {% for group, members in badges | groupby("0.group") %}
   <h3 style="margin:.8rem 0 .4rem">{{ group }} <small class="muted">{{ members | selectattr("2") | list | length }}/{{ members | length }}</small></h3>
   <div class="badges">
@@ -73,6 +89,7 @@
     {% endfor %}
   </div>
   {% endfor %}
+  </details>
 </div>
 
 <div class="card" style="margin-top:1rem">
@@ -82,6 +99,10 @@
     <span class="chip {{ 'queued' if loop.index == level.number }}" title="{{ step.xp }} XP">{{ step.icon }} {{ step.title }} <small>{{ step.xp }}</small></span>
     {% endfor %}
   </div>
-  <p class="muted" style="margin-top:.6rem">How points work: <a href="/how#game">rules</a> · every point: <a href="/ledger">XP ledger</a></p>
 </div>
+
+<h2 id="ledger" style="margin-top:1.6rem">💰 XP ledger <small class="muted">every point you earned or lost</small></h2>
+{% include "_ledger.html" %}
+
+<div style="margin-top:1rem">{% include "_how_points.html" %}</div>
 {% endblock %}

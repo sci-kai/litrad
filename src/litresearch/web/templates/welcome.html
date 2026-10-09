@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choose your profile · litresearch</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+{% from "macros.html" import rules_fields with context %}
+<main class="welcome">
+  <div class="welcome-head">
+    <div class="brand" style="justify-content:center; font-size:1.6rem"><span class="logo" style="width:46px;height:46px;font-size:1.5rem">📡</span> litresearch</div>
+    <p class="muted">Your literature radar. Everything (library, recommendations, reading queue, notes and progress) belongs to a profile.</p>
+  </div>
+
+  {% if profiles %}
+  <section class="card">
+    <h2>👋 Continue with your profile</h2>
+    <div class="profile-cards">
+      {% for p in profiles %}
+      <form method="post" action="/welcome/select" class="profile-card {{ 'current' if p.slug == current }}">
+        <input type="hidden" name="slug" value="{{ p.slug }}">
+        <button class="profile-pick" title="Continue as {{ p.name }}">
+          <span class="avatar big">{{ p.level.icon }}</span>
+          <span class="who"><b>{{ p.name }}</b><br>
+            <small>Lv {{ p.level.number }} · {{ p.level.title }} · {{ p.xp }} XP</small><br>
+            <small class="muted">{{ p.papers_read }} papers read · {{ p.library }} in library{% if p.last_activity %} · active {{ p.last_activity.date().isoformat() }}{% elif p.created_at %} · since {{ p.created_at.date().isoformat() }}{% endif %}</small></span>
+          <span class="go">▶</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if legacy %}
+  <section class="card up-next" style="margin-top:1rem">
+    <span class="badge-next">EXISTING DATA FOUND</span>
+    <h2>📦 Use your existing library for a profile</h2>
+    <p>Found {{ legacy.library }} library papers and {{ legacy.readings }} reading entries from before profiles existed (<code>{{ legacy.path }}</code>). Turn them into a profile; nothing needs to be imported again, and the original file stays as it is.</p>
+    <form method="post" action="/welcome/adopt" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
+      <div class="field" style="margin:0"><label>Profile name</label><input type="text" name="name" value="{{ legacy.name or '' }}" placeholder="e.g. Kai" maxlength="80" required></div>
+      {{ rules_fields(rule_groups, form_rules, levels_text) }}
+      <div><button class="primary">📦 Create profile from existing data</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  <div class="grid two" style="margin-top:1rem; align-items:start">
+    <section class="card">
+      <h2>✨ Create a new profile</h2>
+      <p class="muted">A fresh start: own library, topics, recommendations and progress. The game rules are fixed when the profile is created and cannot be changed later, which keeps the score honest.</p>
+      <form method="post" action="/welcome/create" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
+        <div class="field" style="margin:0"><label>Profile name</label><input type="text" name="name" placeholder="e.g. Kai" maxlength="80" required></div>
+        {{ rules_fields(rule_groups, form_rules, levels_text) }}
+        <div><button class="primary">🔒 Create profile</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>📂 Load a saved profile</h2>
+      <p class="muted">From a backup or a file someone gave you. It becomes a new profile with its own locked rules; files edited outside litresearch are refused.</p>
+      <form method="post" action="/welcome/load" enctype="multipart/form-data" class="grid" style="gap:.6rem">
+        {% if saves %}
+        <select name="saved"><option value="">Choose a saved file…</option>
+          {% for path, shown in saves %}<option value="{{ path.name }}">{{ shown }}</option>{% endfor %}
+        </select>
+        <small class="muted">…or upload one:</small>
+        {% endif %}
+        <input type="file" name="file" accept=".json,application/json">
+        <input type="text" name="name" placeholder="Name (optional; default: the saved name)" maxlength="80">
+        <div><button>📂 Load profile</button></div>
+      </form>
+    </section>
+  </div>
+</main>
+<div class="toasts" aria-live="polite"></div>
+{% if celebration %}<script id="celebration" type="application/json">{{ celebration | tojson }}</script>{% endif %}
+<script src="/static/app.js"></script>
+</body>
+</html>

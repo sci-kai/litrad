@@ -1,106 +1,65 @@
 # litresearch
 
-A personal literature radar built on a Paperpile library. Every week it
-proposes **up to 5 papers**, ranked by:
+A personal literature radar built on a Paperpile library. Whenever you ask
+(with a weekly reminder), it proposes **up to 5 papers**, ranked by
+similarity to your library (SPECTER2), your topics, paper impact and
+timeliness: very recent *or* a landmark paper.
 
-1. similarity to your Paperpile library (SPECTER2 embeddings),
-2. the topics you define,
-3. paper impact (field-normalised citation percentile, FWCI, influential
-   citations, venue),
-4. timeliness: very recent *or* a landmark paper.
-
-You choose which of them go on your **reading queue**: short (max 5),
-ordered, with exactly one paper "up next". You can also add any paper by
-DOI or title. Reading levels (abstract / skimmed / read / thorough), ratings
-and notes are logged, and a **game layer** keeps you motivated: XP, streaks,
-weekly quests, career levels from *Curious Undergrad* to *Hallmarks Author*,
-badges and a weekly report card. You set all rewards and the penalty when you start your profile; after that they are locked, and profiles can be saved, loaded and compared.
-
-Everything is **transparent**: each recommendation shows an evidence tree,
-every criterion is documented, and every parameter can be changed in the UI.
+- You pick which papers go on your **reading queue**: short (max 5), ordered,
+  one paper "up next". Any paper can be added by DOI or title.
+- You log how deeply you read (abstract / skimmed / read / thorough), rate
+  and take notes; a **game layer** (XP, streaks, weekly quests, 20 career
+  levels, 44 badges, weekly report cards) keeps you going.
+- Everything belongs to a **profile** with its own library, topics,
+  recommendations, progress and game rules, which are locked when the profile
+  is created. Profiles can be saved, loaded and compared.
+- Everything is **transparent**: each recommendation has an evidence tree, and
+  every rule is documented and adjustable.
+- Free data sources only (OpenAlex, Semantic Scholar, Crossref), no personal
+  data sent.
 
 **Status:** `v0.1.0-dev`. Local web UI and command line; a phone app (PWA) is
-planned. See the [roadmap](#roadmap).
+planned.
 
 ## Quick start
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-cp config/config.example.yaml config/config.yaml   # set paths.bibtex, topics, API keys
-.venv/bin/litresearch ingest
-.venv/bin/litresearch recommend          # this week's top 5
-.venv/bin/litresearch queue add r1       # pick one
-.venv/bin/litresearch next               # read it ...
+cp config/config.example.yaml config/config.yaml
+.venv/bin/litresearch serve              # prints the address to open
+```
+
+In the browser: create a profile, upload your Paperpile BibTeX export
+(**Library → Paperpile library**), name your topics and get your first
+recommendations (**Reading → Recommendations**). The same works on the
+command line:
+
+```bash
+.venv/bin/litresearch profile create "Kai"
+cp library.bib data/profiles/kai/library.bib && .venv/bin/litresearch ingest
+.venv/bin/litresearch recommend          # latest list; --new for new papers
+.venv/bin/litresearch queue add r1
 .venv/bin/litresearch read q1 thorough --rating 5 --note "..."
 .venv/bin/litresearch score
 ```
 
-Or use the web UI: `litresearch serve` starts the web server and prints its
-address (choose the network with `--network` or `web.host`)
-(see [docs/web-ui.md](docs/web-ui.md)). The weekly workflow is described in
-[docs/usage.md](docs/usage.md).
-
-Full instructions, including the Paperpile auto-export and Google Drive sync:
-[docs/setup.md](docs/setup.md).
-
-## Commands
-
-| Command | Purpose | Status |
-|---|---|---|
-| `db-init` | create the SQLite database | ✅ |
-| `ingest [--no-s2]` | import the Paperpile export; resolve DOIs; fetch metrics and embeddings | ✅ |
-| `status` | library summary: coverage, top folders | ✅ |
-| `recommend [--refresh] [--no-s2]` | this week's ≤ 5 papers, ranked | ✅ |
-| `profile [show\|start\|save\|load\|compare\|reset]` | game profile with locked rules | ✅ |
-| `check-bib [FILE]` | check a Paperpile BibTeX export | ✅ |
-| `queue [add\|drop\|move]` | the short, ordered reading queue | ✅ |
-| `next`, `show REF` | top paper / any paper with abstract, status, notes | ✅ |
-| `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
-| `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant | ✅ |
-| `score`, `history` | level, streak, weekly grade, badges / reading log | ✅ |
-| `serve [--network local\|all\|eth0\|wlan0\|IP] [--port] [--choose] [--list-networks]` | web server for this computer, all networks or one chosen network (never opens a browser) | ✅ |
-| `set-password [--remove]` | password for network access to the UI | ✅ |
-| `backup`, `restore FILE` | database snapshot + progress export / restore a snapshot | ✅ |
-| `export-progress FILE`, `import-progress FILE` | move or merge your progress between machines | ✅ |
-| `check` | database integrity, contents, last backup | ✅ |
-| `export`, `sync-notes` | Obsidian export and note round-trip | milestone 6 |
-| `export-paperpile` | BibTeX with reading-status keywords, for import into Paperpile | milestone 6 |
-
-Global option: `-v/--verbose` shows HTTP requests and retries.
-
 ## Documentation
 
-| Document | For |
+Everything is in **[docs/documentation.md](docs/documentation.md)**:
+
+| Part | Contents |
 |---|---|
-| [Setup](docs/setup.md) | installation, Paperpile export, sync, first ingest, troubleshooting |
-| [Usage](docs/usage.md) | the weekly loop of recommend, queue, read and score |
-| [Web UI](docs/web-ui.md) | pages, rewards, network access with login |
-| [Recommendation criteria](docs/recommendation-criteria.md) | every rule and formula, the evidence tree |
-| [Gamification](docs/gamification.md) | points, bonuses, penalty, levels, badges, metrics |
-| [Data & backups](docs/data-and-backups.md) | where your progress lives, backups, moving machines |
-| [Configuration](docs/configuration.md) | every config key |
-| [How it is built](docs/implementation.md) | development, modules, algorithms, tests, **credits for all packages, services and literature** |
-| [Architecture](docs/architecture.md) | pipeline, data model, external services |
-| [Development](docs/development.md) | git workflow, tests, lint, fixtures |
-
-
-## Data sources
-
-All free, used within their free limits, and no personal data is sent:
-
-- [Crossref](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) for DOIs
-- [OpenAlex](https://docs.openalex.org/) for metrics and identifiers
-- [Semantic Scholar](https://www.semanticscholar.org/product/api) for SPECTER2 and TLDRs
-
-Planned: PubMed, bioRxiv/medRxiv. Paperpile has no public API, so its BibTeX
-auto-export is the interface.
+| I. Using litresearch | setup (Paperpile export, sync), the reading loop, profiles, the web UI and network access |
+| II. How it works | how papers are recommended (every rule and formula, the evidence tree), points, penalty, levels and badges |
+| III. Reference | all commands, data sources and privacy, configuration, where your data lives, backups, moving machines |
+| IV. How it is built | architecture, modules, algorithms, tests, development workflow, **credits for all packages, services and literature** |
 
 ## Roadmap
 
 1. ✅ Skeleton: config, database, CLI
 2. ✅ Library ingest and enrichment
-3. ✅ Candidate search, scoring, weekly ≤ 5-paper list (unread library papers included)
-4. ✅ Reading queue, reading log, gamification, local web UI · ⏳ phone app (PWA)
+3. ✅ Candidate search, scoring, ≤ 5-paper lists on request (unread library papers included)
+4. ✅ Reading queue, reading log, gamification, local web UI, profiles · ⏳ phone app (PWA)
 5. LLM summaries via an OpenAI-compatible endpoint (LM Studio / Ollama)
 6. Obsidian export/sync, Paperpile write-back file, systemd deployment
 7. Feedback loop: ✅ dismissals and good ratings already steer the S2 recommendations; ⏳ weight tuning
@@ -109,7 +68,7 @@ auto-export is the interface.
 
 - `main`: releases
 - `dev`: development; feature branches `feat-*` branch off `dev`
-  (see [docs/development.md](docs/development.md))
+  (see [Development](docs/documentation.md#13-development))
 
 ## License
 

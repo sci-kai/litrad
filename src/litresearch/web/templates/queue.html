@@ -4,6 +4,10 @@
 {% block title %}Reading queue{% endblock %}
 {% block heading %}📚 Reading queue <small class="muted">{{ queue | length }}/{{ cfg.queue.max_size }}</small>{% endblock %}
 {% block content %}
+<nav class="tabs" aria-label="Reading">
+  <a href="/queue" class="active">📚 Reading queue</a>
+  <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
+</nav>
 <p class="muted">Short and ordered on purpose: there is always exactly one paper up next. Reading it first earns the 🐸 frog bonus.
   Removing a paper you picked from the recommendations before at least skimming it costs <b>{{ rules.drop_penalty }} XP</b>.</p>
 
@@ -43,7 +47,7 @@
     </div>
   </div>
   {% else %}
-  <div class="card"><h2>📭 Inbox zero!</h2><p>Your queue is empty. Pick from <a href="/recommendations">this week's recommendations</a> or add a paper below.</p></div>
+  <div class="card"><h2>📭 Inbox zero!</h2><p>Your queue is empty. Pick from <a href="/recommendations">your recommendations</a> or add a paper below.</p></div>
   {% endfor %}
 
   <div class="card">

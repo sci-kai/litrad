@@ -22,7 +22,7 @@ from typer.testing import CliRunner
 import litresearch.cli as cli
 import litresearch.reading as reading_module
 import litresearch.web.app as web
-from conftest import FakeApis, make_work
+from conftest import FakeApis, enter_profile, make_work, profile_cfg
 from litresearch.backup import export_progress, import_progress
 from litresearch.config import Config, ConfigError, load_config
 from litresearch.db import (
@@ -169,18 +169,22 @@ def test_crash_inside_a_web_request(cfg, tmp_path, monkeypatch):
     )
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
-        session.add(Paper(title="P", doi="10.1/p"))
+        session.add(Paper(title="P", doi="10.1/p", in_library=True))
         session.commit()
-    before = snapshot_counts(engine)
+    engine.dispose()
     client = TestClient(web.create_app(path), raise_server_exceptions=False)
+    enter_profile(client)  # takes over the existing data
+    engine = init_db(profile_cfg(path).paths.database)
+    before = snapshot_counts(engine)
 
     def boom(*_args, **_kwargs):
         raise RuntimeError("bug")
 
+    original = web.record_reading
     monkeypatch.setattr(web, "record_reading", boom)
     assert client.post("/papers/1/read", data={"level": "read"}).status_code == 500
     assert snapshot_counts(engine) == before
-    monkeypatch.undo()
+    monkeypatch.setattr(web, "record_reading", original)
     # the server keeps working after the error
     assert client.post("/papers/1/read", data={"level": "read"}).status_code == 200
     assert snapshot_counts(engine)["Reading"] == 1
@@ -249,10 +253,12 @@ def test_progress_survives_a_web_restart(cfg, tmp_path):
         f"  cache_dir: {cfg.paths.cache_dir}\n"
     )
     first = TestClient(web.create_app(path))
+    enter_profile(first, adopt=False)
     first.post("/queue/add", data={"title": "Survivor"})
     first.post("/papers/1/read", data={"level": "read", "note": "remember me"})
     first.close()
     second = TestClient(web.create_app(path))
+    second.post("/welcome/select", data={"slug": "tester"})
     assert "remember me" in second.get("/papers/1").text
     assert "Badge: First Steps" in second.get("/ledger").text
     second.close()
@@ -349,10 +355,11 @@ def test_html_and_unicode_are_shown_safely(cfg, tmp_path):
         f"  cache_dir: {cfg.paths.cache_dir}\n"
     )
     client = TestClient(web.create_app(path))
+    enter_profile(client, adopt=False)
     evil = '<script>alert("x")</script> α-β 🧬 Ünïcödé'
     client.post("/queue/add", data={"title": evil})
     client.post("/papers/1/read", data={"level": "read", "note": "<img src=x onerror=alert(1)>"})
-    for url in ("/queue", "/papers/1", "/ledger", "/weekly", "/"):
+    for url in ("/queue", "/papers/1", "/progress", "/", "/profile", "/welcome"):
         page = client.get(url).text
         assert "<script>alert" not in page and "<img src=x" not in page
     assert "🧬 Ünïcödé" in client.get("/papers/1").text

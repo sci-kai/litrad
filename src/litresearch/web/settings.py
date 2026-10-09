@@ -47,17 +47,27 @@ class Group:
 
 GROUPS = (
     Group(
-        "Weekly list",
-        "How many papers you get. How deeply you read each one is up to you; "
-        "deeper reads earn more XP.",
+        "Recommendation list",
+        "How many papers you get and when you are reminded to ask for new ones. How deeply "
+        "you read each one is up to you; deeper reads earn more XP.",
         (
             Setting(
                 ("selection", "n_recommendations"),
-                "Papers per week",
-                "Size of the weekly list, ranked by score (1-5).",
+                "Papers per list",
+                "Size of each recommendation list, ranked by score (1-5).",
                 "int",
                 1,
                 5,
+                1,
+            ),
+            Setting(
+                ("selection", "reminder_days"),
+                "Reminder (days)",
+                "Remind me to get new recommendations this many days after the last list "
+                "(0 = never).",
+                "int",
+                0,
+                365,
                 1,
             ),
         ),
@@ -332,6 +342,12 @@ def parse_form(form: dict) -> dict:
         except ValueError as error:
             raise SettingsError(f"'{setting.label}': '{raw}' is not a number") from error
 
+    updates.update(parse_topics(form))
+    return updates
+
+
+def parse_topics(form: dict) -> dict:
+    """Topics and excluded terms from the topic editor (lists of form values)."""
     topics = []
     names = form.get("topic_name", [])
     weights = form.get("topic_weight", [])
@@ -351,11 +367,12 @@ def parse_form(form: dict) -> dict:
                 "queries": [q.strip() for q in query_text.splitlines() if q.strip()],
             }
         )
-    updates["topics"] = topics
-    updates["excluded_terms"] = [
-        t.strip() for t in form.get("excluded_terms", "").splitlines() if t.strip()
-    ]
-    return updates
+    return {
+        "topics": topics,
+        "excluded_terms": [
+            t.strip() for t in form.get("excluded_terms", "").splitlines() if t.strip()
+        ],
+    }
 
 
 def _merge(base: dict, updates: dict) -> dict:

@@ -22,6 +22,37 @@ console = Console(highlight=False)
 
 ConfigOpt = typer.Option(Path("config/config.yaml"), "--config", "-c", help="Path to config.yaml")
 
+# set by the global --profile option
+state: dict = {"profile": None}
+
+
+def load_cfg(config: Path) -> Config:
+    """The configuration of the selected profile.
+
+    The profile is the one named with ``--profile``, else the current one
+    (``litresearch profile use``, the web UI, or the only profile there is).
+    Without any profiles, the data from before profiles existed is used.
+    """
+    from litresearch import profiles
+    from litresearch.config import ConfigError
+
+    base = load_config(config)
+    try:
+        if state["profile"]:
+            slug = profiles.find(base, state["profile"])
+        else:
+            slug = profiles.get_current(base)
+            if slug is None:
+                if profiles.list_profiles(base):
+                    raise ConfigError(
+                        "There are several profiles. Choose one with --profile NAME or "
+                        "'litresearch profile use NAME' (list them: 'litresearch profile list')."
+                    )
+                return base
+        return profiles.profile_config(base, slug)
+    except profiles.ProfilesError as error:
+        raise ConfigError(str(error)) from error
+
 
 def make_http(cfg: Config) -> HttpClient:
     s2_interval = 1.1 if cfg.api.semanticscholar_key else 3.0
@@ -48,7 +79,13 @@ def run() -> None:
 
 
 @app.callback()
-def main(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show HTTP retries etc.")):
+def main(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show HTTP retries etc."),
+    profile: str = typer.Option(
+        None, "--profile", "-p", help="Profile (name or id) to work with; default: the current one"
+    ),
+):
+    state["profile"] = profile
     logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(message)s")
 
 
@@ -66,7 +103,7 @@ def version():
 @app.command("db-init")
 def db_init(config: Path = ConfigOpt):
     """Create the SQLite database and tables."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     init_db(cfg.paths.database).dispose()
     typer.echo(f"Database ready: {cfg.paths.database}")
 
@@ -79,11 +116,11 @@ def ingest(
     """Import the Paperpile BibTeX export and enrich it with metadata."""
     from litresearch.ingest.pipeline import ingest_library
 
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     if not cfg.paths.bibtex.exists():
         console.print(
             f"[red]No BibTeX file at {cfg.paths.bibtex}.[/red] Export your Paperpile library "
-            "(see docs/setup.md) or fix paths.bibtex."
+            "(see docs/documentation.md, Setup) or fix paths.bibtex."
         )
         raise typer.Exit(code=1)
     engine = init_db(cfg.paths.database)
@@ -109,7 +146,7 @@ def check_bib(
     """Check a Paperpile BibTeX export: does it contain what litresearch needs?"""
     from litresearch.ingest.check import FIELDS, INSTRUCTIONS, check_bibtex
 
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     path = bibtex or cfg.paths.bibtex
     result = check_bibtex(path, cfg.library.ignore_labels)
     console.print(f"[bold]{path}[/bold]: {result.entries} entries")
@@ -135,7 +172,7 @@ def check_bib(
 @app.command()
 def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of folders to list")):
     """Summarise the library stored in the database."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         papers = session.exec(select(Paper).where(Paper.in_library)).all()
@@ -186,17 +223,29 @@ def paper_link(paper: Paper) -> str:
 @app.command()
 def recommend(
     config: Path = ConfigOpt,
-    refresh: bool = typer.Option(False, help="Build a new batch even if this week has one"),
+    new: bool = typer.Option(False, "--new", "--refresh", help="Get new recommendations"),
     s2: bool = typer.Option(True, help="Use Semantic Scholar (recommendations, embeddings)"),
 ):
-    """Show this week's top papers (built on first call each week)."""
-    from litresearch.recommend.engine import batch_items, build_recommendations, latest_batch
+    """Show your latest recommendations (new ones with --new, or when there are none)."""
+    from litresearch.recommend.engine import (
+        batch_items,
+        build_recommendations,
+        days_since_last_batch,
+        latest_batch,
+    )
 
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
-            batch = None if refresh else latest_batch(session, date.today())
+            batch = None if new else latest_batch(session)
+            if batch is not None:
+                age = days_since_last_batch(session)
+                if cfg.selection.reminder_days and age >= cfg.selection.reminder_days:
+                    console.print(
+                        f"[yellow]These recommendations are {age} days old; "
+                        "get new ones with 'litresearch recommend --new'.[/yellow]"
+                    )
             if batch is None:
                 http = make_http(cfg)
                 try:
@@ -212,11 +261,11 @@ def recommend(
 
 def show_batch(batch, items) -> None:
     console.print(
-        f"[bold]Recommendations for the week of {batch.week_start.isoformat()}[/bold] "
+        f"[bold]Recommendations from {batch.created_at.date().isoformat()}[/bold] "
         f"[dim]({batch.n_candidates} candidates checked)[/dim]"
     )
     if not items:
-        console.print("No eligible papers found. Check your topics or try --refresh later.")
+        console.print("No eligible papers found. Check your topics or try --new later.")
     for rec, paper in items:
         console.print(f"\n[bold cyan]r{rec.rank}[/bold cyan]  [bold]{paper.title}[/bold]")
         console.print(f"     {paper_line(paper)}")

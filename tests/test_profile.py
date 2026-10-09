@@ -1,13 +1,10 @@
 import json
-import re
 from datetime import date, datetime, timedelta
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
 from litresearch.backup import (
     BackupError,
     export_progress,
@@ -447,119 +444,3 @@ def test_xp_badges_follow_badge_xp(db):
 
 
 # --- web and CLI -----------------------------------------------------------------------------
-
-
-def write_config(tmp_path):
-    path = tmp_path / "config.yaml"
-    path.write_text(
-        f"paths:\n  bibtex: x.bib\n  database: {tmp_path / 'db.sqlite'}\n"
-        f"backup:\n  dir: {tmp_path / 'backups'}\n"
-    )
-    init_db(tmp_path / "db.sqlite").dispose()
-    return path
-
-
-def start_form(page: str) -> dict:
-    form = {m[0]: m[1] for m in re.findall(r'name="([a-z_]+)" value="([^"]*)"', page)}
-    form["levels"] = re.search(r'<textarea name="levels"[^>]*>(.*?)</textarea>', page, re.S)[1]
-    return form
-
-
-def test_web_profile_lifecycle(tmp_path):
-    from litresearch.web.app import create_app
-
-    path = write_config(tmp_path)
-    client = TestClient(create_app(path))
-    assert "Set up your game" in client.get("/").text
-    page = client.get("/profile").text
-    assert "Start your game" in page and "Hallmarks Author" in page and "Night Owl" in page
-    form = start_form(page)
-    form.update(name="Web journey", xp_read="55", badge_bookworm="20")
-    response = client.post("/profile/start", data=form, follow_redirects=True)
-    assert "has started" in response.text
-    locked = client.get("/profile").text
-    assert "RULES LOCKED" in locked and "Web journey" in locked and ">55<" in locked
-    assert "Set up your game" not in client.get("/").text
-    assert (
-        "game rules" in client.get("/settings").text
-        and "drop_penalty" not in client.get("/settings").text
-    )
-    # a second start is refused
-    again = client.post("/profile/start", data=form, follow_redirects=True)
-    assert "locked" in again.text
-
-    client.post("/queue/add", data={"title": "T"})
-    client.post("/papers/1/read", data={"level": "read"})
-    assert "+55" in client.get("/ledger").text
-
-    saved = client.post("/profile/save", follow_redirects=True)
-    assert "Profile saved as litresearch_profile_web-journey_" in saved.text
-    download = client.get("/profile/download")
-    assert download.json()["profile"]["name"] == "Web journey"
-    compare = client.post("/profile/compare", files={"file": ("mine.json", download.content)})
-    assert "same rules" in compare.text and "unmodified" in compare.text
-
-    bad = client.post("/profile/reset", data={"confirm_name": "wrong"}, follow_redirects=True)
-    assert "exact profile name" in bad.text
-    reset = client.post(
-        "/profile/reset", data={"confirm_name": "Web journey"}, follow_redirects=True
-    )
-    assert "archived" in reset.text and "Start your game" in client.get("/profile").text
-
-    name = sorted((tmp_path / "backups").glob("litresearch_profile_*.json"))[0].name
-    refused = client.post("/profile/load", data={"saved": name}, follow_redirects=True)
-    assert "Tick the confirmation" in refused.text
-    loaded = client.post(
-        "/profile/load", data={"saved": name, "confirm": "replace"}, follow_redirects=True
-    )
-    assert "Loaded" in loaded.text and "Web journey" in client.get("/profile").text
-    client.close()
-
-
-def test_web_start_form_validation(tmp_path):
-    from litresearch.web.app import create_app
-
-    client = TestClient(create_app(write_config(tmp_path)))
-    form = start_form(client.get("/profile").text)
-    form["levels"] = "5 | Wrong start"
-    assert "start at 0" in client.post("/profile/start", data=form, follow_redirects=True).text
-    form = start_form(client.get("/profile").text)
-    form["xp_read"] = "abc"
-    assert "not a number" in client.post("/profile/start", data=form, follow_redirects=True).text
-    assert "Start your game" in client.get("/profile").text  # nothing was started
-    client.close()
-
-
-@pytest.fixture
-def plain_console(monkeypatch):
-    from rich.console import Console
-
-    import litresearch.cli_data as cli_data
-
-    console = Console(color_system=None, width=300, highlight=False)
-    monkeypatch.setattr(cli, "console", console)
-    monkeypatch.setattr(cli_data, "console", console)
-
-
-def test_cli_profile_commands(tmp_path, plain_console):
-    path = str(write_config(tmp_path))
-    out = runner.invoke(cli.app, ["profile", "show", "-c", path]).stdout
-    assert "No profile yet" in out and "thorough +80" in out
-    result = runner.invoke(cli.app, ["profile", "start", "--name", "CLI", "--yes", "-c", path])
-    assert result.exit_code == 0 and "Started 'CLI'" in result.stdout
-    result = runner.invoke(cli.app, ["profile", "start", "--yes", "-c", path])
-    assert result.exit_code == 1 and "locked" in result.stdout
-    out = runner.invoke(cli.app, ["profile", "show", "-c", path]).stdout
-    assert "CLI" in out and "rules locked" in out
-    target = tmp_path / "mine.json"
-    assert runner.invoke(cli.app, ["profile", "save", str(target), "-c", path]).exit_code == 0
-    result = runner.invoke(cli.app, ["profile", "compare", str(target), "-c", path])
-    assert "same rules" in result.stdout and "unmodified" in result.stdout
-    assert runner.invoke(cli.app, ["profile", "reset", "--yes", "-c", path]).exit_code == 0
-    result = runner.invoke(cli.app, ["profile", "load", str(target), "--yes", "-c", path])
-    assert result.exit_code == 0 and "Loaded" in result.stdout
-    tampered = json.loads(target.read_text())
-    tampered["profile"]["name"] = "Edited"
-    target.write_text(json.dumps(tampered))
-    result = runner.invoke(cli.app, ["profile", "load", str(target), "--yes", "-c", path])
-    assert result.exit_code == 1 and "modified outside" in result.stdout

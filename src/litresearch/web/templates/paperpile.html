@@ -9,6 +9,10 @@
   {% endfor %}
 {%- endmacro %}
 {% block content %}
+<nav class="tabs" aria-label="Library">
+  <a href="/paperpile" class="{{ 'active' if active == 'paperpile' }}">📁 Paperpile library</a>
+  <a href="/library" class="{{ 'active' if active == 'library' }}">🔍 Find &amp; add</a>
+</nav>
 {% set age = (today - last_run.at.date()).days if last_run else none %}
 
 {% if upload_check %}

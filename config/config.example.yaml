@@ -1,8 +1,15 @@
 # litresearch configuration -- copy to config/config.yaml and adapt.
 # Dates follow ISO 8601 (YYYY-MM-DD).
 
+# Machine settings and the DEFAULTS of every profile. Each profile keeps its own
+# data in data/profiles/<profile>/ and may override topics, excluded_terms,
+# selection, sources, queue, library and paths.bibtex in its settings.yaml
+# (written by the web UI).
+
 paths:
-  # Paperpile auto-export (Google Drive), pulled locally e.g. via rclone
+  # one folder per profile: litresearch.sqlite, library.bib, settings.yaml
+  profiles_dir: data/profiles
+  # data from before profiles existed (can be taken over as a profile)
   bibtex: data/paperpile/library.bib
   database: data/litresearch.sqlite
   cache_dir: data/cache
@@ -12,6 +19,7 @@ library:
   # Paperpile labels without topical meaning (case-insensitive)
   ignore_labels: ["Import Mendeley"]
 
+# topics of a profile taken over from existing data; a new profile asks for its own
 topics:
   - name: tumor-evolution
     weight: 1.0
@@ -52,7 +60,7 @@ embeddings:
   local_url: http://embed-server:8100/v1/embeddings
 
 selection:
-  # papers per weekly list (1-5); how deeply you read them is your choice
+  # papers per list (1-5); how deeply you read them is your choice
   n_recommendations: 5
   fresh_window_months: 6
   landmark_min_percentile: 95
@@ -60,6 +68,8 @@ selection:
   landmark_max_age_years: 15
   results_per_query: 25
   cooldown_weeks: 8
+  # remind me to get new recommendations after this many days (0 = never)
+  reminder_days: 7
   weights:
     relevance: 0.5
     impact: 0.3
@@ -70,10 +80,10 @@ queue:
   max_size: 5
 
 game:
-  # DEFAULTS FOR A NEW GAME PROFILE. When your profile starts (Profile page or
-  # `litresearch profile start`), these rules are copied and locked; changing
+  # DEFAULTS FOR A NEW PROFILE. When a profile is created (welcome screen or
+  # `litresearch profile create`), these rules are copied and locked; changing
   # them later only affects the next profile. All keys (points per level,
-  # bonuses, levels, badge_targets, ...) are listed in docs/gamification.md.
+  # bonuses, levels, badge_targets, ...) are listed in docs/documentation.md (Gamification).
   # weekly quest: papers read at least to depth "read" / at least "skimmed"
   weekly_detail_goal: 1
   weekly_skim_goal: 2

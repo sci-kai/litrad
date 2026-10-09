@@ -148,3 +148,73 @@
   {% endif %}
 </details>
 {%- endmacro %}
+
+{% macro rules_fields(rule_groups, form_rules, levels_text) -%}
+<details class="rules-box">
+  <summary><b>⚙️ Game rules</b> <small class="muted">rewards, penalty, levels, badges · locked once the profile exists · defaults are fine to start</small></summary>
+  {% for title, intro, fields in rule_groups %}
+  <h3 style="margin-top:1rem">{{ title }}</h3>
+  <p class="muted" style="margin:0 0 .4rem">{{ intro }}</p>
+  <div class="grid two">
+    {% for name, label, kind, minimum, maximum, step in fields %}
+    <div class="field">
+      <label>{{ label }}</label>
+      <input type="number" name="{{ name }}" value="{{ form_rules[name] }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}" required>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  <h3 style="margin-top:1rem">🪜 Level ladder ({{ form_rules.levels | length }} levels)</h3>
+  <p class="muted" style="margin:0 0 .4rem">One level per line: <code>XP | title | icon</code>.</p>
+  <textarea name="levels" style="min-height:14rem; font-family: ui-monospace, monospace">{{ levels_text }}</textarea>
+  <h3 style="margin-top:1rem">🏅 Badge targets ({{ form_rules.badges() | length }} badges)</h3>
+  {% for group, members in form_rules.badges() | groupby("group") %}
+  <h4 style="margin:.6rem 0 .3rem">{{ group }}</h4>
+  <div class="grid three">
+    {% for badge in members %}
+    <div class="field"><label>{{ badge.icon }} {{ badge.name }}</label>
+      <input type="number" name="badge_{{ badge.code }}" value="{{ badge.target }}" min="1" step="1">
+      <span class="help">{{ badge.description }}</span></div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</details>
+{%- endmacro %}
+
+{# topics and excluded terms; the form fields are read by settings.parse_topics #}
+{% macro topics_editor(cfg) %}
+  <div class="topics-editor">
+    <p class="muted">Each query runs two OpenAlex searches per batch (fresh and landmark papers). Papers found by a topic get a relevance bonus of weight ÷ highest weight.</p>
+    <div class="topic-list grid" style="gap:.6rem">
+      {% for topic in cfg.topics %}
+      <div class="topic-row">
+        <input type="text" name="topic_name" value="{{ topic.name }}" placeholder="name">
+        <input type="number" name="topic_weight" value="{{ topic.weight }}" step="0.05" min="0" title="weight">
+        <textarea name="topic_queries" placeholder="one search query per line">{{ topic.queries | join("\n") }}</textarea>
+        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
+      </div>
+      {% else %}
+      <div class="topic-row">
+        <input type="text" name="topic_name" placeholder="name, e.g. tumour evolution">
+        <input type="number" name="topic_weight" value="1.0" step="0.05" min="0" title="weight">
+        <textarea name="topic_queries" placeholder="one search query per line"></textarea>
+        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
+      </div>
+      {% endfor %}
+    </div>
+    <template>
+      <div class="topic-row">
+        <input type="text" name="topic_name" placeholder="name">
+        <input type="number" name="topic_weight" value="1.0" step="0.05" min="0" title="weight">
+        <textarea name="topic_queries" placeholder="one search query per line"></textarea>
+        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
+      </div>
+    </template>
+    <p><button type="button" class="small" data-add-topic>➕ Add topic</button></p>
+    <div class="field">
+      <label>Excluded terms
+      <textarea name="excluded_terms" placeholder="one per line">{{ cfg.excluded_terms | join("\n") }}</textarea></label>
+      <span class="help">Papers whose title or abstract contains one of these (case-insensitive) are never recommended.</span>
+    </div>
+  </div>
+{% endmacro %}

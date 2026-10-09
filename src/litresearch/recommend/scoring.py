@@ -15,7 +15,8 @@ do not all cover the same subject.
 
 Every number that influences the result is recorded in ``Scored.evidence``,
 which the UI shows as an evidence tree. The criteria are documented in
-``docs/recommendation-criteria.md``; keep both in sync.
+``docs/documentation.md`` ("How papers are recommended") and shown in the UI by
+``web/templates/_how_recommend.html``; keep all three in sync.
 """
 
 import math

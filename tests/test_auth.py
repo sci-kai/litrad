@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
-from conftest import SAMPLE_BIB
+from conftest import SAMPLE_BIB, enter_profile
 from litresearch.config import load_config
 from litresearch.web.app import create_app
 from litresearch.web.auth import (
@@ -113,6 +113,9 @@ def test_login_and_logout(protected):
     assert response.status_code == 303 and response.headers["location"] == "/queue"
     cookie = response.headers["set-cookie"]
     assert "HttpOnly" in cookie and "samesite=lax" in cookie.lower()
+    # logged in, but no profile chosen yet: the welcome screen comes first
+    assert protected.get("/queue", follow_redirects=False).headers["location"] == "/welcome"
+    enter_profile(protected, "Ada", adopt=False)
     page = protected.get("/queue")
     assert page.status_code == 200 and "Reading queue" in page.text and "Log out" in page.text
     protected.post("/logout")

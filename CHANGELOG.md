@@ -2,6 +2,36 @@
 
 ## 0.1.0-dev (unreleased)
 
+### Changed: everything centres on profiles
+
+- Several profiles side by side, each in its own folder
+  (`data/profiles/<profile>/`: database, Paperpile export, `settings.yaml`
+  with topics and recommendation settings); backups go to
+  `backup.dir/<profile>/`.
+- The web UI starts with a welcome screen: continue with a profile, create
+  one (rules locked at creation), take over the data from before profiles,
+  or load a saved profile as a new one. Nothing is accessible without a
+  profile. The profile chip (top right) shows name, level and XP and leads to
+  the profile page; *Switch profile* is in the sidebar.
+- New menu: Dashboard (with the weekly reports) · Reading (queue,
+  recommendations) · Progress & XP (with the XP ledger and the point rules) ·
+  Library (Paperpile library, find & add) · Settings. `/weekly`, `/ledger` and
+  `/how` redirect to their new places.
+- Recommendations on demand instead of one batch per week, with a reminder
+  after `selection.reminder_days` (7). A new list shows papers not
+  recommended within the cooldown (including today's lists).
+- The first visit to Recommendations asks for the profile's topics (or
+  library only); topics can be edited on that page. The page explains how
+  recommendations are made, with the current values.
+- Settings are saved to the profile's `settings.yaml` (comments kept,
+  `.bak`), not to `config.yaml`; profile files include them.
+- CLI: global `--profile`; `profile list|create|adopt|use`; `profile load`
+  creates a new profile; `recommend` shows the latest list (`--new` for a new
+  one). `profile start` and `profile reset` are replaced by creating another
+  profile.
+- Documentation consolidated into `docs/documentation.md`; the README is a
+  short overview.
+
 ### Added
 
 - Project skeleton: config models, SQLite schema, CLI entry point.

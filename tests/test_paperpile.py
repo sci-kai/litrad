@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 import litresearch.cli as cli
 import litresearch.web.app as web
-from conftest import SAMPLE_BIB, FakeApis
+from conftest import SAMPLE_BIB, FakeApis, enter_profile, profile_cfg
 from litresearch.db import IngestRun, init_db
 from litresearch.ingest.bibtex import BibEntry
 from litresearch.ingest.check import check_bibtex, check_entries
@@ -114,7 +114,11 @@ def site(tmp_path, monkeypatch, make_http):
     apis = FakeApis()
     monkeypatch.setattr(web, "make_http", lambda cfg: make_http(apis))
     client = TestClient(web.create_app(path))
-    yield client, bib, tmp_path
+    enter_profile(client, "Ada", adopt=False)
+    cfg = profile_cfg(path)
+    # a new profile keeps its export in its own folder
+    assert cfg.paths.bibtex.resolve() == tmp_path / "data/profiles/ada/library.bib"
+    yield client, cfg.paths.bibtex, cfg.paths.database
     client.close()
 
 
@@ -189,9 +193,9 @@ def test_reimport_without_file(site):
 
 
 def test_stale_and_changed_file_notices(site):
-    client, bib, tmp_path = site
+    client, bib, database = site
     upload(client, SAMPLE_BIB.read_bytes(), "import")
-    engine = init_db(tmp_path / "db.sqlite")
+    engine = init_db(database)
     with Session(engine) as session:
         run = session.exec(select(IngestRun)).one()
         run.at = datetime.now() - timedelta(days=40)

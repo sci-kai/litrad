@@ -1,10 +1,4 @@
-{% extends "base.html" %}
-{% set active = "weekly" %}
-{% block title %}Weekly reports{% endblock %}
-{% block heading %}🗓️ Weekly reports{% endblock %}
-{% block content %}
-<p class="muted">One report card per week (Monday to Sunday). Grades: <b>S</b> quest done with a thorough read · <b>A</b> quest done · <b>B</b> half way · <b>C</b> started · <b>–</b> rest week.
-  Showing {{ summaries | length }} weeks · <a href="/weekly?weeks={{ weeks + 8 }}">show more</a></p>
+{# weekly report cards; needs `summaries` #}
 <div class="grid">
   {% for w in summaries %}
   <div class="card">
@@ -42,4 +36,3 @@
   </div>
   {% endfor %}
 </div>
-{% endblock %}

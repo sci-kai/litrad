@@ -179,17 +179,26 @@
       });
     });
 
-    // settings: add/remove topic rows, live sum of weights
-    const addTopic = document.getElementById("add-topic");
-    if (addTopic) {
-      addTopic.addEventListener("click", () => {
-        const template = document.getElementById("topic-template");
-        document.getElementById("topics").appendChild(template.content.cloneNode(true));
+    // topic editors (settings, recommendations): add/remove topic rows
+    document.querySelectorAll(".topics-editor").forEach((editor) => {
+      const list = editor.querySelector(".topic-list");
+      const template = editor.querySelector("template");
+      editor.querySelector("[data-add-topic]").addEventListener("click", () => {
+        list.appendChild(template.content.cloneNode(true));
       });
-      document.getElementById("topics").addEventListener("click", (e) => {
+      list.addEventListener("click", (e) => {
         if (e.target.matches("[data-remove-topic]")) e.target.closest(".topic-row").remove();
       });
-    }
+    });
+
+    // links to a collapsed section (#how) open it
+    const openTarget = () => {
+      const target = location.hash && document.getElementById(location.hash.slice(1));
+      if (target && target.tagName === "DETAILS") target.open = true;
+    };
+    openTarget();
+    window.addEventListener("hashchange", openTarget);
+
     const weights = document.querySelectorAll("[data-weight]");
     const share = () => {
       const values = Array.from(weights).map((w) => Number(w.value) || 0);

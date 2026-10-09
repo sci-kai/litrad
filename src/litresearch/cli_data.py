@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from sqlmodel import Session, func, select
 
+from litresearch import profiles
 from litresearch.backup import (
     BackupError,
     atomic_write_text,
@@ -14,17 +15,16 @@ from litresearch.backup import (
     import_progress,
     integrity_ok,
     latest_backup,
-    load_profile,
-    reset_progress,
+    profile_settings,
     restore,
     run_backup,
     save_profile_file,
     summarize,
 )
-from litresearch.cli import ConfigOpt, app, console
+from litresearch.cli import ConfigOpt, app, console, load_cfg
 from litresearch.config import load_config
 from litresearch.db import Paper, QueueItem, Reading, XpEvent, init_db
-from litresearch.profile import ProfileError, get_profile, profile_rules, start_profile
+from litresearch.profile import ProfileError, get_profile, profile_rules
 
 BACKUP_WARN_DAYS = 7
 
@@ -37,11 +37,11 @@ def _fail(message: str):
 @app.command()
 def backup(config: Path = ConfigOpt):
     """Snapshot the database and export your progress into backup.dir."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
-            result = run_backup(cfg, session)
+            result = run_backup(cfg, session, settings=profile_settings(cfg))
     except BackupError as error:
         _fail(str(error))
     finally:
@@ -57,11 +57,11 @@ def export_progress_cmd(
     target: Path = typer.Argument(..., help="JSON file to write"), config: Path = ConfigOpt
 ):
     """Write your reading progress, notes, queue and XP to a portable JSON file."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
-            data = export_progress(session)
+            data = export_progress(session, settings=profile_settings(cfg))
     finally:
         engine.dispose()
     atomic_write_text(target, json.dumps(data, indent=1))
@@ -78,7 +78,7 @@ def import_progress_cmd(
     config: Path = ConfigOpt,
 ):
     """Merge progress from another machine (idempotent; notes from both sides are kept)."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -107,7 +107,7 @@ def restore_cmd(
     config: Path = ConfigOpt,
 ):
     """Replace the database with a snapshot (the current state is backed up first)."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     if not yes:
         typer.confirm(
             f"Replace {cfg.paths.database} with {snapshot_file}? Stop 'litresearch serve' first.",
@@ -123,7 +123,7 @@ def restore_cmd(
 @app.command()
 def check(config: Path = ConfigOpt):
     """Check the database and show where your data and backups are."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     database = cfg.paths.database
     console.print(f"Database:  {database.resolve()}")
     if not database.exists():
@@ -158,9 +158,11 @@ def check(config: Path = ConfigOpt):
         console.print(f"Last backup: [{colour}]{last.isoformat()} ({age} days ago)[/{colour}]")
 
 
-# --- game profile ---------------------------------------------------------------------------
+# --- profiles ---------------------------------------------------------------------------
 
-profile_app = typer.Typer(help="Your game profile: locked rules, save, load, compare.")
+profile_app = typer.Typer(
+    help="Profiles: each has its own progress, queue, library, topics and locked rules."
+)
 app.add_typer(profile_app, name="profile")
 
 
@@ -182,15 +184,110 @@ def _rules_lines(rules) -> list[str]:
     ]
 
 
+@profile_app.command("list")
+def profile_list_cmd(config: Path = ConfigOpt):
+    """List all profiles (* = the current one)."""
+    base = load_config(config)
+    current = profiles.get_current(base)
+    infos = profiles.list_profiles(base)
+    for info in infos:
+        mark = "*" if info.slug == current else " "
+        last = info.last_activity.date().isoformat() if info.last_activity else "never"
+        console.print(
+            f"{mark} [bold]{info.name}[/bold] [dim]({info.slug})[/dim]: {info.level.icon} Lv "
+            f"{info.level.number} {info.level.title}, {info.xp} XP, {info.papers_read} papers "
+            f"read, {info.library} in library, last active {last}"
+        )
+    if not infos:
+        console.print("No profiles yet. Create one with 'litresearch profile create NAME'.")
+    legacy = profiles.legacy_available(base)
+    if legacy:
+        console.print(
+            f"Data from before profiles ({legacy['library']} library papers, "
+            f"{legacy['readings']} readings) can become a profile: "
+            "'litresearch profile adopt NAME'."
+        )
+
+
+def _confirm_rules(base, yes: bool) -> None:
+    console.print(
+        "These rules (from the 'game' section of config.yaml) will be locked:\n"
+        + "\n".join(_rules_lines(base.game))
+    )
+    if not yes:
+        typer.confirm("Create the profile with these rules?", abort=True)
+
+
+def _created(base, slug: str) -> None:
+    profiles.set_current(base, slug)
+    info = profiles.describe(base, slug)
+    console.print(
+        f"Created '{info.name}' (fingerprint {info.fingerprint}) in "
+        f"{profiles.folder(base, slug)}; it is now the current profile."
+    )
+
+
+@profile_app.command("create")
+def profile_create_cmd(
+    name: str = typer.Argument(..., help="Profile name"),
+    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
+    config: Path = ConfigOpt,
+):
+    """Create a new, empty profile; its rules are locked from the start."""
+    base = load_config(config)
+    _confirm_rules(base, yes)
+    try:
+        slug = profiles.create_profile(base, name)
+    except (profiles.ProfilesError, ProfileError) as error:
+        _fail(str(error))
+    _created(base, slug)
+    console.print(
+        f"Put your Paperpile export at {profiles.profile_config(base, slug).paths.bibtex} "
+        "and run 'litresearch ingest'."
+    )
+
+
+@profile_app.command("adopt")
+def profile_adopt_cmd(
+    name: str = typer.Argument(..., help="Profile name"),
+    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
+    config: Path = ConfigOpt,
+):
+    """Turn the data from before profiles existed into a profile (a copy)."""
+    base = load_config(config)
+    if profiles.legacy_available(base) is None:
+        _fail("There is no existing data to take over.")
+    _confirm_rules(base, yes)
+    try:
+        slug = profiles.adopt_legacy(base, name)
+    except (profiles.ProfilesError, ProfileError, BackupError) as error:
+        _fail(str(error))
+    _created(base, slug)
+
+
+@profile_app.command("use")
+def profile_use_cmd(
+    name: str = typer.Argument(..., help="Profile name or id"), config: Path = ConfigOpt
+):
+    """Make a profile the current one (for the command line)."""
+    base = load_config(config)
+    try:
+        slug = profiles.find(base, name)
+        profiles.set_current(base, slug)
+    except profiles.ProfilesError as error:
+        _fail(str(error))
+    console.print(f"Current profile: {profiles.describe(base, slug).name}")
+
+
 @profile_app.command("show")
 def profile_show(config: Path = ConfigOpt):
     """Show the profile and its locked rules."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         profile = get_profile(session)
         if profile is None:
-            console.print("No profile yet. Defaults from config.yaml (locked when you start):")
+            console.print("No profile yet. Create one with 'litresearch profile create NAME'.")
             lines = _rules_lines(cfg.game)
         else:
             console.print(
@@ -199,29 +296,8 @@ def profile_show(config: Path = ConfigOpt):
             )
             lines = _rules_lines(profile_rules(profile))
     engine.dispose()
+    console.print(f"Data: {cfg.paths.database.parent.resolve()}")
     console.print("\n".join(lines))
-
-
-@profile_app.command("start")
-def profile_start_cmd(
-    name: str = typer.Option("My reading journey", help="Profile name"),
-    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
-    config: Path = ConfigOpt,
-):
-    """Start the game with the rules from the 'game' section of config.yaml."""
-    cfg = load_config(config)
-    console.print("These rules will be locked:\n" + "\n".join(_rules_lines(cfg.game)))
-    if not yes:
-        typer.confirm("Start the game with these rules?", abort=True)
-    engine = init_db(cfg.paths.database)
-    try:
-        with Session(engine) as session:
-            profile = start_profile(session, cfg, name)
-    except ProfileError as error:
-        _fail(str(error))
-    finally:
-        engine.dispose()
-    console.print(f"Started '{profile.name}' (fingerprint {profile.fingerprint}). Happy reading!")
 
 
 @profile_app.command("save")
@@ -229,15 +305,17 @@ def profile_save_cmd(
     target: Path = typer.Argument(None, help="File (default: a new file in backup.dir)"),
     config: Path = ConfigOpt,
 ):
-    """Save the profile with all progress and recommendations."""
-    cfg = load_config(config)
+    """Save the profile with all progress, recommendations and settings."""
+    cfg = load_cfg(config)
+    settings = profile_settings(cfg)
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
             if target is None:
-                path = save_profile_file(session, cfg.backup.dir)
+                path = save_profile_file(session, cfg.backup.dir, settings=settings)
             else:
-                atomic_write_text(target, json.dumps(export_progress(session), indent=1))
+                data = export_progress(session, settings=settings)
+                atomic_write_text(target, json.dumps(data, indent=1))
                 path = target
     finally:
         engine.dispose()
@@ -247,28 +325,20 @@ def profile_save_cmd(
 @profile_app.command("load")
 def profile_load_cmd(
     source: Path = typer.Argument(..., help="A saved profile (JSON)"),
-    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
+    name: str = typer.Option(None, help="Name of the new profile (default: the saved name)"),
     config: Path = ConfigOpt,
 ):
-    """Replace your progress with a saved profile (the current state is saved first)."""
-    cfg = load_config(config)
+    """Load a saved profile as a new profile (existing profiles are not changed)."""
+    base = load_config(config)
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         _fail(f"Cannot read {source}: {error}")
-    if not yes:
-        typer.confirm("Replace your current progress with this profile?", abort=True)
-    engine = init_db(cfg.paths.database)
     try:
-        with Session(engine) as session:
-            archive = save_profile_file(session, cfg.backup.dir)
-            report = load_profile(session, cfg, data)
-    except BackupError as error:
+        slug = profiles.import_profile_file(base, data, name)
+    except (profiles.ProfilesError, BackupError, ProfileError) as error:
         _fail(str(error))
-    finally:
-        engine.dispose()
-    console.print(f"Loaded {source}. Your previous state was saved as {archive}.")
-    console.print("\n".join(report.lines()))
+    _created(base, slug)
 
 
 @profile_app.command("compare")
@@ -277,7 +347,7 @@ def profile_compare_cmd(
     config: Path = ConfigOpt,
 ):
     """Compare your profile with saved ones (nothing is changed)."""
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
@@ -300,22 +370,3 @@ def profile_compare_cmd(
             f"best streak {row['best_streak']}, {row['badges']} badges, "
             f"{row['quests']} quests · {same} · {integrity}"
         )
-
-
-@profile_app.command("reset")
-def profile_reset_cmd(
-    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
-    config: Path = ConfigOpt,
-):
-    """Save the profile, then delete all progress to start a new game."""
-    cfg = load_config(config)
-    if not yes:
-        typer.confirm("Archive this profile and delete all progress?", abort=True)
-    engine = init_db(cfg.paths.database)
-    try:
-        with Session(engine) as session:
-            archive = save_profile_file(session, cfg.backup.dir)
-            reset_progress(session)
-    finally:
-        engine.dispose()
-    console.print(f"Archived as {archive}. Start a new game with 'litresearch profile start'.")

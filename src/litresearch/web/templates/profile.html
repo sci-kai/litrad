@@ -1,56 +1,8 @@
 {% extends "base.html" %}
 {% set active = "profile" %}
 {% block title %}Profile{% endblock %}
-{% block heading %}🎮 Your game profile{% endblock %}
+{% block heading %}🎮 Your profile{% endblock %}
 {% block content %}
-{% if not profile %}
-<div class="card up-next" style="margin-bottom:1rem">
-  <h2>✨ Start your game</h2>
-  <p>Set the rewards and the penalty, name your profile, and start. <b>Once started, the rules are locked</b>
-    so nobody (including you) can inflate points afterwards. To play by different rules later, save this profile and start a new one.</p>
-  {% if xp_total %}<p class="notice warn">There are already {{ xp_total }} XP in this database from before profiles existed; they stay part of your score.</p>{% endif %}
-</div>
-<form method="post" action="/profile/start" class="grid" data-confirm="Start the game? The rules cannot be changed afterwards.">
-  <div class="card">
-    <div class="field"><label for="name">Profile name</label>
-      <input type="text" id="name" name="name" value="My reading journey" maxlength="80" required></div>
-  </div>
-  {% for title, intro, fields in rule_groups %}
-  <div class="card">
-    <h2>{{ title }}</h2>
-    <p class="muted">{{ intro }}</p>
-    <div class="grid two">
-      {% for name, label, kind, minimum, maximum, step in fields %}
-      <div class="field">
-        <label for="{{ name }}">{{ label }}</label>
-        <input type="number" id="{{ name }}" name="{{ name }}" value="{{ form_rules[name] }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}" required>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endfor %}
-  <details class="card">
-    <summary><h2 style="display:inline">🪜 Level ladder ({{ form_rules.levels | length }} levels)</h2></summary>
-    <p class="muted">One level per line: <code>XP | title | icon</code>. The first level starts at 0; thresholds must increase.</p>
-    <textarea name="levels" style="min-height:22rem; font-family: ui-monospace, monospace">{{ levels_text }}</textarea>
-  </details>
-  <details class="card">
-    <summary><h2 style="display:inline">🏅 Badge targets ({{ form_rules.badges() | length }} badges)</h2></summary>
-    <p class="muted">How much it takes to unlock each badge.</p>
-    {% for group, members in form_rules.badges() | groupby("group") %}
-    <h3 style="margin-top:.8rem">{{ group }}</h3>
-    <div class="grid three">
-      {% for badge in members %}
-      <div class="field"><label for="badge_{{ badge.code }}">{{ badge.icon }} {{ badge.name }}</label>
-        <input type="number" id="badge_{{ badge.code }}" name="badge_{{ badge.code }}" value="{{ badge.target }}" min="1" step="1">
-        <span class="help">{{ badge.description }}</span></div>
-      {% endfor %}
-    </div>
-    {% endfor %}
-  </details>
-  <div><button class="primary">🔒 Start the game with these rules</button></div>
-</form>
-{% else %}
 <div class="grid two">
   <div class="card up-next">
     <span class="badge-next">🔒 RULES LOCKED</span>
@@ -64,16 +16,13 @@
     </div>
   </div>
   <div class="card">
-    <h2>📂 Load a saved profile</h2>
-    <p class="muted">Replaces your current progress (profile, readings, notes, queue, XP, badges, recommendations). Your current state is saved first.</p>
-    <form method="post" action="/profile/load" enctype="multipart/form-data" class="grid" style="gap:.5rem">
-      <select name="saved"><option value="">Choose a saved file…</option>
-        {% for save in saves %}<option value="{{ save.name }}">{{ save.name }} ({{ save.modified.isoformat() }})</option>{% endfor %}
-      </select>
-      <input type="file" name="file" accept=".json,application/json">
-      <label class="row"><input type="checkbox" name="confirm" value="replace" style="width:auto"> Replace my current progress</label>
-      <div><button>📂 Load</button></div>
-    </form>
+    <h2>🔁 Other profiles</h2>
+    <p class="muted">Everything you see (progress, queue, recommendations, library, topics and settings) belongs to this profile.
+      Each profile has its own folder <code>{{ folder }}</code>. To play by other rules, create another profile; this one stays as it is.</p>
+    {% if others %}
+    <table>{% for o in others %}<tr><td>{{ o.level.icon }} <b>{{ o.name }}</b></td><td class="num">{{ o.xp }} XP</td><td class="num">{{ o.papers_read }} read</td></tr>{% endfor %}</table>
+    {% endif %}
+    <form method="post" action="/welcome/leave" style="margin-top:.8rem"><button class="primary">🔁 Switch or create a profile</button></form>
   </div>
 </div>
 
@@ -95,13 +44,4 @@
   </details>
 </div>
 
-<div class="card" style="margin-top:1rem">
-  <h2>🔁 Start over</h2>
-  <p class="muted">Saves this profile, then deletes your progress (readings, notes, queue, XP, badges, recommendations) so you can start a new game, possibly with other rules. Your Paperpile library stays. You can load the saved profile again at any time.</p>
-  <form method="post" action="/profile/reset" class="row" data-confirm="Archive this profile and start over?">
-    <input type="text" name="confirm_name" placeholder="type the profile name to confirm" style="max-width:320px">
-    <button class="danger">🔁 Archive and reset</button>
-  </form>
-</div>
-{% endif %}
 {% endblock %}

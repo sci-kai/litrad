@@ -159,10 +159,11 @@ def test_latest_batch_per_week(setup):
         assert latest_batch(session).id == first.id
 
 
-def test_refresh_in_same_week_may_repeat_papers(setup):
+def test_a_new_list_shows_other_papers(setup):
+    # asking again (even the same day) gives papers that were not shown yet
     _, first = build(setup)
     _, second = build(setup)
-    assert dois(first) == dois(second)
+    assert dois(first) and not dois(first) & dois(second)
 
 
 def test_cooldown_hides_last_weeks_papers(setup):
@@ -245,11 +246,11 @@ def test_unread_library_papers_can_be_recommended(setup):
     neighbours = rec.breakdown["evidence"]["relevance"]["neighbours"]
     assert paper_id not in [n["paper_id"] for n in neighbours]
 
-    # an abstract glance keeps it eligible ...
+    # an abstract glance keeps it eligible (after the cooldown) ...
     with Session(engine) as session:
         session.add(Reading(paper_id=paper_id, status=ReadStatus.abstract))
         session.commit()
-    _, items = build(setup)
+    _, items = build(setup, today=TODAY + timedelta(weeks=9))
     assert library_doi in dois(items)
     # ... reading it removes it
     with Session(engine) as session:
@@ -257,5 +258,5 @@ def test_unread_library_papers_can_be_recommended(setup):
         reading.status = ReadStatus.skimmed
         session.add(reading)
         session.commit()
-    _, items = build(setup)
+    _, items = build(setup, today=TODAY + timedelta(weeks=18))
     assert library_doi not in dois(items)

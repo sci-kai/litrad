@@ -1,38 +1,16 @@
 {% extends "base.html" %}
+{% from "macros.html" import topics_editor %}
 {% set active = "settings" %}
 {% block title %}Settings{% endblock %}
 {% block heading %}⚙️ Settings{% endblock %}
 {% block content %}
-<p class="muted">Changes are written to <code>{{ config_path }}</code> (comments are kept; the previous version is saved as <code>{{ config_path.name }}.bak</code>) and apply to the next recommendation batch.
-  What each setting does in detail: <a href="/how">How it works</a>. File paths, API keys and the web server are only editable in the file.</p>
+<p class="muted">These settings belong to your profile <b>{{ profile.name if profile }}</b> and are saved in <code>{{ settings_file }}</code> (comments are kept).
+  They apply to the next recommendations. How they are used: <a href="/recommendations#how">How recommendations are made</a>.
+  Machine settings (APIs, web server, backups) and the defaults for new profiles are in <code>{{ config_path }}</code>; game rules are locked per profile (<a href="/profile">your profile</a>).</p>
 <form method="post" action="/settings" class="grid">
-  <div class="card">
+  <div class="card" id="topics-card">
     <h2>🏷️ Topics</h2>
-    <p class="muted">Each query runs two OpenAlex searches per batch (fresh and landmark papers). Papers found by a topic get a relevance bonus of weight ÷ highest weight.</p>
-    <div id="topics" class="grid" style="gap:.6rem">
-      {% for topic in cfg.topics %}
-      <div class="topic-row grid" style="grid-template-columns: 1fr 110px 2fr auto; gap:.5rem; align-items: start">
-        <input type="text" name="topic_name" value="{{ topic.name }}" placeholder="name">
-        <input type="number" name="topic_weight" value="{{ topic.weight }}" step="0.05" min="0" title="weight">
-        <textarea name="topic_queries" placeholder="one search query per line">{{ topic.queries | join("\n") }}</textarea>
-        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
-      </div>
-      {% endfor %}
-    </div>
-    <template id="topic-template">
-      <div class="topic-row grid" style="grid-template-columns: 1fr 110px 2fr auto; gap:.5rem; align-items: start">
-        <input type="text" name="topic_name" placeholder="name">
-        <input type="number" name="topic_weight" value="1.0" step="0.05" min="0" title="weight">
-        <textarea name="topic_queries" placeholder="one search query per line"></textarea>
-        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
-      </div>
-    </template>
-    <p><button type="button" class="small" id="add-topic">➕ Add topic</button></p>
-    <div class="field">
-      <label for="excluded_terms">Excluded terms</label>
-      <textarea id="excluded_terms" name="excluded_terms" placeholder="one per line">{{ cfg.excluded_terms | join("\n") }}</textarea>
-      <span class="help">Papers whose title or abstract contains one of these (case-insensitive) are never recommended.</span>
-    </div>
+    {{ topics_editor(cfg) }}
   </div>
 
   {% for group in groups %}
@@ -63,7 +41,9 @@
 <div class="card" id="data" style="margin-top:1rem">
   <h2>🗄️ Data &amp; backups</h2>
   <table>
+    <tr><td>Profile folder</td><td><code>{{ settings_file.parent.resolve() }}</code></td></tr>
     <tr><td>Database (your progress lives here)</td><td><code>{{ cfg.paths.database.resolve() }}</code></td></tr>
+    <tr><td>Paperpile export</td><td><code>{{ cfg.paths.bibtex.resolve() }}</code></td></tr>
     <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · automatic every {{ cfg.backup.interval_hours | round(1) }} h while the server runs</td></tr>
     <tr><td>Last backup</td><td>{% if last_backup %}{{ last_backup.isoformat() }}{% else %}<span class="neg">none yet</span>{% endif %}</td></tr>
   </table>
@@ -71,6 +51,6 @@
     <form method="post" action="/backup"><button class="primary">🗄️ Back up now</button></form>
     <a class="button" href="/progress.json">⬇ Download progress (JSON)</a>
   </div>
-  <p class="muted" style="margin-top:.6rem">Tip: point <code>backup.dir</code> to a cloud-synced folder, but keep the database itself local. Restore with <code>litresearch restore</code>; merge progress into another installation with <code>litresearch import-progress</code> (see docs/data-and-backups.md).</p>
+  <p class="muted" style="margin-top:.6rem">Tip: point <code>backup.dir</code> to a cloud-synced folder, but keep the database itself local. Restore with <code>litresearch restore</code>; merge progress into another installation with <code>litresearch import-progress</code> (see docs/documentation.md).</p>
 </div>
 {% endblock %}

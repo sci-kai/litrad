@@ -136,12 +136,15 @@ class BackupResult:
     removed: list[Path]
 
 
-def run_backup(cfg: Config, session: Session, moment: datetime | None = None) -> BackupResult:
+def run_backup(
+    cfg: Config, session: Session, moment: datetime | None = None, settings: dict | None = None
+) -> BackupResult:
     moment = moment or now()
     directory = cfg.backup.dir
     snap = snapshot(cfg.paths.database, directory / f"{SNAPSHOT_PREFIX}{stamp(moment)}.sqlite")
     progress = directory / f"{PROGRESS_PREFIX}{stamp(moment)}.json"
-    atomic_write_text(progress, json.dumps(export_progress(session, moment), indent=1))
+    data = export_progress(session, moment, settings)
+    atomic_write_text(progress, json.dumps(data, indent=1))
     return BackupResult(snap, progress, rotate(directory, cfg.backup.keep))
 
 
@@ -222,7 +225,9 @@ PAPER_FIELDS = (
 )
 
 
-def export_progress(session: Session, moment: datetime | None = None) -> dict:
+def export_progress(
+    session: Session, moment: datetime | None = None, settings: dict | None = None
+) -> dict:
     """The whole profile: rules, progress and recommendations, independent of ids."""
     readings = session.exec(select(Reading)).all()
     events = session.exec(select(StatusEvent).order_by(StatusEvent.at, StatusEvent.id)).all()
@@ -323,6 +328,7 @@ def export_progress(session: Session, moment: datetime | None = None) -> dict:
             }
             for e in xp
         ],
+        "settings": settings or {},
         "achievements": [
             {"code": a.code, "unlocked_at": _iso(a.unlocked_at)} for a in achievements
         ],
@@ -676,9 +682,14 @@ def slug(text: str) -> str:
     return cleaned[:40] or "profile"
 
 
-def save_profile_file(session: Session, directory: Path, moment: datetime | None = None) -> Path:
+def save_profile_file(
+    session: Session,
+    directory: Path,
+    moment: datetime | None = None,
+    settings: dict | None = None,
+) -> Path:
     moment = moment or now()
-    data = export_progress(session, moment)
+    data = export_progress(session, moment, settings)
     name = (data["profile"] or {}).get("name", "no-profile")
     path = directory / f"{PROFILE_PREFIX}{slug(name)}_{stamp(moment)}.json"
     atomic_write_text(path, json.dumps(data, indent=1))
@@ -752,25 +763,62 @@ def summarize(data: dict, cfg: Config, label: str = "") -> dict:
 # --- automatic backups while the web UI runs ---------------------------------------------
 
 
-def backup_loop(config_path: Path, stop, log) -> None:
-    """Back up now and then every ``backup.interval_hours`` until ``stop`` is set."""
-    from litresearch.config import load_config
+def backup_targets(base: Config) -> list[tuple[str, Config]]:
+    """Every profile, plus the data from before profiles existed (until adopted)."""
+    from litresearch import profiles
+
+    targets = [
+        (info.slug, profiles.profile_config(base, info.slug))
+        for info in profiles.list_profiles(base)
+    ]
+    if (
+        base.paths.database.exists()
+        and not (base.paths.profiles_dir / profiles.LEGACY_MARKER).exists()
+    ):
+        targets.append(("(no profile)", base))
+    return targets
+
+
+def backup_all(base: Config, log=print) -> int:
+    """Back up every profile; returns the number of failures."""
     from litresearch.db import init_db
 
-    while not stop.is_set():
-        cfg = load_config(config_path)
-        if cfg.backup.interval_hours <= 0:
-            return
+    failures = 0
+    for label, cfg in backup_targets(base):
         engine = init_db(cfg.paths.database)
         try:
             with Session(engine) as session:
-                result = run_backup(cfg, session)
-            log(f"backup written: {result.snapshot.name}")
+                settings = None if label == "(no profile)" else profile_settings(cfg)
+                result = run_backup(cfg, session, settings=settings)
+            log(f"backup written: {label}: {result.snapshot.name}")
         except Exception as error:  # a failed backup must never stop the server
-            log(f"WARNING: backup failed: {error}")
+            failures += 1
+            log(f"WARNING: backup of {label} failed: {error}")
         finally:
             engine.dispose()
-        stop.wait(cfg.backup.interval_hours * 3600)
+    return failures
+
+
+def profile_settings(cfg: Config) -> dict:
+    """The settings.yaml of the profile that ``cfg`` belongs to (empty if none)."""
+    import yaml
+
+    path = cfg.paths.database.parent / "settings.yaml"
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def backup_loop(config_path: Path, stop, log) -> None:
+    """Back up all profiles now and then every ``backup.interval_hours``."""
+    from litresearch.config import load_config
+
+    while not stop.is_set():
+        base = load_config(config_path)
+        if base.backup.interval_hours <= 0:
+            return
+        backup_all(base, log)
+        stop.wait(base.backup.interval_hours * 3600)
 
 
 def start_backup_thread(config_path: Path, log=print):

@@ -2,10 +2,10 @@
 {% from "macros.html" import paper_meta, read_form with context %}
 {% set active = "dashboard" %}
 {% block title %}Dashboard{% endblock %}
-{% block heading %}Good to see you 👋{% endblock %}
+{% block heading %}Good to see you, {{ profile.name if profile else "reader" }} 👋{% endblock %}
 {% block content %}
-{% if not profile %}
-<div class="notice">🎮 <b>Set up your game:</b> choose your rewards, penalty, levels and badges before you start. <a href="/profile">Start your profile →</a> (If you log a reading first, the game starts with your configured defaults.)</div>
+{% if header.reminder %}
+<div class="notice">✨ {% if header.since_batch is none %}You have no recommendations yet.{% else %}Your last recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">Get new recommendations →</a></div>
 {% endif %}
 {% if waiting is not none and waiting >= nudge_days %}
 <div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>. Read it today, or drop it if it no longer matters.</div>
@@ -29,8 +29,8 @@
     <p class="muted" style="margin-top:.6rem">Reading your top paper first earns the 🐸 frog bonus: +50 % XP.</p>
     {% else %}
     <h2>📭 Your queue is empty</h2>
-    <p>Pick one of this week's recommendations or add a paper you want to read.</p>
-    <a class="button primary" href="/recommendations">✨ See this week's picks</a>
+    <p>Pick one of your recommendations or add a paper you want to read.</p>
+    <a class="button primary" href="/recommendations">✨ See your recommendations</a>
     <a class="button" href="/library">🔍 Add a paper</a>
     {% endif %}
   </div>
@@ -50,7 +50,8 @@
 
 <div class="grid two" style="margin-top:1rem">
   <div class="card">
-    <div class="head"><h2>✨ This week's picks</h2><a href="/recommendations">all details →</a></div>
+    <div class="head"><h2>✨ Latest recommendations</h2><a href="/recommendations">all details →</a></div>
+    {% if batch %}<p class="muted" style="margin:0 0 .4rem">from {{ batch.created_at.date().isoformat() }}</p>{% endif %}
     {% if recs %}
     {% for rec, paper in recs %}
     <div class="row" style="margin:.35rem 0; flex-wrap: nowrap">
@@ -61,9 +62,7 @@
     {% endfor %}
     {% else %}
     <p>No recommendations yet.</p>
-    <form method="post" action="/recommendations/build" data-loading="Searching OpenAlex and Semantic Scholar… this takes about a minute.">
-      <button class="primary">✨ Build this week's list</button>
-    </form>
+    <a class="button primary" href="/recommendations">✨ Get recommendations</a>
     {% endif %}
   </div>
 
@@ -89,4 +88,9 @@
     {% endfor %}
   </div>
 </div>
+
+<h2 id="weekly" style="margin-top:1.6rem">🗓️ Weekly reports</h2>
+<p class="muted">One report card per week (Monday to Sunday). Grades: <b>S</b> quest done with a thorough read · <b>A</b> quest done · <b>B</b> half way · <b>C</b> started · <b>–</b> rest week.
+  Showing {{ summaries | length }} weeks · <a href="/?weeks={{ weeks + 8 }}#weekly">show more</a></p>
+{% include "_weekly.html" %}
 {% endblock %}

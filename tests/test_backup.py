@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
+from conftest import enter_profile
 from litresearch.backup import (
     BackupError,
     atomic_write_text,
@@ -396,7 +397,7 @@ def test_backup_loop_backs_up_and_survives_errors(tmp_path, monkeypatch):
     monkeypatch.setattr("litresearch.backup.run_backup", broken)
     messages.clear()
     backup_loop(path, OneShot(), messages.append)
-    assert messages == ["WARNING: backup failed: disk full"]
+    assert messages == ["WARNING: backup of (no profile) failed: disk full"]
     assert not stop.is_set()
 
 
@@ -475,6 +476,7 @@ def test_web_backup_and_download(tmp_path):
     path = write_config(tmp_path)
     init_db(tmp_path / "db.sqlite").dispose()
     client = TestClient(create_app(path))
+    enter_profile(client, "Ada", adopt=False)
     page = client.get("/settings").text
     assert "Data &amp; backups" in page and "none yet" in page
     response = client.post("/backup", follow_redirects=False)
@@ -486,4 +488,7 @@ def test_web_backup_and_download(tmp_path):
         "attachment; filename=litresearch_progress_"
     )
     assert download.json()["format"] == "litresearch-progress"
+    assert download.json()["settings"]["topics"] == []  # the profile's settings travel along
+    # backups of a profile go to its own subfolder
+    assert list((tmp_path / "backups" / "ada").glob("litresearch_*.sqlite"))
     client.close()

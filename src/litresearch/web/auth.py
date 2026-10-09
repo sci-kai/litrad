@@ -80,3 +80,8 @@ def check_session(token: str | None, secret: bytes, password_hash: str, now=None
 def _sign(secret: bytes, password_hash: str, expires: int) -> str:
     message = f"{expires}:{password_hash}".encode()
     return hmac.new(secret, message, hashlib.sha256).hexdigest()
+
+
+def sign_value(secret: bytes, value: str) -> str:
+    """HMAC signature for small cookie values (e.g. the chosen profile)."""
+    return hmac.new(secret, value.encode(), hashlib.sha256).hexdigest()[:32]

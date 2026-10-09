@@ -24,27 +24,29 @@
     <div class="brand"><span class="logo">📡</span> litresearch</div>
     <nav class="nav">
       <a href="/" class="{{ 'active' if active == 'dashboard' }}"><span class="icon">🏠</span>Dashboard</a>
-      <a href="/recommendations" class="{{ 'active' if active == 'recommendations' }}"><span class="icon">✨</span>This week</a>
-      <a href="/queue" class="{{ 'active' if active == 'queue' }}"><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
-      <a href="/paperpile" class="{{ 'active' if active == 'paperpile' }}"><span class="icon">📁</span>Paperpile</a>
-      <a href="/library" class="{{ 'active' if active == 'library' }}"><span class="icon">🔍</span>Find &amp; add</a>
-      <a href="/progress" class="{{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress</a>
-      <a href="/profile" class="{{ 'active' if active == 'profile' }}"><span class="icon">🎮</span>Profile{% if not profile %}<span class="count">start</span>{% endif %}</a>
-      <a href="/weekly" class="{{ 'active' if active == 'weekly' }}"><span class="icon">🗓️</span>Weekly reports</a>
-      <a href="/ledger" class="{{ 'active' if active == 'ledger' }}"><span class="icon">💰</span>XP ledger</a>
-      <a href="/how" class="{{ 'active' if active == 'how' }}"><span class="icon">🔎</span>How it works</a>
+      <div class="group">Reading</div>
+      <a href="/queue" class="sub {{ 'active' if active == 'queue' }}"><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
+      <a href="/recommendations" class="sub {{ 'active' if active == 'recommendations' }}"><span class="icon">✨</span>Recommendations{% if header.reminder %}<span class="count" title="time for new recommendations">⏰</span>{% endif %}</a>
+      <div class="group">Progress</div>
+      <a href="/progress" class="sub {{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress &amp; XP</a>
+      <div class="group">Library</div>
+      <a href="/paperpile" class="sub {{ 'active' if active == 'paperpile' }}"><span class="icon">📁</span>Paperpile library</a>
+      <a href="/library" class="sub {{ 'active' if active == 'library' }}"><span class="icon">🔍</span>Find &amp; add</a>
+      <div class="group"></div>
       <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="icon">⚙️</span>Settings</a>
     </nav>
     <div class="footer">v{{ version }} · keys: <code>n</code> next, <code>r</code> recs, <code>p</code> progress
-      {% if cfg.web.password_hash %}<form method="post" action="/logout" style="margin-top:.5rem"><button class="small ghost">🔒 Log out</button></form>{% endif %}
+      <form method="post" action="/welcome/leave" style="margin-top:.5rem"><button class="small ghost">🔁 Switch profile</button></form>
+      {% if cfg.web.password_hash %}<form method="post" action="/logout"><button class="small ghost">🔒 Log out</button></form>{% endif %}
     </div>
   </aside>
   <main class="main">
     <div class="topbar">
       <h1>{% block heading %}{% endblock %}</h1>
-      <a class="player" href="/progress" title="{{ header.xp }} XP">
+      <a class="player" href="/profile" title="Profile {{ profile.name if profile else '' }}: rules, save, compare, switch">
         <span class="avatar">{{ header.level.icon }}</span>
         <span>
+          <span class="who-name">{{ profile.name if profile else "Profile" }}</span><br>
           <span class="lvl">Lv {{ header.level.number }} · {{ header.level.title }}</span><br>
           <span class="xpbar"><span style="width: {{ (header.progress * 100) | round(1) }}%"></span></span>
         </span>

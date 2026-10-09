@@ -8,8 +8,15 @@ from pathlib import Path
 import typer
 from sqlmodel import Session, select
 
-from litresearch.cli import ConfigOpt, app, console, make_http, paper_line, paper_link
-from litresearch.config import load_config
+from litresearch.cli import (
+    ConfigOpt,
+    app,
+    console,
+    load_cfg,
+    make_http,
+    paper_line,
+    paper_link,
+)
 from litresearch.db import Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
 from litresearch.game import (
     Award,
@@ -56,7 +63,7 @@ class Level(StrEnum):
 
 @contextmanager
 def open_db(config: Path):
-    cfg = load_config(config)
+    cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:

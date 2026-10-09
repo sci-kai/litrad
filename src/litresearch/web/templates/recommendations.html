@@ -1,32 +1,55 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view with context %}
+{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view, topics_editor with context %}
 {% set active = "recommendations" %}
-{% block title %}This week{% endblock %}
+{% block title %}Recommendations{% endblock %}
 {% block heading %}✨ Recommendations{% endblock %}
 {% block content %}
+<nav class="tabs" aria-label="Reading">
+  <a href="/queue">📚 Reading queue</a>
+  <a href="/recommendations" class="active">✨ Recommendations</a>
+</nav>
+{% set loading = "Searching OpenAlex and Semantic Scholar… this takes about a minute." %}
+{% if onboarding %}
+<div class="card onboarding" id="topics">
+  <h2>🏷️ What are you interested in?</h2>
+  <p>Recommendations combine <b>similarity to your Paperpile library</b> with <b>topics</b> you name here. Each topic has search queries for OpenAlex
+    (e.g. <i>clonal evolution cancer</i>) and a weight: topics with a higher weight count more. The topics belong to your profile
+    <b>{{ profile.name if profile }}</b>; change them later on this page or in <a href="/settings#topics-card">Settings</a>.</p>
+  <form method="post" action="/recommendations/topics">
+    {{ topics_editor(cfg) }}
+    <div class="row"><button class="primary">💾 Save topics</button></div>
+  </form>
+  <form method="post" action="/recommendations/topics/skip" style="margin-top:.6rem">
+    <button class="ghost small">Skip: use my library only</button>
+  </form>
+</div>
+{% else %}
 <div class="card" style="margin-bottom:1rem">
   <div class="row" style="justify-content: space-between">
     <div>
       {% if batch %}
-      <b>Week of {{ batch.week_start.isoformat() }}</b>
-      <span class="muted">· built {{ batch.created_at.isoformat() }} · {{ batch.n_candidates }} candidates checked</span>
+      <b>Recommendations from {{ batch.created_at.date().isoformat() }}</b>
+      <span class="muted">· {{ batch.created_at.strftime("%H:%M") }} · {{ batch.n_candidates }} candidates checked</span>
       {% else %}<b>No recommendations yet.</b>{% endif %}
+      {% if header.reminder and batches %}<br><span class="chip queued">⏰ {{ header.since_batch }} days old: time for new ones</span>{% endif %}
     </div>
     <div class="row">
       {% if batches | length > 1 %}
       <form method="get" class="row">
-        <select name="batch" onchange="this.form.submit()">
-          {% for b in batches %}<option value="{{ b.id }}" {{ "selected" if batch and b.id == batch.id }}>{{ b.week_start.isoformat() }} (#{{ b.id }})</option>{% endfor %}
+        <select name="batch" onchange="this.form.submit()" aria-label="earlier recommendations">
+          {% for b in batches %}<option value="{{ b.id }}" {{ "selected" if batch and b.id == batch.id }}>{{ b.created_at.date().isoformat() }} (#{{ b.id }})</option>{% endfor %}
         </select>
       </form>
       {% endif %}
-      <form method="post" action="/recommendations/build" data-loading="Searching OpenAlex and Semantic Scholar… this takes about a minute.">
-        <button class="{{ 'primary' if not this_week_has_batch }}">{{ "🔄 Rebuild with current settings" if this_week_has_batch else "✨ Build this week's list" }}</button>
+      <form method="post" action="/recommendations/build" data-loading="{{ loading }}">
+        <button class="{{ 'primary' if header.reminder or not batch }}">✨ Get new recommendations</button>
       </form>
     </div>
   </div>
   {% for warning in (batch.warnings if batch else []) %}<div class="notice warn" style="margin:.6rem 0 0">⚠️ {{ warning }}</div>{% endfor %}
-  {% if this_week_has_batch %}<p class="muted" style="margin:.5rem 0 0">Rebuilding the same day reuses cached searches, so it is quick and costs no extra API budget.</p>{% endif %}
+  <p class="muted" style="margin:.5rem 0 0">Ask for new recommendations whenever you like.
+    {% if cfg.selection.reminder_days %}You are reminded {{ cfg.selection.reminder_days }} days after the last list{% else %}Reminders are off{% endif %}
+    (<a href="/settings">change</a>). Papers you did not pick may return after {{ cfg.selection.cooldown_weeks }} weeks.</p>
 </div>
 
 {% if queue_full %}<div class="notice warn">📚 Your queue is full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}). Read or drop a paper before picking new ones.</div>{% endif %}
@@ -71,7 +94,9 @@
       {{ evidence_tree(rec, paper, batch) }}
     </div>
     {% endfor %}
-    {% if batch and not recs %}<div class="card">No eligible papers this time. Check your topics in <a href="/settings">Settings</a>.</div>{% endif %}
+    {% if batch and not recs %}<div class="card">No eligible papers this time. Check <a href="?topics=1#topics">your topics</a>.</div>{% endif %}
+    {% if not batch %}<div class="card"><h2>✨ Ready when you are</h2><p>Get your first list: up to {{ cfg.selection.n_recommendations }} papers, ranked by score. Then pick the ones you want to read for your queue.</p>
+      <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get recommendations</button></form></div>{% endif %}
   </div>
 
   <div class="grid" style="position: sticky; top: 1rem">
@@ -80,7 +105,20 @@
       {% if batch and batch.funnel %}{{ funnel_view(batch.funnel) }}
       <p class="muted" style="margin-top:.6rem">Library: {{ batch.funnel.library_papers }} papers, {{ batch.funnel.library_embedded }} with SPECTER2 embeddings.</p>
       {% else %}<p class="muted">Funnel data is available for batches built from now on.</p>{% endif %}
-      <a href="/how">Full criteria →</a>
+      <a href="#how" data-open="how">How recommendations are made →</a>
+    </div>
+    <div class="card" id="topics">
+      <div class="head"><h3>🏷️ Your topics</h3></div>
+      {% for t in cfg.topics %}<span class="chip" title="{{ t.queries | join(' · ') }}">{{ t.name }} <small>{{ t.weight }}</small></span>
+      {% else %}<p class="muted">No topics: recommendations use your library only.</p>{% endfor %}
+      {% if cfg.excluded_terms %}<p class="muted" style="margin:.4rem 0 0">excluded: {{ cfg.excluded_terms | join(", ") }}</p>{% endif %}
+      <details style="margin-top:.6rem" {{ "open" if edit_topics }}>
+        <summary>✏️ Edit topics</summary>
+        <form method="post" action="/recommendations/topics" style="margin-top:.6rem">
+          {{ topics_editor(cfg) }}
+          <button class="primary small">💾 Save topics</button>
+        </form>
+      </details>
     </div>
     {% if batch and batch.params %}
     <div class="card">
@@ -97,4 +135,11 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
+
+<details class="card how" id="how" style="margin-top:1rem">
+  <summary><h2 style="display:inline">🔎 How recommendations are made</h2> <small class="muted">the exact rules with your current settings</small></summary>
+  <p class="muted">Each recommendation also has an <b>evidence tree</b> with the numbers for that paper. The full documentation is in <code>docs/documentation.md</code>.</p>
+  {% include "_how_recommend.html" %}
+</details>
 {% endblock %}

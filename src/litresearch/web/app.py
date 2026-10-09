@@ -5,7 +5,9 @@ rejected so that other websites cannot trigger actions in the background.
 """
 
 import asyncio
+import contextvars
 import csv
+import hmac
 import io
 import json
 import os
@@ -23,13 +25,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
-from litresearch import __version__
+from litresearch import __version__, profiles
 from litresearch.backup import (
     BackupError,
     export_progress,
     latest_backup,
-    load_profile,
-    reset_progress,
+    profile_settings,
     run_backup,
     save_profile_file,
     saved_files,
@@ -64,7 +65,6 @@ from litresearch.game import (
     reading_impact_factor,
     stats,
     streak_multiplier,
-    total_xp,
     week_progress,
     weekly_summaries,
 )
@@ -73,7 +73,8 @@ from litresearch.ingest.check import FIELDS as BIB_FIELDS
 from litresearch.ingest.check import INSTRUCTIONS as BIB_INSTRUCTIONS
 from litresearch.ingest.check import check_bibtex
 from litresearch.papers import upsert_work
-from litresearch.profile import ProfileError, active_rules, get_profile, start_profile
+from litresearch.profile import ProfileError, active_rules, get_profile
+from litresearch.profiles import ProfilesError
 from litresearch.reading import (
     ReadingError,
     add_note,
@@ -86,7 +87,12 @@ from litresearch.reading import (
     record_reading,
     source_of,
 )
-from litresearch.recommend.engine import batch_items, build_recommendations, latest_batch
+from litresearch.recommend.engine import (
+    batch_items,
+    build_recommendations,
+    days_since_last_batch,
+    latest_batch,
+)
 from litresearch.sources.http import HttpError
 from litresearch.sources.openalex import OpenAlex
 from litresearch.web.auth import (
@@ -95,6 +101,7 @@ from litresearch.web.auth import (
     check_session,
     load_secret,
     make_session,
+    sign_value,
     verify_password,
 )
 from litresearch.web.settings import (
@@ -104,10 +111,15 @@ from litresearch.web.settings import (
     levels_text,
     parse_form,
     parse_rules_form,
-    save_settings,
+    parse_topics,
 )
 
 HERE = Path(__file__).parent
+PROFILE_COOKIE = "litresearch_profile"
+# the profile of the current request (set by the middleware)
+CURRENT_PROFILE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "litresearch_profile", default=None
+)
 QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
 MAX_UPLOAD = 50 * 2**20  # bytes
@@ -215,28 +227,67 @@ def create_app(config_path: Path) -> FastAPI:
 
     env.globals["paper_link"] = paper_link
 
+    def base_config():
+        return load_config(config_path)
+
+    def current_cfg():
+        """Configuration of the profile chosen for this request."""
+        slug = CURRENT_PROFILE.get()
+        if slug is None:
+            raise RuntimeError("no profile selected")
+        return profiles.profile_config(base_config(), slug)
+
+    def save_profile_settings(updates: dict):
+        """Settings belong to the profile (its settings.yaml), not to config.yaml."""
+        weights = (updates.get("selection") or {}).get("weights") or {}
+        if weights and sum(weights.values()) <= 0:
+            raise SettingsError("At least one score weight must be above 0")
+        return profiles.write_overlay(base_config(), CURRENT_PROFILE.get(), updates)
+
     def open_session():
-        cfg = load_config(config_path)
+        cfg = current_cfg()
         engine = init_db(cfg.paths.database)
         return cfg, engine
 
     def secret() -> bytes:
-        cfg = load_config(config_path)
-        return load_secret(cfg.paths.database.parent / "web_secret")
+        return load_secret(base_config().paths.database.parent / "web_secret")
+
+    def profile_cookie(slug: str) -> str:
+        return f"{slug}.{sign_value(secret(), 'profile:' + slug)}"
+
+    def profile_from_cookie(request: Request) -> str | None:
+        slug, _, signature = (request.cookies.get(PROFILE_COOKIE) or "").partition(".")
+        if not slug or not hmac.compare_digest(signature, sign_value(secret(), "profile:" + slug)):
+            return None
+        return slug if profiles.exists(base_config(), slug) else None
 
     @app.middleware("http")
     async def require_login(request: Request, call_next):
-        """With web.password_hash set, every page needs a valid session cookie."""
-        password_hash = load_config(config_path).web.password_hash
+        """Password (for network access) first, then a chosen profile."""
+        base = base_config()
         path = request.url.path
-        if not password_hash or path == "/login" or path.startswith("/static/"):
+        open_paths = path in ("/login", "/logout") or path.startswith("/static/")
+        password_hash = base.web.password_hash
+        if password_hash and not open_paths:
+            if not check_session(request.cookies.get(COOKIE), secret(), password_hash):
+                if request.method == "GET":
+                    target = path + (f"?{request.url.query}" if request.url.query else "")
+                    return RedirectResponse(
+                        f"/login?{urlencode({'next': target})}", status_code=303
+                    )
+                return PlainTextResponse("Login required", status_code=401)
+        if open_paths or path == "/welcome" or path.startswith("/welcome/"):
             return await call_next(request)
-        if check_session(request.cookies.get(COOKIE), secret(), password_hash):
+        slug = profile_from_cookie(request)
+        if slug is None:
+            if request.method == "GET":
+                return RedirectResponse("/welcome", status_code=303)
+            return PlainTextResponse("Choose a profile first", status_code=401)
+        token = CURRENT_PROFILE.set(slug)
+        try:
             return await call_next(request)
-        if request.method == "GET":
-            target = path + (f"?{request.url.query}" if request.url.query else "")
-            return RedirectResponse(f"/login?{urlencode({'next': target})}", status_code=303)
-        return PlainTextResponse("Login required", status_code=401)
+        finally:
+            CURRENT_PROFILE.reset(token)
 
     @app.middleware("http")
     async def same_origin_only(request: Request, call_next):
@@ -251,6 +302,7 @@ def create_app(config_path: Path) -> FastAPI:
         today = date.today()
         rules = active_rules(session, cfg)
         head = header_stats(session, today, rules)
+        since = days_since_last_batch(session, today)
         context.update(
             request=request,
             cfg=cfg,
@@ -265,6 +317,10 @@ def create_app(config_path: Path) -> FastAPI:
                 "progress": head["level"].progress(head["xp"]),
                 "streak": head["streak"],
                 "queue": len(queue_items(session)),
+                "since_batch": since,
+                # time to ask for new recommendations
+                "reminder": bool(cfg.selection.reminder_days)
+                and (since is None or since >= cfg.selection.reminder_days),
             },
             celebration=celebrations.pop(token),
         )
@@ -317,10 +373,121 @@ def create_app(config_path: Path) -> FastAPI:
         response.delete_cookie(COOKIE)
         return response
 
+    # --- profile selection (shown before anything else) -----------------------------
+
+    def enter(slug: str, payload: dict | None = None, url: str = "/") -> RedirectResponse:
+        response = back(url, payload)
+        response.set_cookie(
+            PROFILE_COOKIE, profile_cookie(slug), max_age=365 * 86400, httponly=True, samesite="lax"
+        )
+        profiles.set_current(base_config(), slug)  # the CLI follows the last choice
+        return response
+
+    def all_saved_files(base) -> list[Path]:
+        root = base.backup.dir
+        files = saved_files(root)
+        if root.exists():
+            for sub in sorted(p for p in root.iterdir() if p.is_dir()):
+                files += saved_files(sub)
+        return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)[:40]
+
+    @app.get("/welcome", response_class=HTMLResponse)
+    def welcome(request: Request):
+        base = base_config()
+        return templates.TemplateResponse(
+            request,
+            "welcome.html",
+            {
+                "profiles": profiles.list_profiles(base),
+                "legacy": profiles.legacy_available(base),
+                "saves": [(p, p.relative_to(base.backup.dir)) for p in all_saved_files(base)],
+                "rule_groups": RULE_GROUPS,
+                "form_rules": base.game,
+                "levels_text": levels_text(base.game),
+                "celebration": celebrations.pop(request.query_params.get("c")),
+                "current": profile_from_cookie(request),
+            },
+        )
+
+    @app.post("/welcome/select")
+    def welcome_select(slug: str = Form(...)):
+        if not profiles.exists(base_config(), slug):
+            return error("/welcome", "That profile does not exist")
+        return enter(slug)
+
+    async def _new_profile(request: Request, adopt: bool):
+        form = await request.form()
+        base = base_config()
+        try:
+            rules = parse_rules_form(dict(form), base.game)
+            name = str(form.get("name", ""))
+            if adopt:
+                slug = profiles.adopt_legacy(base, name, rules)
+            else:
+                slug = profiles.create_profile(base, name, rules)
+        except (SettingsError, ProfilesError, ProfileError, BackupError) as exc:
+            return error("/welcome", f"Not created: {exc}")
+        info = profiles.describe(base, slug)
+        return enter(
+            slug,
+            {
+                "kind": "success",
+                "events": [],
+                "points": 0,
+                "sparkle": True,
+                "message": f"Welcome, {info.name}! Your rules are locked "
+                f"(fingerprint {info.fingerprint}).",
+            },
+        )
+
+    @app.post("/welcome/create")
+    async def welcome_create(request: Request):
+        return await _new_profile(request, adopt=False)
+
+    @app.post("/welcome/adopt")
+    async def welcome_adopt(request: Request):
+        return await _new_profile(request, adopt=True)
+
+    @app.post("/welcome/load")
+    async def welcome_load(request: Request):
+        form = await request.form()
+        base = base_config()
+        try:
+            uploads = await read_upload(request)
+            saved = str(form.get("saved", "")).strip()
+            if saved:
+                path = next((f for f in all_saved_files(base) if f.name == saved), None)
+                if path is None:
+                    raise BackupError("Saved file not found")
+                uploads = [{"name": saved, "data": json.loads(path.read_text("utf-8"))}]
+            if not uploads:
+                raise BackupError("Choose a saved profile or upload a file")
+            name = str(form.get("name", "")).strip() or None
+            slug = profiles.import_profile_file(base, uploads[0]["data"], name)
+        except (BackupError, ProfilesError, json.JSONDecodeError) as exc:
+            return error("/welcome", f"Not loaded: {exc}")
+        info = profiles.describe(base, slug)
+        return enter(
+            slug,
+            {
+                "kind": "success",
+                "events": [],
+                "points": 0,
+                "sparkle": True,
+                "message": f"Loaded profile {info.name} ({info.xp} XP).",
+            },
+        )
+
+    @app.post("/welcome/leave")
+    def welcome_leave():
+        response = RedirectResponse("/welcome", status_code=303)
+        response.delete_cookie(PROFILE_COOKIE)
+        return response
+
     # --- pages -------------------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    def dashboard(request: Request):
+    def dashboard(request: Request, weeks: int = 4):
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -349,6 +516,10 @@ def create_app(config_path: Path) -> FastAPI:
                     nudge_days=QUEUE_NUDGE_DAYS,
                     stats=figures,
                     multiplier=streak_multiplier(max(figures["streak"], 1), rules),
+                    summaries=weekly_summaries(
+                        session, rules, today, weeks=min(max(weeks, 1), 104)
+                    ),
+                    weeks=weeks,
                 )
         finally:
             engine.dispose()
@@ -365,7 +536,7 @@ def create_app(config_path: Path) -> FastAPI:
         return status
 
     @app.get("/recommendations", response_class=HTMLResponse)
-    def recommendations(request: Request, batch: int | None = None):
+    def recommendations(request: Request, batch: int | None = None, topics: bool = False):
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -388,10 +559,57 @@ def create_app(config_path: Path) -> FastAPI:
                     recs=recs,
                     rec_status=recommendation_status(session, recs),
                     queue_full=len(queue_items(session)) >= cfg.queue.max_size,
-                    this_week_has_batch=latest_batch(session, date.today()) is not None,
+                    # first visit: ask for the topics of interest
+                    onboarding=not cfg.topics and not topics_onboarded(),
+                    edit_topics=topics,
                 )
         finally:
             engine.dispose()
+
+    def topics_onboarded() -> bool:
+        info = profiles.meta(base_config(), CURRENT_PROFILE.get())
+        return bool((info.get("onboarding") or {}).get("topics_done"))
+
+    @app.post("/recommendations/topics")
+    async def topics_save(request: Request):
+        form = await request.form()
+        data = {"excluded_terms": form.get("excluded_terms", "")}
+        for key in ("topic_name", "topic_weight", "topic_queries"):
+            data[key] = form.getlist(key)
+        try:
+            updates = parse_topics(data)
+            profiles.write_overlay(
+                base_config(),
+                CURRENT_PROFILE.get(),
+                {**updates, "onboarding": {"topics_done": True}},
+            )
+        except (SettingsError, ProfilesError, ValueError) as exc:
+            return error("/recommendations?topics=1#topics", f"Not saved: {exc}")
+        n = len(updates["topics"])
+        return back(
+            "/recommendations",
+            {
+                "kind": "success",
+                "message": f"Saved {n} topic{'s' if n != 1 else ''} for this profile.",
+                "events": [],
+                "points": 0,
+            },
+        )
+
+    @app.post("/recommendations/topics/skip")
+    def topics_skip():
+        profiles.write_overlay(
+            base_config(), CURRENT_PROFILE.get(), {"onboarding": {"topics_done": True}}
+        )
+        return back(
+            "/recommendations",
+            {
+                "kind": "info",
+                "message": "No topics: recommendations come from papers similar to your library.",
+                "events": [],
+                "points": 0,
+            },
+        )
 
     @app.post("/recommendations/build")
     def build(s2: bool = Form(True)):
@@ -509,8 +727,28 @@ def create_app(config_path: Path) -> FastAPI:
         finally:
             engine.dispose()
 
+    def ledger_context(session: Session, kind: str, page: int) -> dict:
+        page = max(page, 1)
+        rows, total = ledger(session, kind or None, LEDGER_PAGE, (page - 1) * LEDGER_PAGE)
+        all_rows, _ = ledger(session, limit=10**9)
+        totals: dict[str, list[int]] = {}
+        for row in all_rows:
+            entry = totals.setdefault(row["event"].kind, [0, 0])
+            entry[0] += 1
+            entry[1] += row["event"].points
+        return {
+            "rows": rows,
+            "total": total,
+            "kind": kind,
+            "page": page,
+            "pages": max(1, -(-total // LEDGER_PAGE)),
+            "totals": dict(sorted(totals.items(), key=lambda kv: -kv[1][1])),
+            "earned": sum(r["event"].points for r in all_rows if r["event"].points > 0),
+            "lost": sum(r["event"].points for r in all_rows if r["event"].points < 0),
+        }
+
     @app.get("/progress", response_class=HTMLResponse)
-    def progress_page(request: Request):
+    def progress_page(request: Request, kind: str = "", page: int = 1):
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -518,6 +756,7 @@ def create_app(config_path: Path) -> FastAPI:
                 rules = active_rules(session, cfg)
                 s = stats(session, today, rules)
                 summaries = weekly_summaries(session, rules, today, weeks=12)
+                badges = badge_progress(session, today, rules)
                 return render(
                     request,
                     "progress.html",
@@ -525,60 +764,35 @@ def create_app(config_path: Path) -> FastAPI:
                     cfg,
                     stats=s,
                     level=level_for(s["xp"], rules),
-                    badges=badge_progress(session, today, rules),
+                    badges=badges,
+                    # badges with the largest share of their target reached
+                    closest=sorted(
+                        (b for b in badges if not b[2]), key=lambda b: -b[1] / b[0].target
+                    )[:6],
                     bests=personal_bests(session, rules, today),
                     calendar=reading_calendar(session, today, weeks=26),
                     rif=reading_impact_factor(session, today),
                     weeks=list(reversed(summaries)),
                     multiplier=streak_multiplier(max(s["streak"], 1), rules),
                     hints=next_goals(session, rules, today),
+                    **ledger_context(session, kind, page),
                 )
         finally:
             engine.dispose()
 
-    @app.get("/weekly", response_class=HTMLResponse)
-    def weekly_page(request: Request, weeks: int = 8):
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                summaries = weekly_summaries(
-                    session, active_rules(session, cfg), date.today(), weeks=min(weeks, 104)
-                )
-                return render(
-                    request, "weekly.html", session, cfg, summaries=summaries, weeks=weeks
-                )
-        finally:
-            engine.dispose()
+    # pages that were merged into others; old links and bookmarks keep working
+    @app.get("/weekly")
+    def weekly_page(weeks: int = 8):
+        return RedirectResponse(f"/?weeks={min(max(weeks, 1), 104)}#weekly", status_code=307)
 
-    @app.get("/ledger", response_class=HTMLResponse)
-    def ledger_page(request: Request, kind: str = "", page: int = 1):
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                page = max(page, 1)
-                rows, total = ledger(session, kind or None, LEDGER_PAGE, (page - 1) * LEDGER_PAGE)
-                all_rows, _ = ledger(session, limit=10**9)
-                totals: dict[str, list[int]] = {}
-                for row in all_rows:
-                    entry = totals.setdefault(row["event"].kind, [0, 0])
-                    entry[0] += 1
-                    entry[1] += row["event"].points
-                return render(
-                    request,
-                    "ledger.html",
-                    session,
-                    cfg,
-                    rows=rows,
-                    total=total,
-                    kind=kind,
-                    page=page,
-                    pages=max(1, -(-total // LEDGER_PAGE)),
-                    totals=dict(sorted(totals.items(), key=lambda kv: -kv[1][1])),
-                    earned=sum(r["event"].points for r in all_rows if r["event"].points > 0),
-                    lost=sum(r["event"].points for r in all_rows if r["event"].points < 0),
-                )
-        finally:
-            engine.dispose()
+    @app.get("/ledger")
+    def ledger_page(kind: str = "", page: int = 1):
+        query = urlencode({k: v for k, v in (("kind", kind), ("page", page)) if v and v != 1})
+        return RedirectResponse(f"/progress{'?' + query if query else ''}#ledger", 307)
+
+    @app.get("/how")
+    def how_page():
+        return RedirectResponse("/recommendations#how", status_code=307)
 
     @app.get("/ledger.tsv")
     def ledger_tsv():
@@ -722,7 +936,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/paperpile/reimport")
     def paperpile_reimport():
-        cfg = load_config(config_path)
+        cfg = current_cfg()
         if not cfg.paths.bibtex.exists():
             return error("/paperpile", f"No BibTeX file at {cfg.paths.bibtex}; upload one.")
         check = check_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels)
@@ -733,7 +947,7 @@ def create_app(config_path: Path) -> FastAPI:
     @app.post("/paperpile/upload", response_class=HTMLResponse)
     async def paperpile_upload(request: Request):
         form = await request.form()
-        cfg = load_config(config_path)
+        cfg = current_cfg()
         upload = form.get("file")
         if not hasattr(upload, "read") or not upload.filename:
             return error("/paperpile", "Choose a .bib file to upload")
@@ -780,52 +994,16 @@ def create_app(config_path: Path) -> FastAPI:
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                rules = active_rules(session, cfg)
-                saves = [
-                    {
-                        "path": path,
-                        "name": path.name,
-                        "modified": datetime.fromtimestamp(path.stat().st_mtime).replace(
-                            microsecond=0
-                        ),
-                    }
-                    for path in saved_files(cfg.backup.dir)
-                ]
+                base = base_config()
+                slug = CURRENT_PROFILE.get()
                 return render(
                     request,
                     "profile.html",
                     session,
                     cfg,
                     rule_groups=RULE_GROUPS,
-                    levels_text=levels_text(rules),
-                    form_rules=rules,
-                    saves=saves[:30],
-                    xp_total=total_xp(session),
-                )
-        finally:
-            engine.dispose()
-
-    @app.post("/profile/start")
-    async def profile_start(request: Request):
-        form = await request.form()
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                try:
-                    rules = parse_rules_form(dict(form), cfg.game)
-                    profile = start_profile(session, cfg, str(form.get("name", "")), rules)
-                except (SettingsError, ProfileError) as exc:
-                    return error("/profile", f"Not started: {exc}")
-                return back(
-                    "/profile",
-                    {
-                        "kind": "success",
-                        "events": [],
-                        "points": 0,
-                        "sparkle": True,
-                        "message": f"Your game '{profile.name}' has started. The rules are locked "
-                        f"(fingerprint {profile.fingerprint}). Happy reading!",
-                    },
+                    folder=profiles.folder(base, slug),
+                    others=[i for i in profiles.list_profiles(base) if i.slug != slug],
                 )
         finally:
             engine.dispose()
@@ -835,7 +1013,7 @@ def create_app(config_path: Path) -> FastAPI:
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                path = save_profile_file(session, cfg.backup.dir)
+                path = save_profile_file(session, cfg.backup.dir, settings=profile_settings(cfg))
             return back(
                 "/profile",
                 {
@@ -853,7 +1031,7 @@ def create_app(config_path: Path) -> FastAPI:
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                data = export_progress(session)
+                data = export_progress(session, settings=profile_settings(cfg))
             name = slug((data["profile"] or {}).get("name", "profile"))
             filename = f"litresearch_profile_{name}_{date.today().strftime('%Y%m%d')}.json"
             return Response(
@@ -881,67 +1059,6 @@ def create_app(config_path: Path) -> FastAPI:
                 raise BackupError(f"{upload.filename} is not a JSON file") from exc
         return result
 
-    @app.post("/profile/load")
-    async def profile_load(request: Request):
-        form = await request.form()
-        cfg, engine = open_session()
-        try:
-            if form.get("confirm") != "replace":
-                return error("/profile", "Tick the confirmation to replace your current progress")
-            try:
-                uploads = await read_upload(request)
-                saved = str(form.get("saved", "")).strip()
-                if saved:
-                    path = next((f for f in saved_files(cfg.backup.dir) if f.name == saved), None)
-                    if path is None:
-                        raise BackupError("Saved file not found")
-                    uploads = [{"name": saved, "data": json.loads(path.read_text("utf-8"))}]
-                if not uploads:
-                    raise BackupError("Choose a saved profile or upload a file")
-                with Session(engine) as session:
-                    archive = save_profile_file(session, cfg.backup.dir)  # safety net
-                    report = load_profile(session, cfg, uploads[0]["data"])
-            except BackupError as exc:
-                return error("/profile", f"Not loaded: {exc}")
-            return back(
-                "/profile",
-                {
-                    "kind": "success",
-                    "events": [],
-                    "points": 0,
-                    "sparkle": True,
-                    "message": f"Loaded {uploads[0]['name']} ({report.readings_added} readings, "
-                    f"{report.xp_added} XP transactions). Your previous state was saved "
-                    f"as {archive.name}.",
-                },
-            )
-        finally:
-            engine.dispose()
-
-    @app.post("/profile/reset")
-    def profile_reset(confirm_name: str = Form("")):
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                profile = get_profile(session)
-                expected = profile.name if profile else ""
-                if not profile or confirm_name.strip() != expected:
-                    return error("/profile", "Type the exact profile name to confirm")
-                archive = save_profile_file(session, cfg.backup.dir)
-                reset_progress(session)
-            return back(
-                "/profile",
-                {
-                    "kind": "info",
-                    "events": [],
-                    "points": 0,
-                    "message": f"Profile archived as {archive.name} and reset. "
-                    "Set up your new game.",
-                },
-            )
-        finally:
-            engine.dispose()
-
     @app.get("/profile/compare", response_class=HTMLResponse)
     async def compare_page(request: Request):
         return await compare(request, [])
@@ -949,7 +1066,7 @@ def create_app(config_path: Path) -> FastAPI:
     @app.post("/profile/compare", response_class=HTMLResponse)
     async def compare_post(request: Request):
         form = await request.form()
-        cfg = load_config(config_path)
+        cfg = current_cfg()
         entries = []
         try:
             for name in form.getlist("saved"):
@@ -991,6 +1108,8 @@ def create_app(config_path: Path) -> FastAPI:
                     cfg,
                     groups=GROUPS,
                     config_path=config_path,
+                    settings_file=profiles.folder(base_config(), CURRENT_PROFILE.get())
+                    / profiles.PROFILE_SETTINGS,
                     last_backup=latest_backup(cfg),
                 )
         finally:
@@ -1002,7 +1121,7 @@ def create_app(config_path: Path) -> FastAPI:
         try:
             with Session(engine) as session:
                 try:
-                    result = run_backup(cfg, session)
+                    result = run_backup(cfg, session, settings=profile_settings(cfg))
                 except BackupError as exc:
                     return error("/settings#data", f"Backup failed: {exc}")
                 return back(
@@ -1022,7 +1141,7 @@ def create_app(config_path: Path) -> FastAPI:
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                data = export_progress(session)
+                data = export_progress(session, settings=profile_settings(cfg))
             name = f"litresearch_progress_{date.today().strftime('%Y%m%d')}.json"
             return Response(
                 json.dumps(data, indent=1),
@@ -1039,8 +1158,8 @@ def create_app(config_path: Path) -> FastAPI:
         for key in ("topic_name", "topic_weight", "topic_queries"):
             data[key] = form.getlist(key)
         try:
-            save_settings(config_path, parse_form(data))
-        except SettingsError as exc:
+            save_profile_settings(parse_form(data))
+        except (SettingsError, ProfilesError, ValueError) as exc:
             return error("/settings", f"Not saved: {exc}")
         return back(
             "/settings",
@@ -1051,16 +1170,6 @@ def create_app(config_path: Path) -> FastAPI:
                 "points": 0,
             },
         )
-
-    @app.get("/how", response_class=HTMLResponse)
-    def how_page(request: Request):
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                batch = latest_batch(session)
-                return render(request, "how.html", session, cfg, groups=GROUPS, batch=batch)
-        finally:
-            engine.dispose()
 
     # --- actions -----------------------------------------------------------------
 

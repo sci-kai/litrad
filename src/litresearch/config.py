@@ -24,8 +24,11 @@ class _Base(BaseModel):
 
 
 class Paths(_Base):
-    bibtex: Path
+    # used when no profile is selected (and as the source of "existing data")
+    bibtex: Path = Path("data/paperpile/library.bib")
     database: Path = Path("data/litresearch.sqlite")
+    # one folder per profile: database, Paperpile export, settings
+    profiles_dir: Path = Path("data/profiles")
     cache_dir: Path = Path("data/cache")
     obsidian_vault: Path | None = None
 
@@ -85,9 +88,11 @@ class Selection(_Base):
     landmark_max_age_years: int = Field(15, ge=1)
     # results per topic query and kind (fresh / landmark); each query costs API budget
     results_per_query: int = Field(25, ge=1, le=100)
-    # an unread recommendation may come back after this many weeks
+    # a recommended paper you did not pick may come back after this many weeks
     cooldown_weeks: int = Field(8, ge=0)
-    # --- fine-tuning (see docs/recommendation-criteria.md) ---
+    # remind me to get new recommendations after this many days (0 = never)
+    reminder_days: int = Field(7, ge=0, le=365)
+    # --- fine-tuning (see docs/documentation.md, "How papers are recommended") ---
     # relevance = similarity_share * library similarity + (1 - share) * topic bonus
     similarity_share: float = Field(0.7, ge=0, le=1)
     # number of most similar library papers averaged for the similarity

@@ -3,7 +3,7 @@
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 import numpy as np
 from sqlmodel import Session, select
@@ -141,10 +141,10 @@ def gather_s2_candidates(
 def exclusion_sets(session: Session, cfg: Config, today: date) -> dict[str, set[int]]:
     """Papers that must not be recommended, by reason.
 
-    Batches of the current week do not count, so a refresh can rebuild them.
+    Recommendations are made on demand, so every batch within the cooldown
+    counts, also one from today: asking again brings new papers.
     """
-    this_week = week_start(today)
-    since = this_week - timedelta(weeks=cfg.selection.cooldown_weeks)
+    since = today - timedelta(weeks=cfg.selection.cooldown_weeks)
     return {
         # an abstract glance does not count as read; library papers are fine
         "read_or_dismissed": set(
@@ -157,8 +157,7 @@ def exclusion_sets(session: Session, cfg: Config, today: date) -> dict[str, set[
             session.exec(
                 select(Recommendation.paper_id)
                 .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
-                .where(RecommendationBatch.week_start >= since)
-                .where(RecommendationBatch.week_start < this_week)
+                .where(RecommendationBatch.created_at >= datetime.combine(since, time.min))
             ).all()
         ),
     }
@@ -333,3 +332,11 @@ def batch_items(session: Session, batch: RecommendationBatch) -> list[tuple[Reco
             .order_by(Recommendation.rank)
         ).all()
     )
+
+
+def days_since_last_batch(session: Session, today: date | None = None) -> int | None:
+    """Days since the newest recommendation batch (None: there is none)."""
+    batch = latest_batch(session)
+    if batch is None:
+        return None
+    return ((today or date.today()) - batch.created_at.date()).days
