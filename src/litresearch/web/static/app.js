@@ -151,6 +151,16 @@
       document.querySelectorAll("[data-width]").forEach((el) => { el.style.width = el.dataset.width; });
     });
 
+    // a field the browser rejects may sit in a collapsed section: open it, so the
+    // browser can show its message instead of silently not submitting
+    document.addEventListener("invalid", (e) => {
+      let node = e.target.parentElement;
+      while (node) {
+        if (node.tagName === "DETAILS") node.open = true;
+        node = node.parentElement;
+      }
+    }, true);
+
     // confirmations (e.g. penalties)
     document.querySelectorAll("form[data-confirm]").forEach((form) => {
       form.addEventListener("submit", (e) => {

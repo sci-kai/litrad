@@ -183,14 +183,41 @@ def test_list_networks(tmp_path, server, plain_console):
     assert "wlan0    WLAN: 10.100.7.134" in result.stdout and "local" in result.stdout
 
 
-def test_choose_and_save(tmp_path, server, plain_console):
+def test_choose_and_save(tmp_path, server, plain_console, monkeypatch):
+    monkeypatch.setattr(cli, "interactive", lambda: True)
     config = write_config(tmp_path, password_hash=hash_password("lab-meeting-42"))
-    # options: 1 local, 2 all, 3 eth0, 4 wlan0
-    result = runner.invoke(cli.app, ["serve", "--choose", "-c", config], input="4\ny\n")
+    # serve asks by default; options: 1 local, 2 all, 3 eth0, 4 wlan0
+    result = runner.invoke(cli.app, ["serve", "-c", config], input="4\ny\n")
     assert result.exit_code == 0, result.stdout
     assert server["host"] == "10.100.7.134" and "Saved" in result.stdout
     assert load_config(tmp_path / "config.yaml").web.host == "wlan0"
     assert "# my settings" in (tmp_path / "config.yaml").read_text()
-    result = runner.invoke(cli.app, ["serve", "--choose", "-c", config], input="1\nn\n")
+    result = runner.invoke(cli.app, ["serve", "-c", config], input="1\nn\n")
     assert server["host"] == "127.0.0.1"
     assert load_config(tmp_path / "config.yaml").web.host == "wlan0"  # not saved
+    # Enter keeps the default and asks nothing more
+    result = runner.invoke(cli.app, ["serve", "-c", config], input="\n")
+    assert result.exit_code == 0 and server["host"] == "10.100.7.134"
+    assert "wlan0    WLAN: 10.100.7.134 ← default" in result.stdout
+    assert "Make" not in result.stdout
+
+
+def test_no_question_with_network_option_or_without_terminal(
+    tmp_path, server, plain_console, monkeypatch
+):
+    config = write_config(tmp_path)
+    monkeypatch.setattr(cli, "interactive", lambda: True)
+    result = runner.invoke(cli.app, ["serve", "--network", "local", "-c", config])
+    assert result.exit_code == 0 and "Where should" not in result.stdout
+    result = runner.invoke(cli.app, ["serve", "--no-choose", "-c", config])
+    assert result.exit_code == 0 and "Where should" not in result.stdout
+    monkeypatch.setattr(cli, "interactive", lambda: False)  # e.g. systemd
+    result = runner.invoke(cli.app, ["serve", "-c", config])
+    assert result.exit_code == 0 and "Where should" not in result.stdout
+
+
+def test_menu_marks_networks_that_need_a_password(tmp_path, server, plain_console, monkeypatch):
+    monkeypatch.setattr(cli, "interactive", lambda: True)
+    result = runner.invoke(cli.app, ["serve", "-c", write_config(tmp_path)], input="\n")
+    assert "eth0     cable (Ethernet): 192.168.50.2 (needs a password)" in result.stdout
+    assert "litresearch set-password" in result.stdout

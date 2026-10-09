@@ -11,7 +11,9 @@ tree, and every rule is documented here.
 
 This file is the complete documentation: using the tool (parts I and II),
 reference (part III) and how it is built (part IV). The README has a short
-overview.
+overview. In the web UI it is under **📖 Documentation**, one page per
+chapter (rendered from this file by `web/docs.py`: every `## ` heading is a
+chapter, every `# Part` heading groups chapters).
 
 ## Contents
 
@@ -338,11 +340,26 @@ Where a profile's files live: [Your data and backups](#10-your-data-and-backups)
 ## 4. Web UI
 
 ```bash
-litresearch serve                    # where and on which port: web.host / web.port in the config
+litresearch serve                    # asks where to serve; Enter keeps web.host from the config
+litresearch serve --network wlan0    # no question: only on the WLAN (or eth0, all, local, an IP)
+litresearch serve --no-choose        # no question: use web.host / web.port from the config
 litresearch serve --list-networks    # which networks this computer has
-litresearch serve --network wlan0    # serve only on the WLAN (or eth0, all, local, an IP)
-litresearch serve --choose           # pick the network interactively, optionally save it
 ```
+
+`serve` first asks where the UI should be reachable:
+
+```
+Where should the web UI be reachable?
+  1. local    only this computer (127.0.0.1) ← default
+  2. all      all networks (needs a password)
+  3. eth0     cable (Ethernet): 192.168.50.2 (needs a password)
+  4. wlan0    WLAN: 10.100.7.134 (needs a password)
+Choose a number [1]:
+```
+
+Enter keeps the default (`web.host`); choosing another network offers to
+make it the new default. `serve` never asks when it is not run in a terminal
+(systemd, cron, `nohup … &`): then it uses `web.host`.
 
 `serve` only starts the web server and prints the address(es) to open; it
 never opens a browser on the server itself, so a Raspberry Pi without a
@@ -385,8 +402,8 @@ in the same network:
    litresearch set-password
    ```
 
-2. Choose the network: e.g. `web.host: wlan0` in `config/config.yaml`,
-   `litresearch serve --network wlan0`, or `litresearch serve --choose`.
+2. Choose the network when `litresearch serve` asks, or set it with
+   `web.host: wlan0` in `config/config.yaml` or `litresearch serve --network wlan0`.
 3. Start it; the server prints the address to open:
 
    ```
@@ -432,6 +449,7 @@ page.
 | Library | 📁 **Paperpile library** | your library without PDFs (search, folder and read-status filters, queue buttons), last import and notices when it is outdated, upload of a new BibTeX export with checks, re-import, export instructions, import history |
 | Library | 🔍 **Find & add** | search your library and all known papers (title, author, citation key, DOI, folder) and queue them; add any DOI |
 | | ⚙️ **Settings** | the profile's topics, excluded terms and every recommendation and queue parameter; data & backups of the profile |
+| | 📖 **Documentation** | this documentation, one page per chapter, with a linked table of contents of all chapters and sections and previous/next links; pages link to the matching chapter (e.g. Recommendations → chapter 5) |
 | (chip) | 🎮 **Profile** | the locked rules and fingerprint; save, download and compare profiles; your other profiles; switch or create a profile |
 | | 📄 **Paper** | abstract, TL;DR, metrics, notes (timestamped), status, every recommendation of it with its evidence tree, the XP it earned |
 
@@ -885,7 +903,7 @@ gallery grouped by theme (on **Progress & XP**) ([Web UI](#4-web-ui)).
 | `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant | ✅ |
 | `score`, `history` | level, streak, weekly grade, badges / reading log | ✅ |
-| `serve [--network local\|all\|eth0\|wlan0\|IP] [--port] [--choose] [--list-networks]` | web server for this computer, all networks or one chosen network (never opens a browser) | ✅ |
+| `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | web server for this computer, all networks or one chosen network; asks where to serve unless `--network`/`--no-choose` is given (never opens a browser) | ✅ |
 | `set-password [--remove]` | password for network access to the UI | ✅ |
 | `backup`, `restore FILE` | database snapshot + progress export / restore a snapshot | ✅ |
 | `export-progress FILE`, `import-progress FILE` | move or merge your progress between machines | ✅ |
@@ -1469,6 +1487,7 @@ Layers, from the bottom up:
 | `cli.py`, `cli_reading.py`, `cli_data.py` | ~880 | Typer commands; `run()` turns expected errors into messages |
 | `web/app.py` | ~1 300 | FastAPI routes, login, profile and same-origin middleware, welcome screen, celebration tokens, downloads |
 | `web/auth.py` | ~80 | scrypt password hashes, HMAC-signed session cookies |
+| `web/docs.py` | ~150 | renders `docs/documentation.md` as linked chapter pages for the web UI |
 | `web/settings.py` | ~540 | Settings schema (labels, help, ranges), game-rule form, form and topic parsing |
 | `web/templates/`, `web/static/` | ~1 800 | Jinja2 pages, CSS (themes, animations), JavaScript (toasts, confetti, rings) |
 
@@ -1663,6 +1682,7 @@ source; their licenses permit use in this project.
 | [Rich](https://github.com/Textualize/rich) | 15.0.0 | MIT | coloured terminal output |
 | [FastAPI](https://github.com/fastapi/fastapi) | 0.142.4 | MIT | web routes, forms, test client |
 | [Jinja2](https://jinja.palletsprojects.com/) | 3.1.6 | BSD-3-Clause | HTML templates (auto-escaping) |
+| [Python-Markdown](https://python-markdown.github.io/) | 3.11 | BSD-3-Clause | renders this documentation in the web UI (tables, fenced code, table of contents) |
 | [python-multipart](https://github.com/Kludex/python-multipart) | 0.0.32 | Apache-2.0 | form parsing for FastAPI |
 | [Uvicorn](https://uvicorn.dev/) | 0.54.0 | BSD-3-Clause | ASGI web server |
 

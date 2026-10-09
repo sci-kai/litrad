@@ -104,6 +104,7 @@ from litresearch.web.auth import (
     sign_value,
     verify_password,
 )
+from litresearch.web.docs import DocsCache
 from litresearch.web.settings import (
     GROUPS,
     RULE_GROUPS,
@@ -779,6 +780,40 @@ def create_app(config_path: Path) -> FastAPI:
                 )
         finally:
             engine.dispose()
+
+    docs_cache = DocsCache()
+
+    def docs_page(request: Request, slug: str | None):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                docs = docs_cache.get()
+                if docs is None:
+                    return render(request, "docs.html", session, cfg, docs=None, chapter=None)
+                chapter = docs.chapter(slug) if slug else None
+                if slug and chapter is None:
+                    return error("/docs", f"No chapter '{slug}' in the documentation")
+                before, after = docs.neighbours(slug) if chapter else (None, docs.chapters[0])
+                return render(
+                    request,
+                    "docs.html",
+                    session,
+                    cfg,
+                    docs=docs,
+                    chapter=chapter,
+                    before=before,
+                    after=after,
+                )
+        finally:
+            engine.dispose()
+
+    @app.get("/docs", response_class=HTMLResponse)
+    def docs_index(request: Request):
+        return docs_page(request, None)
+
+    @app.get("/docs/{slug}", response_class=HTMLResponse)
+    def docs_chapter(request: Request, slug: str):
+        return docs_page(request, slug)
 
     # pages that were merged into others; old links and bookmarks keep working
     @app.get("/weekly")

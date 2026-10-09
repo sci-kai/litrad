@@ -30,7 +30,19 @@
   one). `profile start` and `profile reset` are replaced by creating another
   profile.
 - Documentation consolidated into `docs/documentation.md`; the README is a
-  short overview.
+  short overview. The web UI shows it under 📖 Documentation, one page per
+  chapter with a linked table of contents (Python-Markdown).
+- `serve` asks where to serve by default (Enter keeps `web.host`);
+  `--network` or `--no-choose` skip the question, and it never asks outside a
+  terminal.
+
+### Fixed
+
+- Creating a profile did nothing: the default "notes: characters needed"
+  (140) did not fit the form's step (browsers count steps from the minimum),
+  and the browser's message was hidden in the collapsed rules section. Steps
+  fixed (also for citations/year in the settings), collapsed sections open
+  on invalid input, and a test checks all form defaults.
 
 ### Added
 

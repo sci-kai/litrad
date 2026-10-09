@@ -383,3 +383,31 @@ details.how[open] > summary { margin-bottom: .8rem; }
 /* long titles wrap instead of overflowing their card */
 .paper .row > .title { flex: 1 1 0; }
 .row > a { min-width: 0; overflow-wrap: anywhere; }
+
+/* documentation pages */
+.docs-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1rem; align-items: start; }
+.docs-toc { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; display: flex; flex-direction: column; gap: .1rem; font-size: .9rem; }
+.docs-toc a { padding: .25rem .5rem; border-radius: 8px; color: var(--text); }
+.docs-toc a:hover { background: var(--surface-2); text-decoration: none; }
+.docs-toc a.current { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.docs-part { margin: .8rem .5rem .2rem; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.docs-sections { display: flex; flex-direction: column; margin: .1rem 0 .3rem .7rem; border-left: 2px solid var(--border); }
+.docs-sections a { font-size: .82rem; color: var(--muted); }
+.docs-body { line-height: 1.6; overflow-wrap: anywhere; }
+.docs-body h1 { margin-top: 0; }
+.docs-body h2, .docs-body h3, .docs-body h4 { scroll-margin-top: 1rem; margin-top: 1.6rem; }
+.docs-body pre { background: var(--surface-2); padding: .8rem 1rem; border-radius: 10px; overflow-x: auto; font-size: .85rem; line-height: 1.4; }
+.docs-body code { font-size: .88em; }
+.docs-body table { display: block; overflow-x: auto; margin: .6rem 0; }
+.docs-body blockquote { margin: .6rem 0; padding: .2rem 1rem; border-left: 3px solid var(--accent); color: var(--muted); }
+.docs-crumb { margin: 0 0 .3rem; font-size: .85rem; }
+.docs-onpage { font-size: .88rem; padding: .6rem .8rem; background: var(--surface-2); border-radius: 10px; margin-bottom: 1rem; }
+.docs-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: .4rem 1.4rem; }
+.docs-overview li { margin: .35rem 0; }
+.docs-pager { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+@media (max-width: 900px) { .docs-layout { grid-template-columns: 1fr; } .docs-toc { position: static; max-height: none; } }
+.docs-body th, .docs-body td { overflow-wrap: normal; word-break: normal; }
+.docs-body th { white-space: nowrap; }
+.docs-body h2 { font-size: 1.35rem; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
+.docs-body h3 { font-size: 1.12rem; }
+.docs-body h4 { font-size: 1rem; color: var(--muted); }

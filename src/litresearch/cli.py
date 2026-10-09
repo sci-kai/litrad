@@ -280,8 +280,15 @@ def show_batch(batch, items) -> None:
         )
 
 
+def interactive() -> bool:
+    """True when a person can answer questions (not systemd, cron or a pipe)."""
+    import sys
+
+    return sys.stdin.isatty()
+
+
 def choose_network(cfg: Config, config: Path) -> str:
-    """Ask where to serve; optionally save the answer as the default."""
+    """Ask where to serve (Enter keeps web.host); optionally save the answer."""
     from litresearch.web.network import interfaces
     from litresearch.web.settings import write_values
 
@@ -289,14 +296,26 @@ def choose_network(cfg: Config, config: Path) -> str:
     options += [
         (i.name, f"{i.kind}: {i.address}") for i in interfaces() if i.kind != "this computer only"
     ]
+    current = cfg.web.host if cfg.web.host in [name for name, _ in options] else "local"
+    if cfg.web.host in ("127.0.0.1", "localhost"):
+        current = "local"
+    elif cfg.web.host == "0.0.0.0":
+        current = "all"
     console.print("[bold]Where should the web UI be reachable?[/bold]")
     for number, (name, text) in enumerate(options, start=1):
-        console.print(f"  {number}. {name:<8} {text}")
-    picked = typer.prompt("Choose a number", type=click.IntRange(1, len(options)))
+        note = "" if name == "local" or cfg.web.password_hash else " [dim](needs a password)[/dim]"
+        mark = " [green]← default[/green]" if name == current else ""
+        console.print(f"  {number}. {name:<8} {text}{note}{mark}")
+    if not cfg.web.password_hash:
+        console.print("  [dim]Network access needs a password: litresearch set-password[/dim]")
+    default = [name for name, _ in options].index(current) + 1
+    picked = typer.prompt("Choose a number", type=click.IntRange(1, len(options)), default=default)
     spec = options[picked - 1][0]
-    if typer.confirm(f"Save '{spec}' as the default (web.host in {config})?", default=True):
+    if spec != current and typer.confirm(
+        f"Make '{spec}' the default (web.host in {config})?", default=True
+    ):
         write_values(config, {"web": {"host": spec}})
-        console.print("Saved. Next time just run [bold]litresearch serve[/bold].")
+        console.print("Saved.")
     return spec
 
 
@@ -309,10 +328,15 @@ def serve(
         "-n",
         "--host",
         help="Where to listen: local, all, an interface name (eth0, wlan0) or an IP address. "
-        "Default: web.host from the config.",
+        "Without it, serve asks (Enter keeps web.host from the config).",
     ),
     port: int = typer.Option(None, help="Port (default: web.port from the config)"),
-    choose: bool = typer.Option(False, "--choose", help="Pick the network interactively"),
+    choose: bool = typer.Option(
+        True,
+        "--choose/--no-choose",
+        help="Ask where to serve (default). --no-choose uses web.host without asking; "
+        "serve never asks when it is not run in a terminal.",
+    ),
     list_networks: bool = typer.Option(
         False, "--list-networks", help="Show the available networks and exit"
     ),
@@ -336,7 +360,12 @@ def serve(
             if interface.kind != "this computer only":
                 console.print(f"  {interface.name:<8} {interface.kind}: {interface.address}")
         return
-    spec = choose_network(cfg, config) if choose else (network or cfg.web.host)
+    if network:
+        spec = network
+    elif choose and interactive():
+        spec = choose_network(cfg, config)
+    else:
+        spec = cfg.web.host
     try:
         binding = resolve(spec, port)
     except NetworkError as error:

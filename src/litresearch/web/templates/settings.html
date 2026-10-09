@@ -5,7 +5,7 @@
 {% block heading %}⚙️ Settings{% endblock %}
 {% block content %}
 <p class="muted">These settings belong to your profile <b>{{ profile.name if profile }}</b> and are saved in <code>{{ settings_file }}</code> (comments are kept).
-  They apply to the next recommendations. How they are used: <a href="/recommendations#how">How recommendations are made</a>.
+  They apply to the next recommendations. How they are used: <a href="/recommendations#how">How recommendations are made</a>; every key: <a href="/docs/9-configuration">Configuration</a>.
   Machine settings (APIs, web server, backups) and the defaults for new profiles are in <code>{{ config_path }}</code>; game rules are locked per profile (<a href="/profile">your profile</a>).</p>
 <form method="post" action="/settings" class="grid">
   <div class="card" id="topics-card">
@@ -51,6 +51,6 @@
     <form method="post" action="/backup"><button class="primary">🗄️ Back up now</button></form>
     <a class="button" href="/progress.json">⬇ Download progress (JSON)</a>
   </div>
-  <p class="muted" style="margin-top:.6rem">Tip: point <code>backup.dir</code> to a cloud-synced folder, but keep the database itself local. Restore with <code>litresearch restore</code>; merge progress into another installation with <code>litresearch import-progress</code> (see docs/documentation.md).</p>
+  <p class="muted" style="margin-top:.6rem">Tip: point <code>backup.dir</code> to a cloud-synced folder, but keep the database itself local. Restore with <code>litresearch restore</code>; merge progress into another installation with <code>litresearch import-progress</code> (see <a href="/docs/10-your-data-and-backups">Your data and backups</a>).</p>
 </div>
 {% endblock %}

@@ -400,3 +400,70 @@ def test_library_paper_picked_from_recommendations_keeps_penalty(app_env):
     assert "−15 XP if removed unread" in client.get("/queue").text
     payload = celebration(post(client, f"/queue/{pid}/drop"))
     assert payload["points"] == -15
+
+
+def _browser_accepts(value, minimum, maximum, step) -> bool:
+    """HTML number inputs: min <= value <= max, and (value - min) a multiple of step."""
+    from decimal import Decimal
+
+    if step in (None, "any"):
+        return minimum is None or value >= minimum
+    base = Decimal(str(minimum if minimum is not None else 0))
+    in_range = (minimum is None or value >= minimum) and (maximum is None or value <= maximum)
+    return in_range and (Decimal(str(value)) - base) % Decimal(str(step)) == 0
+
+
+def test_default_values_pass_browser_validation():
+    # a rejected value in a collapsed form section blocks the submit without any message
+    from litresearch.config import Config
+    from litresearch.rules import GameRules
+    from litresearch.web.settings import GROUPS, RULE_GROUPS
+
+    rules = GameRules()
+    for _, _, fields in RULE_GROUPS:
+        for name, _, _, minimum, maximum, step in fields:
+            assert _browser_accepts(getattr(rules, name), minimum, maximum, step), name
+    cfg = Config.model_validate({"paths": {}})
+    for group in GROUPS:
+        for setting in group.settings:
+            if setting.kind != "bool":
+                value = setting.value(cfg)
+                assert _browser_accepts(value, setting.minimum, setting.maximum, setting.step), (
+                    setting.key
+                )
+
+
+# --- documentation ----------------------------------------------------------------------
+
+
+def test_documentation_pages(app_env):
+    client, _, _ = app_env
+    overview = client.get("/docs").text
+    assert "litresearch documentation" in overview and "Part II: How it works" in overview
+    assert 'href="/docs/5-how-papers-are-recommended"' in overview
+    assert 'href="/docs"' in client.get("/queue").text  # in the sidebar
+    chapter = client.get("/docs/5-how-papers-are-recommended").text
+    assert "<table>" in chapter and "evidence tree" in chapter
+    assert 'href="/docs/6-gamification"' in chapter  # links between chapters work
+    assert "← 4. Web UI" in chapter and "6. Gamification →" in chapter
+    assert 'href="#5-selection"' in chapter or 'href="#selection"' in chapter  # on-page TOC
+    missing = client.get("/docs/no-such-chapter", follow_redirects=True).text
+    assert "No chapter" in missing
+
+
+def test_documentation_links_all_resolve():
+    from litresearch.web.docs import load
+
+    docs = load()
+    ids = {c.slug: c.ids for c in docs.chapters}
+    assert len(docs.chapters) >= 10
+    for chapter in docs.chapters:
+        for target in re.findall(r'href="([^"]+)"', chapter.html):
+            if target.startswith("/docs/"):
+                slug, _, anchor = target[len("/docs/") :].partition("#")
+                assert slug in ids, (chapter.slug, target)
+                assert not anchor or anchor in ids[slug], (chapter.slug, target)
+            elif target.startswith("#"):
+                assert target[1:] in chapter.ids, (chapter.slug, target)
+            else:
+                assert target.startswith(("http://", "https://", "mailto:")), (chapter.slug, target)

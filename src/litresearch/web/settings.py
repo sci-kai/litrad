@@ -261,7 +261,7 @@ GROUPS = (
                 "int",
                 1,
                 5000,
-                10,
+                1,
             ),
             Setting(
                 ("selection", "landmark_timeliness"),
@@ -482,7 +482,7 @@ RULE_GROUPS = (
             ("hot_xp", "📰 fresh paper read", "int", 0, 1000, 1),
             ("recommendation_xp", "🎯 read a recommended paper", "int", 0, 1000, 1),
             ("rating_xp", "⭐ first rating", "int", 0, 1000, 1),
-            ("reflection_chars", "✍️ notes: characters needed", "int", 1, 100000, 10),
+            ("reflection_chars", "✍️ notes: characters needed", "int", 1, 100000, 1),
             ("reflection_xp", "✍️ substantial notes", "int", 0, 1000, 1),
             ("inbox_zero_xp", "📭 queue emptied by reading", "int", 0, 1000, 1),
             ("badge_xp", "🏅 per badge", "int", 0, 1000, 1),
