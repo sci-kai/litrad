@@ -29,6 +29,11 @@ def _surname(author: str) -> str:
 
 
 def is_match(item: dict, title: str, first_author: str | None, year: int | None) -> bool:
+    """Whether a Crossref record really is the library paper.
+
+    Not a review/dataset record, year within ±1, same first-author surname, and a
+    title similarity of at least 0.9 (or a truncated title that is a prefix).
+    """
     if item.get("type") in SKIP_TYPES:
         return False
     item_title = " ".join(item.get("title") or [])

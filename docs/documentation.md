@@ -52,15 +52,31 @@ chapter, every `# Part` heading groups chapters).
 
 ### 1. Install
 
-Requires Python ≥ 3.11 on Linux (tested on a Raspberry Pi, aarch64, Python 3.13).
+Requires Python ≥ 3.11 on Linux (tested on a Raspberry Pi 5, aarch64,
+Python 3.13) and `git`.
 
 ```bash
-git clone <repo-url> litresearch-tool
-cd litresearch-tool
-python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/litresearch --help
+git clone <repository-url> litresearch
+cd litresearch
+python3 install.py                # or: python3 install.py --service
+.venv/bin/litresearch serve
 ```
+
+`install.py` creates a virtual environment in `.venv`, installs litresearch
+with its dependencies and creates `config/config.yaml` from the example (an
+existing one is never overwritten). With `--service` it also installs a
+systemd user service, so the web UI starts automatically; it then serves on
+the network set as `web.host` without asking. `--dev` adds the test and lint
+tools. Run it again after `git pull` to update.
+
+To update: `git pull && python3 install.py`. Your data in `data/` and your
+`config/config.yaml` are kept. Back up first (`litresearch backup`), since an
+alpha may change the data format; the CHANGELOG says when.
+
+Without the installer: `python3 -m venv .venv && .venv/bin/pip install -e .`,
+then `cp config/config.example.yaml config/config.yaml`. Each GitHub release
+also has a wheel (`pip install litresearch-*.whl`); then run litresearch in a
+folder of your choice, where it keeps `config/` and `data/`.
 
 ### 2. Export the Paperpile library
 
@@ -235,14 +251,13 @@ litresearch queue add 10.1038/s41586-024-07894-z   # any DOI (metadata from Open
 litresearch queue add --title "Preprint from the lab meeting" --url https://...
 litresearch queue                     # show it
 litresearch queue move q4 1           # reorder
-litresearch queue drop q3             # remove (costs XP for picked recommendations left unread)
+litresearch queue drop q3             # remove (costs XP if you did not at least skim it)
 ```
 
 When the queue is full (`queue.max_size`, default 5) nothing can be added
 until you read or drop something. That limit is intentional. Removing a paper
-you picked from the recommendations before at least skimming it costs
-the penalty set in your game profile (default 15 XP); papers you added yourself are free to
-remove.
+before you at least skimmed it costs the penalty set in your game profile
+(default 15 XP), wherever it came from: the queue is a commitment.
 
 #### Referring to papers
 
@@ -444,7 +459,7 @@ page.
 | | 👋 **Welcome** (before anything else) | continue with a profile, create a new one (choose and lock its rules), take over existing data, or load a saved profile |
 | 🏠 | **Dashboard** | your up-next paper with a one-click reading log, the weekly quest, hints, a reminder when new recommendations are due, your latest recommendations, queue, recent XP, and the **weekly reports** (one report card per week: grade, XP, papers, points by kind, badges; *show more* for older weeks) |
 | Reading | 📚 **Reading queue** | the ordered queue (q1 = up next): log a reading (level, star rating, notes), reorder, remove; add papers by DOI, PubMed ID, citation key, title words or title only |
-| Reading | ✨ **Recommendations** | on the first visit: set up the topics of your profile (or skip and use your library only). Then: **Get new recommendations** whenever you like (a reminder appears after `selection.reminder_days`, default 7); the list ranked by score with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; add to your queue or mark not relevant; your topics with an inline editor; **How recommendations are made**: every rule with your current values |
+| Reading | ✨ **Recommendations** | on the first visit: set up the topics of your profile (or skip and use your library only). Then: **Get new recommendations** whenever you like (a reminder appears after `selection.reminder_days`, default 7); the list ranked by score with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; add to your queue or mark not relevant; once every paper of a set is handled the page says **Finished this recommendation set!** (the set stays available in the drop-down menu); your topics with an inline editor; **How recommendations are made**: every rule with your current values |
 | Progress | 🏆 **Progress & XP** | level ring, streak, Reading Impact Factor, discipline and depth, XP per week (12 weeks), reading calendar (26 weeks), personal bests, badge gallery with progress, career ladder, the **XP ledger** (every transaction with running balance, filter by kind, totals, TSV export) and **how points work** (the locked rules of your profile) |
 | Library | 📁 **Paperpile library** | your library without PDFs (search, folder and read-status filters, queue buttons), last import and notices when it is outdated, upload of a new BibTeX export with checks, re-import, export instructions, import history |
 | Library | 🔍 **Find & add** | search your library and all known papers (title, author, citation key, DOI, folder) and queue them; add any DOI |
@@ -466,15 +481,15 @@ recommendations, `p` progress.
 - A **pop-up** for level-ups and unlocked badges.
 - The up-next paper glows; the streak flame flickers.
 - **Penalties** show as a red, shaking toast. A confirmation dialog warns
-  before you remove a picked recommendation unread.
+  before you remove a paper unread.
 - With your system's *reduce motion* setting on, all animations are off.
 
 ### Removing papers from the queue
 
-Removing is free for papers you added yourself or from your library. A paper
-you picked **from the recommendations** costs the penalty of your game profile
-(default 15) if it leaves the queue before you at least skimmed it: removed,
-or marked not relevant. The queue shows this as a red chip, and the remove
+Every paper on your queue (from the recommendations, your library or added
+by hand) costs the penalty of your game profile (default 15) if it leaves the
+queue before you at least skimmed it: removed, or marked not relevant.
+Dismissing a recommendation you never queued is free. The queue shows this as a red chip, and the remove
 button names the cost.
 
 ### Settings
@@ -731,7 +746,7 @@ profile** and are **locked** once the game starts.
 | `inbox_zero_xp` | 10 | 📭 the queue becomes empty because you *read* its last paper (once per day) |
 | `weekly_detail_goal` / `weekly_skim_goal` / `quest_xp` | 1 / 2 / 50 | 🗓️ weekly quest: 1 paper read at least at "read" depth + 2 more at least skimmed |
 | `badge_xp` | 25 | 🏅 per unlocked badge |
-| `drop_penalty` | 15 | ⚠️ a paper you picked **from the recommendations** leaves the queue (removed or marked not relevant) before you at least skimmed it |
+| `drop_penalty` | 15 | ⚠️ a paper on your queue (from the recommendations, your library or added by hand) leaves it, removed or marked not relevant, before you at least skimmed it |
 | `levels` | 20 levels | the ladder below |
 | `badge_targets` | see below | how much each badge needs |
 
@@ -742,8 +757,7 @@ Fairness rules that always apply:
   again pays nothing.
 - Paper bonuses (landmark, fresh, recommendation, rating, notes) are paid
   once per paper. The frog bonus is a share of *newly* earned base points.
-- Papers you added yourself or from your library can be removed from the
-  queue for free; dismissing a recommendation you never picked is free.
+- Dismissing a recommendation you never put on the queue is free.
 - Penalties can push the total, and therefore the level, down; the level
   never drops below 1.
 
@@ -1582,9 +1596,9 @@ Design choices:
   - Paper bonuses are paid once.
   - The frog bonus is proportional to newly earned base points.
   - A randomised test checks these invariants over long random sessions.
-- **Drop penalty.** Picking a recommendation and abandoning it unread costs
-  XP; manual and library papers are free to drop. A library paper picked
-  from the recommendations counts as a recommendation.
+- **Drop penalty.** Putting a paper on the queue and abandoning it unread
+  costs XP, wherever it came from, so the queue stays a commitment and is
+  not used as a bookmark list.
 - **No prescribed depth.** Recommendations are a ranked list; the reader's
   marking decides the points.
 - **Locked, configurable rules.** All rewards, the penalty, the quest, the
@@ -1780,24 +1794,41 @@ Semantic Scholar/SPECTER2 (see Literature) when you report results based on it.
 
 ## 13. Development
 
-### Git workflow (CUBI conventions)
+### Development cycle
+
+The full guide for contributors is [CONTRIBUTING.md](../CONTRIBUTING.md); in
+short (CUBI conventions):
+
+```
+issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI green)
+      ─► rebase and merge ─► dev ─► fast-forward main ─► tag vX.Y.Z ─► GitHub release
+```
 
 - `main`: releases only; `dev` is fast-forwarded into it, with no direct commits.
-- `dev`: integration branch, kept linear.
-- Feature work goes on `feat-<short-name>` (or `issueNN-<short-name>`), branched
-  from `dev`. Clean up with an interactive rebase, then rebase-and-merge into
-  `dev` and delete the branch. No merge commits, no squash merges.
-- A version bump is its own commit (`pyproject.toml`, `__init__.py`,
-  `CITATION.cff`, `CHANGELOG.md`), with no code changes. Dev releases carry the
-  `-dev` suffix, e.g. `0.2.0-dev`.
-- Push target: GitLab@HHU (internal).
+- `dev`: development branch, kept linear.
+- Feature work goes on `feat-<short-name>` (or `issueNN-<short-name>` for
+  issue NN), branched from `dev`. Clean up with an interactive rebase, open a
+  pull request into `dev`, merge with *rebase and merge* and delete the
+  branch. No merge commits, no squash merges.
+- **CI** (`.github/workflows/ci.yml`) runs ruff and the offline test suite on
+  Python 3.11, 3.12 and 3.13 for every push and pull request to `main` and
+  `dev`.
+- **Releases**: a version bump is its own commit (`pyproject.toml`,
+  `__init__.py`, `CITATION.cff`), with no code changes. Pushing a tag `vX.Y.Z`
+  runs `.github/workflows/release.yml`: tests, builds the wheel and source
+  archive and publishes a GitHub release with the CHANGELOG section as notes
+  (a pre-release for versions such as `0.1.0-alpha.1`). Development states
+  carry the `-dev` suffix, e.g. `0.2.0-dev`.
+- Issues use the templates in `.github/ISSUE_TEMPLATE/` (bug report, feature
+  request); pull requests the checklist in `.github/pull_request_template.md`.
+- Hosting: GitHub (public, issues and pull requests). Following the CUBI
+  rules, a mirror on GitLab@HHU can be added as a second push target.
 
 ```bash
 git switch dev && git switch -c feat-scoring
 # ... commits ...
 git rebase dev                   # keep history linear
-git switch dev && git merge --ff-only feat-scoring
-git branch -d feat-scoring
+git push -u origin feat-scoring  # pull request into dev
 ```
 
 ### Tests

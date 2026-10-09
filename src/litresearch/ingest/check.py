@@ -88,6 +88,7 @@ def _present(entry: BibEntry, name: str) -> bool:
 
 
 def check_entries(entries: list[BibEntry], duplicate_keys=()) -> BibCheck:
+    """Check parsed entries: required fields, coverage of useful fields, duplicates."""
     result = BibCheck(entries=len(entries), duplicate_keys=list(duplicate_keys))
     if not entries:
         result.findings.append(Finding("error", "The file contains no BibTeX entries."))

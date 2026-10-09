@@ -143,6 +143,7 @@ def venue_impact(citedness: float | None, sel: Selection) -> float:
 
 
 def impact_score(paper: Paper, kind: str, today: date, sel: Selection) -> tuple[float, dict]:
+    """Impact in [0, 1]: citation percentile for landmarks, journal for fresh papers."""
     if kind == "fresh":
         venue = venue_impact(paper.venue_mean_citedness, sel)
         early = sel.early_citation_bonus * log_scale(

@@ -74,6 +74,7 @@ class Gathered:
 
 
 def gather_topic_candidates(cfg: Config, openalex: OpenAlex, today: date, out: Gathered) -> None:
+    """OpenAlex fresh and landmark searches for every topic query."""
     sel = cfg.selection
     fresh_from = today - timedelta(days=int(sel.fresh_window_months * 30.5))
     landmark_years = f"{today.year - sel.landmark_max_age_years}-{today.year - 1}"
@@ -171,6 +172,7 @@ def has_excluded_term(paper: Paper, terms: list[str]) -> bool:
 def fetch_embeddings(
     session: Session, papers: list[Paper], s2: SemanticScholar, warnings: list[str]
 ) -> None:
+    """SPECTER2 vectors for library and candidates (stored, then cached)."""
     have = set(
         session.exec(select(Embedding.paper_id).where(Embedding.model == EMBEDDING_MODEL)).all()
     )
@@ -206,6 +208,7 @@ def build_recommendations(
     today: date | None = None,
     use_s2: bool = True,
 ) -> RecommendationBatch:
+    """Gather, filter, score and select a new recommendation set."""
     today = today or date.today()
     openalex = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email)
     s2 = SemanticScholar(http, cfg.api.semanticscholar_key)

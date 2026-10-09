@@ -1,9 +1,9 @@
 """The game profile: name, start date and the locked rule set.
 
-There is at most one active profile per database. Once it exists, all points
-are computed with its stored rules; the ``game`` section of ``config.yaml``
-only provides the defaults for the *next* profile. Starting over means saving
-the current profile and resetting (see ``backup.reset_progress``).
+Each profile folder (see ``profiles.py``) has its own database with exactly
+one profile row. Once it exists, all points are computed with its stored
+rules; the ``game`` section of ``config.yaml`` only provides the defaults for
+the *next* profile. Playing by other rules means creating another profile.
 """
 
 from datetime import datetime

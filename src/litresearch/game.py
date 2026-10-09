@@ -74,6 +74,7 @@ class Level:
 
 
 def level_for(xp: int, rules=None) -> Level:
+    """The level reached with ``xp`` points under ``rules``."""
     levels = as_rules(rules).levels
     xp = max(xp, 0)  # penalties can push the total below zero
     index = max(i for i, level in enumerate(levels) if xp >= level.xp)
@@ -410,6 +411,7 @@ def award_reading(
 def unlock_badges(
     session: Session, rules, today: date, at: datetime, events: list[XpEvent]
 ) -> list[Badge]:
+    """Award newly reached badges (with their XP); returns them."""
     rules = as_rules(rules)
     current = stats(session, today, rules)
     owned = set(session.exec(select(Achievement.code)).all())
@@ -561,6 +563,7 @@ def reading_calendar(session: Session, today: date, weeks: int = 26) -> list[lis
 
 
 def personal_bests(session: Session, rules, today: date) -> dict:
+    """Best week, busiest week, longest streak and totals."""
     rules = as_rules(rules)
     events = session.exec(select(XpEvent)).all()
     per_week: dict[date, int] = {}

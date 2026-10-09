@@ -51,7 +51,7 @@
 <div class="grid two" style="margin-top:1rem">
   <div class="card">
     <div class="head"><h2>✨ Latest recommendations</h2><a href="/recommendations">all details →</a></div>
-    {% if batch %}<p class="muted" style="margin:0 0 .4rem">from {{ batch.created_at.date().isoformat() }}</p>{% endif %}
+    {% if batch %}<p class="muted" style="margin:0 0 .4rem">from {{ batch.created_at.date().isoformat() }}{% if recs and rec_status | length == recs | length %} · 🎉 all handled, <a href="/recommendations">get new ones</a>{% endif %}</p>{% endif %}
     {% if recs %}
     {% for rec, paper in recs %}
     <div class="row" style="margin:.35rem 0; flex-wrap: nowrap">

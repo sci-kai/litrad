@@ -15,7 +15,6 @@ from litresearch.cli import (
     load_cfg,
     make_http,
     paper_line,
-    paper_link,
 )
 from litresearch.db import Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
 from litresearch.game import (
@@ -31,13 +30,14 @@ from litresearch.game import (
     week_progress,
 )
 from litresearch.ingest.bibtex import normalize_doi
-from litresearch.papers import upsert_work
+from litresearch.papers import paper_link
 from litresearch.profile import active_rules
 from litresearch.reading import (
     REF_HELP,
     ReadingError,
     add_note,
     drop_from_queue,
+    fetch_by_doi,
     find_paper,
     queue_add,
     queue_items,
@@ -45,8 +45,6 @@ from litresearch.reading import (
     record_reading,
     source_of,
 )
-from litresearch.sources.http import HttpError
-from litresearch.sources.openalex import OpenAlex
 
 queue_app = typer.Typer(help="Your short, ordered reading queue.", invoke_without_command=True)
 app.add_typer(queue_app, name="queue")
@@ -81,6 +79,7 @@ def bar(fraction: float, width: int = 20) -> str:
 
 
 def show_award(session: Session, award: Award) -> None:
+    """Print the points of an action, level-ups and new badges."""
     for event in award.events:
         if event.kind != "badge":
             colour = "green" if event.points >= 0 else "red"
@@ -148,22 +147,6 @@ def queue_show(ctx: typer.Context, config: Path = ConfigOpt):
             )
 
 
-def fetch_by_doi(cfg, session: Session, doi: str) -> Paper:
-    """Store a paper that is not in the database yet, using OpenAlex metadata."""
-    http = make_http(cfg)
-    try:
-        works = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email).works_by_doi([doi])
-    except HttpError as error:
-        raise ReadingError(f"Could not fetch {doi}: {error}") from error
-    finally:
-        http.close()
-    if doi not in works:
-        raise ReadingError(f"OpenAlex does not know {doi}; add it with --title instead")
-    paper = upsert_work(session, works[doi])
-    session.commit()
-    return paper
-
-
 @queue_app.command("add")
 def queue_add_cmd(
     ref: str = typer.Argument(None, help=REF_HELP),
@@ -182,7 +165,12 @@ def queue_add_cmd(
         elif ref:
             paper = find_paper(session, ref)
             if paper is None:  # an unknown DOI
-                paper = fetch_by_doi(cfg, session, normalize_doi(ref))
+                http = make_http(cfg)
+                try:
+                    paper = fetch_by_doi(session, cfg, http, normalize_doi(ref))
+                    session.commit()
+                finally:
+                    http.close()
         else:
             raise ReadingError("Give a reference or --title")
         item = queue_add(session, cfg, paper, source_of(session, paper, ref), 1 if top else at)
@@ -192,7 +180,7 @@ def queue_add_cmd(
 
 @queue_app.command("drop")
 def queue_drop_cmd(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
-    """Remove a paper from the queue (costs XP for picked recommendations left unread)."""
+    """Remove a paper from the queue (costs XP if you did not at least skim it)."""
     with open_db(config) as (cfg, session):
         paper = find_paper(session, ref)
         if paper is None:
@@ -238,6 +226,7 @@ def next_cmd(config: Path = ConfigOpt):
 
 
 def show_paper(session: Session, paper: Paper) -> None:
+    """Print a paper with metadata, status, notes and link."""
     console.print(f"[bold]{paper.title}[/bold]  [dim]#{paper.id}[/dim]")
     console.print(paper_line(paper))
     if paper.citation_count is not None:

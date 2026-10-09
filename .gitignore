@@ -11,3 +11,5 @@ config/config.yaml
 .coverage
 *.swp
 config/*.bak
+build/
+dist/

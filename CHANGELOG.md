@@ -1,106 +1,58 @@
 # Changelog
 
-## 0.1.0-dev (unreleased)
+All notable changes are listed here. Versions follow
+[semantic versioning](https://semver.org); dates are ISO 8601.
 
-### Changed: everything centres on profiles
+## 0.1.0-alpha.1 (2026-10-09)
 
-- Several profiles side by side, each in its own folder
-  (`data/profiles/<profile>/`: database, Paperpile export, `settings.yaml`
-  with topics and recommendation settings); backups go to
-  `backup.dir/<profile>/`.
-- The web UI starts with a welcome screen: continue with a profile, create
-  one (rules locked at creation), take over the data from before profiles,
-  or load a saved profile as a new one. Nothing is accessible without a
-  profile. The profile chip (top right) shows name, level and XP and leads to
-  the profile page; *Switch profile* is in the sidebar.
-- New menu: Dashboard (with the weekly reports) · Reading (queue,
-  recommendations) · Progress & XP (with the XP ledger and the point rules) ·
-  Library (Paperpile library, find & add) · Settings. `/weekly`, `/ledger` and
-  `/how` redirect to their new places.
-- Recommendations on demand instead of one batch per week, with a reminder
-  after `selection.reminder_days` (7). A new list shows papers not
-  recommended within the cooldown (including today's lists).
-- The first visit to Recommendations asks for the profile's topics (or
-  library only); topics can be edited on that page. The page explains how
-  recommendations are made, with the current values.
-- Settings are saved to the profile's `settings.yaml` (comments kept,
-  `.bak`), not to `config.yaml`; profile files include them.
-- CLI: global `--profile`; `profile list|create|adopt|use`; `profile load`
-  creates a new profile; `recommend` shows the latest list (`--new` for a new
-  one). `profile start` and `profile reset` are replaced by creating another
-  profile.
-- Documentation consolidated into `docs/documentation.md`; the README is a
-  short overview. The web UI shows it under 📖 Documentation, one page per
-  chapter with a linked table of contents (Python-Markdown).
-- `serve` asks where to serve by default (Enter keeps `web.host`);
-  `--network` or `--no-choose` skip the question, and it never asks outside a
-  terminal.
+The first release, for testing. Expect rough edges and report them as issues.
+Before 1.0.0, minor versions may change the data format or the configuration;
+the changelog says when.
 
-### Fixed
+### Highlights
 
-- Creating a profile did nothing: the default "notes: characters needed"
-  (140) did not fit the form's step (browsers count steps from the minimum),
-  and the browser's message was hidden in the collapsed rules section. Steps
-  fixed (also for citations/year in the settings), collapsed sections open
-  on invalid input, and a test checks all form defaults.
+- **Recommendations on request**: up to 5 papers, ranked by similarity to
+  your Paperpile library (SPECTER2, TF-IDF fallback), your topics, impact
+  (citation percentile or journal) and timeliness (fresh or landmark), with
+  diversity (MMR) and a score floor. A weekly reminder; a new set shows papers
+  not recommended within the cooldown; a finished set says so.
+- **Full transparency**: an evidence tree for every paper, a filter funnel and
+  a settings snapshot for every set, and every rule explained with your
+  current values.
+- **Reading queue** (max 5, ordered, one paper up next) that you fill
+  yourself: from the recommendations, your library or any DOI or title.
+- **Reading log**: abstract / skimmed / read / thorough, ratings and
+  timestamped notes; you choose the depth, the depth sets the points.
+- **Reading game**: XP with bonuses, a penalty for queued papers that leave
+  the queue unread, weekly streaks and quests, 20 career levels, 44 badges,
+  weekly report cards, an XP ledger with TSV export and statistics. All rules
+  are configurable and locked when a profile is created.
+- **Profiles**: everything (library, topics, settings, recommendations,
+  progress, rules) belongs to a profile with its own folder; several profiles
+  side by side; save, load and compare profile files (with checksum).
+- **Web UI** for laptop and phone browsers: welcome screen, dashboard,
+  reading, progress, library and settings, with animations for rewards, and
+  the complete documentation built in. Serves on this computer, all networks
+  or one chosen network (asked at start); password login for network access.
+- **Paperpile integration** through the BibTeX auto-export: upload with
+  checks, import history, library browser, `check-bib`.
+- **Your data stays yours**: free services only (OpenAlex, Semantic Scholar,
+  Crossref) within their free limits, no personal data sent; one SQLite file
+  per profile; automatic, consistent backups into a folder of your choice;
+  restore, export and idempotent merge of progress.
+- **Command line** for everything, including `--profile` and the `profile`
+  commands.
+- **One-command installation** (`python3 install.py`, optionally as a systemd
+  service).
+- **Quality**: about 380 tests (offline with recorded API responses, plus
+  live tests), failure and randomised scenarios, ruff, CI on GitHub for
+  Python 3.11 to 3.13, and a release workflow.
 
-### Added
+### Known limitations
 
-- Project skeleton: config models, SQLite schema, CLI entry point.
-- `ingest` command:
-  - parses Paperpile BibTeX exports, including their month/day format,
-    folder/label keywords and LaTeX;
-  - resolves missing DOIs via Crossref with title/author/year verification;
-  - enriches papers with OpenAlex metrics (FWCI, citation percentile, venue
-    mean citedness) and Semantic Scholar data (SPECTER2 embeddings, TLDRs);
-  - caches HTTP responses, rate-limits requests and retries on 429/5xx;
-  - continues when a single source fails.
-- `status` command: library summary.
-- `recommend`: weekly top papers from OpenAlex topic searches and Semantic
-  Scholar recommendations; relevance (SPECTER2 / TF-IDF), impact and
-  timeliness scoring; diversity via MMR; detail/skim split.
-- Reading queue (`queue add|drop|move`, `next`), limited and ordered.
-- Reading log (`read`, `note`, `dismiss`, `show`, `history`).
-- Gamification (`score`): XP, bonuses, weekly streaks, weekly quest, levels,
-  badges, weekly grade, reading impact factor.
-- Local web UI (`serve`): dashboard, recommendations with an evidence tree and
-  filter funnel, reading queue, library search, paper pages with notes,
-  progress, weekly reports, XP ledger (TSV export), settings, "How it works";
-  animations for rewards.
-- Every recommendation stores its evidence; batches store a filter funnel and
-  the settings used. All scoring constants are configurable settings.
-- Penalty for picked recommendations that leave the queue unread
-  (`game.drop_penalty`).
-- Additive schema migration for existing databases.
-- Documentation: `docs/recommendation-criteria.md`, `docs/web-ui.md`.
-- Local network access: `serve` uses `web.host`; password login (scrypt hash,
-  signed 30-day session cookie) via `set-password`; the server refuses to
-  listen on the network without a password and prints the LAN address.
-- Backups: consistent SQLite snapshots plus portable progress exports in
-  `backup.dir` (rotated; automatic while `serve` runs); `restore`,
-  `export-progress`, `import-progress` (idempotent merge by DOI/PMID/key/title,
-  notes kept), `check`; data & backups card in the settings page.
-- Robustness: durable commits, busy timeout for concurrent writers, atomic
-  config writes, readable errors for broken config/BibTeX/database, tolerant
-  API parsing; failure-scenario and randomised tests.
-- Documentation: `docs/implementation.md` (how it is built, credits),
-  `docs/data-and-backups.md`.
-- Recommendations: unread papers from the Paperpile library are no longer
-  excluded (only papers marked skimmed/read/thorough or dismissed are); a
-  library paper never counts as its own neighbour; one ranked list
-  (`selection.n_recommendations`) instead of detail/skim, the reader
-  chooses the depth.
-- Game profiles: all rewards, the penalty, the quest, the level ladder and
-  badge targets are configurable and locked when the profile starts;
-  20 levels and 44 badges; profile files with recommendations and checksum;
-  load, merge (same rules only), reset and compare (web and CLI).
-- Paperpile page: library browser, last import and notices, upload with
-  checks (check only / check & import), re-import, import history, export
-  instructions; `check-bib` command.
-- `serve` never opens a browser (on a headless Pi this started a text-mode
-  browser); it prints the address(es) instead. `web.host` / `--network`
-  accept `local`, `all`, an interface name (`eth0`, `wlan0`) or an IP;
-  `--list-networks` and `--choose` (with saving) help pick one.
-- Offline test suite with recorded API responses; live smoke test behind
-  `--network`.
-- Documentation in `docs/`.
+- Linux only (developed and tested on a Raspberry Pi 5 with Python 3.13).
+- Semantic Scholar without an API key is often rate-limited (HTTP 429); those
+  steps are skipped with a warning and the rest still works.
+- The web UI uses plain HTTP: use it in your own network or through a VPN.
+- Planned, not yet included: installable phone app (PWA), LLM summaries,
+  Obsidian export, Paperpile write-back, PubMed and bioRxiv as extra sources.

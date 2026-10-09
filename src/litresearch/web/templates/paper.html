@@ -59,7 +59,7 @@
         <form class="inline" method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="/papers/{{ paper.id }}"><button class="small">➕ Queue</button></form>
         {% endif %}
         {% if queue_item %}
-        <form class="inline" method="post" action="/queue/{{ paper.id }}/drop" {% if drop_cost %}data-confirm="Remove this picked recommendation unread? This costs {{ drop_cost }} XP."{% endif %}><button class="small ghost danger">✖ Remove from queue{{ " (−" ~ drop_cost ~ " XP)" if drop_cost }}</button></form>
+        <form class="inline" method="post" action="/queue/{{ paper.id }}/drop" {% if drop_cost %}data-confirm="Remove this paper unread? This costs {{ drop_cost }} XP."{% endif %}><button class="small ghost danger">✖ Remove from queue{{ " (−" ~ drop_cost ~ " XP)" if drop_cost }}</button></form>
         {% endif %}
         {% if not reading or reading.status.value != "dismissed" %}
         <form class="inline" method="post" action="/papers/{{ paper.id }}/dismiss"><input type="hidden" name="next_url" value="/papers/{{ paper.id }}"><button class="small ghost">🚫 Not relevant</button></form>

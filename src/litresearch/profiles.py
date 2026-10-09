@@ -14,7 +14,6 @@ A database from before profiles existed (``paths.database``) is "legacy data";
 ``adopt_legacy`` turns it into the first profile without losing anything.
 """
 
-import io
 import re
 import shutil
 from dataclasses import dataclass
@@ -22,15 +21,16 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
-from ruamel.yaml import YAML
 from sqlmodel import Session, func, select
 
 from litresearch.backup import atomic_write_text, load_profile, snapshot
+from litresearch.backup import slug as slug_of
 from litresearch.config import Config
 from litresearch.db import Paper, Profile, Reading, XpEvent, init_db, now
 from litresearch.game import Level, level_for
 from litresearch.profile import profile_rules, start_profile
 from litresearch.rules import GameRules
+from litresearch.yamlfile import deep_merge, update_yaml
 
 PROFILE_DB = "litresearch.sqlite"
 PROFILE_BIB = "library.bib"
@@ -64,13 +64,8 @@ def exists(base: Config, slug: str) -> bool:
         return False
 
 
-def make_slug(text: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return cleaned[:40].strip("-") or "profile"
-
-
 def unique_slug(base: Config, name: str) -> str:
-    stem = make_slug(name)
+    stem = slug_of(name)
     slug, number = stem, 2
     while (profiles_dir(base) / slug).exists():
         slug = f"{stem[:36]}-{number}"
@@ -98,21 +93,11 @@ def meta(base: Config, slug: str) -> dict:
     return {k: v for k, v in _settings_file(base, slug).items() if k in META_KEYS}
 
 
-def _merge(base: dict, updates: dict) -> dict:
-    merged = dict(base)
-    for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
 def profile_config(base: Config, slug: str, extra: dict | None = None) -> Config:
     """The effective configuration of one profile."""
     home = folder(base, slug)
-    settings = _merge(overlay(base, slug), extra or {})
-    data = _merge(base.model_dump(mode="json"), settings)
+    settings = deep_merge(overlay(base, slug), extra or {})
+    data = deep_merge(base.model_dump(mode="json"), settings)
     data["paths"]["database"] = str(home / PROFILE_DB)
     data["paths"]["bibtex"] = str((settings.get("paths") or {}).get("bibtex") or home / PROFILE_BIB)
     data["backup"]["dir"] = str(Path(base.backup.dir) / slug)
@@ -131,42 +116,8 @@ def write_overlay(base: Config, slug: str, updates: dict) -> Config:
         raise ProfilesError(f"Not a profile setting: {', '.join(sorted(unknown))}")
     config_part = {k: v for k, v in updates.items() if k in OVERLAY_KEYS}
     cfg = profile_config(base, slug, config_part)  # raises on invalid values
-    path = folder(base, slug) / PROFILE_SETTINGS
-    loader = YAML()
-    loader.preserve_quotes = True
-    document = loader.load(path.read_text(encoding="utf-8")) if path.exists() else None
-    document = document or {}
-    _apply(document, updates)
-    buffer = io.StringIO()
-    loader.dump(document, buffer)
-    if path.exists():
-        shutil.copy2(path, path.with_name(path.name + ".bak"))
-    atomic_write_text(path, buffer.getvalue())
+    update_yaml(folder(base, slug) / PROFILE_SETTINGS, updates)
     return cfg
-
-
-def _apply(node, updates: dict) -> None:
-    for key, value in updates.items():
-        if key == "topics" and isinstance(node.get(key), list):
-            node[key] = _merge_topics(node[key], value)
-        elif isinstance(value, dict) and isinstance(node.get(key), dict):
-            _apply(node[key], value)
-        else:
-            node[key] = value
-
-
-def _merge_topics(existing: list, topics: list[dict]) -> list:
-    by_name = {t.get("name"): t for t in existing if isinstance(t, dict)}
-    merged = []
-    for topic in topics:
-        node = by_name.get(topic.get("name"))
-        if node is None:
-            merged.append(dict(topic))
-            continue
-        for key, value in topic.items():
-            node[key] = value
-        merged.append(node)
-    return merged
 
 
 # --- registry --------------------------------------------------------------------------
@@ -186,6 +137,7 @@ class ProfileInfo:
 
 
 def describe(base: Config, slug: str) -> ProfileInfo:
+    """Name, level, XP, papers read and activity of a profile (for the welcome screen)."""
     cfg = profile_config(base, slug)
     engine = init_db(cfg.paths.database)
     try:

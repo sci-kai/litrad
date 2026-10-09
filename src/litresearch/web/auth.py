@@ -29,6 +29,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored: str | None) -> bool:
+    """Constant-time check of a password against a stored scrypt hash."""
     try:
         scheme, n, r, p, salt, digest = (stored or "").split("$")
         if scheme != "scrypt":

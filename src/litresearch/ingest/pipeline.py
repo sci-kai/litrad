@@ -119,6 +119,7 @@ def sync_library(session: Session, entries: list[BibEntry], report: IngestReport
 def resolve_missing_dois(
     session: Session, papers: list[Paper], http: HttpClient, cfg: Config, report: IngestReport
 ) -> None:
+    """Find DOIs for library papers without DOI and PMID via Crossref."""
     taken = set(session.exec(select(Paper.doi).where(Paper.doi.is_not(None))).all())
     for paper in papers:
         if paper.doi or paper.pmid:
@@ -141,6 +142,7 @@ def resolve_missing_dois(
 def enrich_openalex(
     session: Session, papers: list[Paper], http: HttpClient, cfg: Config, report: IngestReport
 ) -> None:
+    """Add OpenAlex metrics (citations, percentile, venue) in batches of 50."""
     client = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email)
     try:
         by_doi = client.works_by_doi([p.doi for p in papers if p.doi])
@@ -197,6 +199,7 @@ def s2_id(paper: Paper) -> str | None:
 def enrich_semanticscholar(
     session: Session, papers: list[Paper], http: HttpClient, cfg: Config, report: IngestReport
 ) -> None:
+    """Add SPECTER2 embeddings, TLDRs and influential citations."""
     client = SemanticScholar(http, cfg.api.semanticscholar_key)
     ids = {s2_id(p): p for p in papers if s2_id(p)}
     try:
@@ -223,6 +226,7 @@ def enrich_semanticscholar(
 def ingest_library(
     cfg: Config, session: Session, http: HttpClient, use_s2: bool = True, source: str = "file"
 ) -> IngestReport:
+    """Import the Paperpile export: sync, resolve DOIs, enrich. Idempotent."""
     report = IngestReport()
     duplicate_keys = []
     entries = parse_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels, duplicate_keys)

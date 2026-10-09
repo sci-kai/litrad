@@ -9,7 +9,7 @@
   <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
 </nav>
 <p class="muted">Short and ordered on purpose: there is always exactly one paper up next. Reading it first earns the 🐸 frog bonus.
-  Removing a paper you picked from the recommendations before at least skimming it costs <b>{{ rules.drop_penalty }} XP</b>.</p>
+  Removing a paper before you at least skimmed it (or marking it not relevant) costs <b>{{ rules.drop_penalty }} XP</b>.</p>
 
 <div class="grid">
   {% for item, paper in queue %}
@@ -30,7 +30,7 @@
         <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🐸 " if item.position == 1 }}Log reading</button>
         <a class="button small ghost" href="/papers/{{ paper.id }}">Abstract &amp; notes</a>
         <form class="inline" method="post" action="/queue/{{ paper.id }}/drop"
-          {% if costs[paper.id] %}data-confirm="Remove this picked recommendation unread? This costs {{ costs[paper.id] }} XP."{% endif %}>
+          {% if costs[paper.id] %}data-confirm="Remove this paper unread? This costs {{ costs[paper.id] }} XP."{% endif %}>
           <button class="small ghost danger">✖ Remove{{ " (−" ~ costs[paper.id] ~ " XP)" if costs[paper.id] }}</button>
         </form>
       </div>

@@ -178,7 +178,7 @@ def _rules_lines(rules) -> list[str]:
         f"chars), inbox zero +{rules.inbox_zero_xp}, badge +{rules.badge_xp}",
         f"  weekly quest: {rules.weekly_detail_goal} deep + {rules.weekly_skim_goal} skims "
         f"= +{rules.quest_xp}",
-        f"  penalty: -{rules.drop_penalty} for a picked recommendation left unread",
+        f"  penalty: -{rules.drop_penalty} for a queued paper left unread",
         f"  {len(rules.levels)} levels ({rules.levels[0].title} ... {rules.levels[-1].title}), "
         f"{len(rules.badges())} badges",
     ]

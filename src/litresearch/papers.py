@@ -32,3 +32,12 @@ def upsert_work(session: Session, work: Work) -> Paper:
     paper.enriched_at = paper.updated_at = now()
     session.add(paper)
     return paper
+
+
+def paper_link(paper: Paper) -> str:
+    """The best link to a paper: DOI, else PubMed, else its own URL."""
+    if paper.doi:
+        return f"https://doi.org/{paper.doi}"
+    if paper.pmid:
+        return f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}"
+    return paper.url or ""

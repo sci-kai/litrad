@@ -13,8 +13,9 @@ from pathlib import Path
 import markdown
 from markdown.extensions.toc import slugify
 
-# the repository's docs folder (litresearch is installed from a clone)
-DEFAULT_PATH = Path(__file__).resolve().parents[3] / "docs" / "documentation.md"
+# docs/documentation.md; web/documentation.md is a symlink to it that the
+# package build turns into a copy, so the docs also ship in wheels
+DEFAULT_PATH = Path(__file__).parent / "documentation.md"
 EXTENSIONS = ["tables", "fenced_code", "toc", "sane_lists"]
 
 
@@ -121,6 +122,7 @@ def _rewrite_links(html: str, here: str, owner: dict[str, str]) -> str:
 
 
 def load(path: Path = DEFAULT_PATH) -> Documentation:
+    """Parse the documentation file into chapters with rendered HTML and sections."""
     title, intro, parts = _split(path.read_text(encoding="utf-8"))
     # the file's own table of contents is replaced by the navigation
     intro = re.split(r"^## Contents\s*$", intro, flags=re.M)[0]

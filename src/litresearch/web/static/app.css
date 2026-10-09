@@ -411,3 +411,5 @@ details.how[open] > summary { margin-bottom: .8rem; }
 .docs-body h2 { font-size: 1.35rem; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
 .docs-body h3 { font-size: 1.12rem; }
 .docs-body h4 { font-size: 1rem; color: var(--muted); }
+.finished-set { text-align: center; border: 2px solid var(--accent-2); }
+.finished-set .row { justify-content: center; }

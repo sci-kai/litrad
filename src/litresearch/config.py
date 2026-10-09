@@ -179,6 +179,7 @@ class ConfigError(ValueError):
 
 
 def load_config(path: Path) -> Config:
+    """Read and validate ``config.yaml``; problems become a readable ConfigError."""
     try:
         with open(path, encoding="utf-8") as handle:
             raw = yaml.safe_load(handle) or {}

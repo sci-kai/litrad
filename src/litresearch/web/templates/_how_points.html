@@ -14,8 +14,8 @@
     <tr><td>📭 queue emptied by reading (once per day)</td><td class="num">+{{ rules.inbox_zero_xp }}</td></tr>
     <tr><td>🗓️ weekly quest ({{ rules.weekly_detail_goal }} deep read + {{ rules.weekly_skim_goal }} more skims)</td><td class="num">+{{ rules.quest_xp }}</td></tr>
     <tr><td>🏅 badge unlocked ({{ rules.badges() | length }} badges)</td><td class="num">+{{ rules.badge_xp }}</td></tr>
-    <tr><td>⚠️ a paper you picked <b>from the recommendations</b> leaves the queue (removed or marked not relevant) before you at least skimmed it</td><td class="num neg">−{{ rules.drop_penalty }}</td></tr>
+    <tr><td>⚠️ a paper on your queue (from the recommendations, your library or added by hand) leaves it, removed or marked not relevant, before you at least skimmed it</td><td class="num neg">−{{ rules.drop_penalty }}</td></tr>
   </table>
-  <p class="muted" style="margin-top:.6rem">Papers you added yourself or from your library can be removed for free. Upgrading a paper pays only the difference; re-logging pays nothing. Penalties can lower your level.</p>
+  <p class="muted" style="margin-top:.6rem">Dismissing a recommendation you never queued is free. Upgrading a paper pays only the difference; re-logging pays nothing. Penalties can lower your level.</p>
   <p class="muted"><a href="/docs/6-gamification">Levels, badges and all rules in the documentation →</a></p>
 </div>

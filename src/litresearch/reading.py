@@ -25,8 +25,11 @@ from litresearch.db import (
 )
 from litresearch.game import Award, award_reading, level_for, total_xp
 from litresearch.ingest.bibtex import normalize_doi
+from litresearch.papers import upsert_work
 from litresearch.profile import active_rules, ensure_profile, profile_rules
 from litresearch.recommend.engine import latest_batch
+from litresearch.sources.http import HttpClient, HttpError
+from litresearch.sources.openalex import OpenAlex
 
 
 class ReadingError(ValueError):
@@ -116,6 +119,7 @@ def queue_add(
     source: str = "manual",
     position: int | None = None,
 ) -> QueueItem:
+    """Put a paper on the queue (at ``position``, default last); enforces the limit."""
     items = [item for item, _ in queue_items(session)]
     if any(item.paper_id == paper.id for item in items):
         raise ReadingError("Already on the queue")
@@ -164,13 +168,13 @@ def unread_drop_penalty(
     read_depth: int,
     at: datetime,
 ) -> XpEvent | None:
-    """Penalty for a recommended paper you picked but let go unread.
+    """Penalty for a paper you put on the queue but let go unread.
 
-    Applies only to papers added to the queue from a recommendation that were
-    not at least skimmed. Manually added and library papers can be dropped
-    freely.
+    Applies to every queued paper (from the recommendations, your library or
+    added by hand) that leaves the queue, removed or marked not relevant,
+    before it was at least skimmed: the queue is a commitment.
     """
-    if item is None or item.source != "recommendation" or read_depth >= 2:
+    if item is None or read_depth >= 2:
         return None
     profile, _ = ensure_profile(session, cfg, at)
     penalty = profile_rules(profile).drop_penalty
@@ -180,7 +184,7 @@ def unread_drop_penalty(
         paper_id=paper.id,
         points=-penalty,
         kind="penalty",
-        reason=f"Picked recommendation left the queue unread: {paper.title[:60]}",
+        reason=f"Queued paper left the queue unread: {paper.title[:60]}",
         at=at,
     )
     session.add(event)
@@ -204,9 +208,22 @@ def drop_from_queue(
 def drop_would_cost(session: Session, cfg: Config, paper: Paper) -> int:
     """XP a drop would cost right now (for warnings in the UI)."""
     item = session.get(QueueItem, paper.id)
-    if item is None or item.source != "recommendation" or deepest_depth(session, paper.id) >= 2:
+    if item is None or deepest_depth(session, paper.id) >= 2:
         return 0
     return active_rules(session, cfg).drop_penalty
+
+
+def fetch_by_doi(session: Session, cfg: Config, http: HttpClient, doi: str | None) -> Paper:
+    """Store a paper that is not in the database yet, with OpenAlex metadata."""
+    if not doi:
+        raise ReadingError("Not found. Enter a DOI, r1–r5, a citation key or title words.")
+    try:
+        works = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email).works_by_doi([doi])
+    except HttpError as error:
+        raise ReadingError(f"Could not fetch {doi}: {error}") from error
+    if doi not in works:
+        raise ReadingError(f"OpenAlex does not know {doi}; add it by title instead")
+    return upsert_work(session, works[doi])
 
 
 def queue_move(session: Session, paper: Paper, position: int) -> None:
@@ -225,7 +242,7 @@ def queue_move(session: Session, paper: Paper, position: int) -> None:
 def source_of(
     session: Session, paper: Paper, ref: str | None = None, hint: str | None = None
 ) -> str:
-    """Where a queued paper came from; decides whether dropping it costs XP.
+    """Where a queued paper came from (shown in the UI and used for badges).
 
     A paper picked from the recommendations counts as "recommendation" even
     when it is also in the Paperpile library.

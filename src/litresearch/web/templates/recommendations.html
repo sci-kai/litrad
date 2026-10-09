@@ -56,6 +56,18 @@
 
 <div class="grid" style="grid-template-columns: 1fr 300px; align-items: start">
   <div class="grid">
+    {% if finished %}
+    <div class="card finished-set">
+      <h2>🎉 Finished this recommendation set!</h2>
+      <p>You handled all {{ recs | length }} papers: {{ rec_status.values() | select("equalto", "queued") | list | length }} on your queue,
+        {{ rec_status.values() | select("equalto", "dismissed") | list | length }} not relevant{% set other = rec_status.values() | reject("in", ["queued", "dismissed"]) | list | length %}{% if other %}, {{ other }} already read{% endif %}.</p>
+      <div class="row">
+        <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get new recommendations</button></form>
+        <a class="button ghost" href="/recommendations?batch={{ batch.id }}">Show this set again</a>
+      </div>
+      <p class="muted" style="margin:.6rem 0 0">Earlier sets stay available in the drop-down menu above.</p>
+    </div>
+    {% else %}
     {% if recs %}<p class="muted" style="margin:0">Ranked by score. How deeply you read is your choice: abstract +{{ base_xp["abstract"] }}, skimmed +{{ base_xp["skimmed"] }}, read +{{ base_xp["read"] }}, thorough +{{ base_xp["thorough"] }} XP.</p>{% endif %}
     {% for rec, paper in recs %}
     <div class="card paper-card">
@@ -94,6 +106,7 @@
       {{ evidence_tree(rec, paper, batch) }}
     </div>
     {% endfor %}
+    {% endif %}
     {% if batch and not recs %}<div class="card">No eligible papers this time. Check <a href="?topics=1#topics">your topics</a>.</div>{% endif %}
     {% if not batch %}<div class="card"><h2>✨ Ready when you are</h2><p>Get your first list: up to {{ cfg.selection.n_recommendations }} papers, ranked by score. Then pick the ones you want to read for your queue.</p>
       <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get recommendations</button></form></div>{% endif %}

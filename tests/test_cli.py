@@ -42,13 +42,6 @@ def test_version():
     assert result.exit_code == 0 and result.stdout.strip() == cli.__version__
 
 
-def test_db_init(tmp_path):
-    config = write_config(tmp_path)
-    result = runner.invoke(cli.app, ["db-init", "-c", str(config)])
-    assert result.exit_code == 0
-    assert (tmp_path / "db.sqlite").exists()
-
-
 def test_ingest_and_status(tmp_path, monkeypatch, make_http):
     apis = FakeApis()
     monkeypatch.setattr(cli, "make_http", lambda cfg: make_http(apis))
@@ -77,11 +70,6 @@ def test_ingest_without_s2(tmp_path, monkeypatch, make_http):
 def test_missing_config_fails(tmp_path):
     result = runner.invoke(cli.app, ["status", "-c", str(tmp_path / "nope.yaml")])
     assert result.exit_code != 0
-
-
-def test_unimplemented_commands_exit_nonzero(tmp_path):
-    result = runner.invoke(cli.app, ["export", "-c", str(write_config(tmp_path))])
-    assert result.exit_code == 1
 
 
 def test_recommend_builds_once_per_week(tmp_path, monkeypatch, make_http):

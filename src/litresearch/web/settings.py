@@ -1,19 +1,17 @@
-"""Editable settings: one schema for the settings form and the criteria page.
+"""Editable settings: the schema behind the settings form and the rules form.
 
-Values are written back to ``config.yaml`` with ruamel.yaml so that comments
-and key order survive; the previous file is kept as ``config.yaml.bak``.
+``GROUPS`` describes every recommendation setting (label, help, range) for
+the Settings page; ``RULE_GROUPS`` the game rules chosen when a profile is
+created. The parse functions turn submitted forms into nested dicts, which
+``profiles.write_overlay`` validates and saves in the profile's settings.yaml.
 """
 
-import io
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from ruamel.yaml import YAML
-
-from litresearch.backup import atomic_write_text
 from litresearch.config import Config
 from litresearch.rules import BADGE_CODES, GameRules, LevelDef
+from litresearch.yamlfile import update_yaml
 
 
 @dataclass(frozen=True)
@@ -375,88 +373,12 @@ def parse_topics(form: dict) -> dict:
     }
 
 
-def _merge(base: dict, updates: dict) -> dict:
-    merged = dict(base)
-    for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def _apply(node, updates: dict, existing_topics) -> None:
-    """Write updates into a ruamel round-trip node, keeping comments."""
-    for key, value in updates.items():
-        if key == "topics":
-            node["topics"] = _topics_node(value, existing_topics)
-        elif isinstance(value, dict):
-            if key not in node or node[key] is None:
-                node[key] = {}
-            _apply(node[key], value, existing_topics)
-            if key == "selection":
-                # replaced by n_recommendations
-                for old in ("n_detail", "n_skim"):
-                    node[key].pop(old, None)
-        else:
-            node[key] = value
-
-
-def _topics_node(topics: list[dict], existing):
-    """Keep fields of existing topics that the form does not edit (mesh terms, seeds)."""
-    by_name = {t.get("name"): t for t in (existing or [])}
-    result = []
-    for topic in topics:
-        node = by_name.get(topic["name"])
-        if node is None:
-            node = {"name": topic["name"]}
-        node["weight"] = topic["weight"]
-        node["queries"] = topic["queries"]
-        result.append(node)
-    return result
-
-
-def _write_document(config_path: Path, yaml: YAML, document) -> None:
-    """Back up the old file, then replace it atomically (never half-written)."""
-    buffer = io.StringIO()
-    yaml.dump(document, buffer)
-    shutil.copy2(config_path, config_path.with_name(config_path.name + ".bak"))
-    atomic_write_text(config_path, buffer.getvalue())
-
-
 def write_values(config_path: Path, updates: dict) -> None:
-    """Write plain values (no validation) keeping comments, with a backup."""
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    with open(config_path, encoding="utf-8") as handle:
-        document = yaml.load(handle) or {}
-    _apply(document, updates, document.get("topics"))
-    _write_document(config_path, yaml, document)
+    """Write plain values into ``config.yaml`` (no validation), keeping comments."""
+    update_yaml(config_path, updates)
 
 
-def save_settings(config_path: Path, updates: dict) -> Config:
-    """Validate and write; raises SettingsError without touching the file on errors."""
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    with open(config_path, encoding="utf-8") as handle:
-        document = yaml.load(handle) or {}
-    plain = YAML(typ="safe")
-    with open(config_path, encoding="utf-8") as handle:
-        current = plain.load(handle) or {}
-    merged = _merge(current, updates)
-    try:
-        validated = Config.model_validate(merged)
-    except ValueError as error:
-        raise SettingsError(str(error)) from error
-    w = validated.selection.weights
-    if w.relevance + w.impact + w.timeliness <= 0:
-        raise SettingsError("At least one score weight must be above 0")
-    _apply(document, updates, document.get("topics"))
-    _write_document(config_path, yaml, document)
-    return validated
-
-
-# --- game rules (profile start form) ------------------------------------------------------
+# --- game rules (profile creation form) ------------------------------------------------------
 
 RULE_GROUPS = (
     (
@@ -500,7 +422,7 @@ RULE_GROUPS = (
     (
         "Penalty",
         "Discourages picking recommendations and abandoning them.",
-        (("drop_penalty", "⚠️ picked recommendation leaves the queue unread", "int", 0, 1000, 1),),
+        (("drop_penalty", "⚠️ queued paper leaves the queue unread", "int", 0, 1000, 1),),
     ),
 )
 

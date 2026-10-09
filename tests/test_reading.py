@@ -7,6 +7,7 @@ from litresearch.config import Config
 from litresearch.db import (
     Category,
     Paper,
+    QueueItem,
     Reading,
     ReadStatus,
     Recommendation,
@@ -223,15 +224,23 @@ def test_abstract_only_still_counts_as_unread(db):
     assert drop_from_queue(session, cfg, papers[1], at=AT).points == -15
 
 
-def test_manual_and_library_papers_drop_for_free(db):
+def test_every_queued_paper_costs_xp_when_dropped_unread(db):
     cfg, session, papers = db
+    penalty = cfg.game.drop_penalty
     queue_add(session, cfg, papers[0], source="library")
     queue_add(session, cfg, papers[2], source="manual")
-    assert drop_would_cost(session, cfg, papers[0]) == 0
-    assert drop_from_queue(session, cfg, papers[0], at=AT) is None
-    assert drop_from_queue(session, cfg, papers[2], at=AT) is None
+    assert drop_would_cost(session, cfg, papers[0]) == penalty
+    assert drop_from_queue(session, cfg, papers[0], at=AT).points == -penalty
+    event = drop_from_queue(session, cfg, papers[2], at=AT)
+    assert event.points == -penalty and "left the queue unread" in event.reason
     with pytest.raises(ReadingError, match="Not on the queue"):
         drop_from_queue(session, cfg, papers[2], at=AT)
+    # once skimmed, a paper can leave for free
+    queue_add(session, cfg, papers[2], source="manual")
+    record_reading(session, cfg, papers[2], ReadStatus.abstract, at=AT)
+    assert drop_would_cost(session, cfg, papers[2]) == penalty  # an abstract is not enough
+    record_reading(session, cfg, papers[2], ReadStatus.skimmed, at=AT)
+    assert session.get(QueueItem, papers[2].id) is None  # skimming removes it anyway
 
 
 def test_dismissing_a_picked_recommendation_costs_xp(db):

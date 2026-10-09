@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work as described in the documentation
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing litresearch! Please do not paste private data
+        (your BibTeX export, notes, passwords or config with API keys).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: "I clicked 'Create profile' and nothing happened ..."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. litresearch serve
+        2. open the welcome screen
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error messages or terminal output
+      description: Output of the command, or the browser console (F12) for UI problems.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: litresearch version
+      description: Output of `litresearch version`
+      placeholder: 0.1.0-alpha.1
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System and browser
+      placeholder: Raspberry Pi OS (64 bit), Python 3.13, Firefox 140 on the laptop
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Web UI
+        - Command line
+        - Installation
+        - Recommendations / data sources
+        - Points, levels or badges
+        - Backups, profiles or data

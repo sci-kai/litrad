@@ -679,7 +679,7 @@ PROFILE_PREFIX = "litresearch_profile_"
 def slug(text: str) -> str:
     """File-name-safe version of a profile name (a-z, 0-9 and -)."""
     cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return cleaned[:40] or "profile"
+    return cleaned[:40].strip("-") or "profile"
 
 
 def save_profile_file(

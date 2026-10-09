@@ -14,6 +14,7 @@ from sqlmodel import Session, func, select
 from litresearch import __version__
 from litresearch.config import Config, load_config
 from litresearch.db import Embedding, Paper, init_db
+from litresearch.papers import paper_link
 from litresearch.sources.http import HttpClient, ResponseCache
 
 app = typer.Typer(help="Personal literature radar on top of a Paperpile library.")
@@ -89,23 +90,10 @@ def main(
     logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(message)s")
 
 
-def _not_yet(milestone: int):
-    typer.echo(f"Not implemented yet (milestone {milestone}).", err=True)
-    raise typer.Exit(code=1)
-
-
 @app.command()
 def version():
     """Print the version."""
     typer.echo(__version__)
-
-
-@app.command("db-init")
-def db_init(config: Path = ConfigOpt):
-    """Create the SQLite database and tables."""
-    cfg = load_cfg(config)
-    init_db(cfg.paths.database).dispose()
-    typer.echo(f"Database ready: {cfg.paths.database}")
 
 
 @app.command()
@@ -212,14 +200,6 @@ def paper_line(paper: Paper) -> str:
     return f"{short_authors(paper.authors)} ({year}){venue}"
 
 
-def paper_link(paper: Paper) -> str:
-    if paper.doi:
-        return f"https://doi.org/{paper.doi}"
-    if paper.pmid:
-        return f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}"
-    return paper.url or ""
-
-
 @app.command()
 def recommend(
     config: Path = ConfigOpt,
@@ -260,6 +240,7 @@ def recommend(
 
 
 def show_batch(batch, items) -> None:
+    """Print a recommendation set with reasons and links."""
     console.print(
         f"[bold]Recommendations from {batch.created_at.date().isoformat()}[/bold] "
         f"[dim]({batch.n_candidates} candidates checked)[/dim]"
@@ -425,27 +406,9 @@ def set_password(
         raise typer.Exit(code=1) from None
     write_values(config, {"web": {"password_hash": stored}})
     console.print(
-        "Password set; existing logins are signed out. Start the UI for your network with "
-        "[bold]litresearch serve --host 0.0.0.0[/bold] (or set web.host: 0.0.0.0)."
+        "Password set; existing logins are signed out. Start [bold]litresearch serve[/bold] "
+        "and choose the network to serve on."
     )
-
-
-@app.command()
-def export(config: Path = ConfigOpt):
-    """Export reading lists and notes to the Obsidian vault."""
-    _not_yet(6)
-
-
-@app.command("sync-notes")
-def sync_notes(config: Path = ConfigOpt):
-    """Import note and status edits from the Obsidian vault."""
-    _not_yet(6)
-
-
-@app.command("export-paperpile")
-def export_paperpile(config: Path = ConfigOpt):
-    """Write a BibTeX file of recommended/read papers for import into Paperpile."""
-    _not_yet(6)
 
 
 # reading queue, reading log and score commands register themselves on ``app``

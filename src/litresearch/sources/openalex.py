@@ -72,6 +72,7 @@ def rebuild_abstract(index: dict | None) -> str | None:
 
 
 def parse_work(raw: dict) -> Work:
+    """An OpenAlex work record as a ``Work`` (tolerant of missing fields)."""
     location = raw.get("primary_location") or {}
     source = location.get("source") or {}
     percentile = (raw.get("citation_normalized_percentile") or {}).get("value")

@@ -270,10 +270,11 @@ def test_inbox_zero_only_by_reading(db):
     award = record_reading(session, cfg, b, ReadStatus.read, at=MONDAY).award
     assert "inbox_zero" in kinds(award)
     assert "inbox_zero" in [x.code for x in award.badges]
-    # dismissing the last paper does not count
+    # dismissing the last paper does not count (and costs the drop penalty)
     c = add_paper(session, "C")
     queue_add(session, cfg, c)
-    assert record_reading(session, cfg, c, ReadStatus.dismissed, at=MONDAY).award.points == 0
+    award = record_reading(session, cfg, c, ReadStatus.dismissed, at=MONDAY).award
+    assert kinds(award) == {"penalty": -cfg.game.drop_penalty}
 
 
 def test_level_up_is_reported(db):

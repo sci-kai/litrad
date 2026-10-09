@@ -18,20 +18,21 @@ timeliness: very recent *or* a landmark paper.
 - Free data sources only (OpenAlex, Semantic Scholar, Crossref), no personal
   data sent.
 
-**Status:** `v0.1.0-dev`. Local web UI and command line; a phone app (PWA) is
-planned.
+**Status:** alpha (`v0.1.0-alpha.1`), ready for testing. Expect rough
+edges; please [report what breaks](CONTRIBUTING.md#reporting-problems-and-ideas).
+Runs on Linux (developed on a Raspberry Pi); a phone app (PWA) is planned.
 
-## Quick start
+## Install
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-cp config/config.example.yaml config/config.yaml
-.venv/bin/litresearch serve              # prints the address to open
+git clone <repository-url> litresearch && cd litresearch
+python3 install.py                       # add --service to start the web UI automatically
+.venv/bin/litresearch serve              # asks where to serve, prints the address to open
 ```
 
 In the browser: create a profile, upload your Paperpile BibTeX export
 (**Library → Paperpile library**), name your topics and get your first
-recommendations (**Reading → Recommendations**). The same works on the
+recommendations (**Reading → Recommendations**). Everything also works on the
 command line:
 
 ```bash
@@ -42,6 +43,8 @@ cp library.bib data/profiles/kai/library.bib && .venv/bin/litresearch ingest
 .venv/bin/litresearch read q1 thorough --rating 5 --note "..."
 .venv/bin/litresearch score
 ```
+
+Update with `git pull && python3 install.py`; your `config/` and `data/` stay.
 
 ## Documentation
 
@@ -61,14 +64,14 @@ Everything is in **[docs/documentation.md](docs/documentation.md)**:
 3. ✅ Candidate search, scoring, ≤ 5-paper lists on request (unread library papers included)
 4. ✅ Reading queue, reading log, gamification, local web UI, profiles · ⏳ phone app (PWA)
 5. LLM summaries via an OpenAI-compatible endpoint (LM Studio / Ollama)
-6. Obsidian export/sync, Paperpile write-back file, systemd deployment
+6. Obsidian export/sync, Paperpile write-back file · ✅ systemd service (`install.py --service`)
 7. Feedback loop: ✅ dismissals and good ratings already steer the S2 recommendations; ⏳ weight tuning
 
-## Branches
+## Contributing
 
-- `main`: releases
-- `dev`: development; feature branches `feat-*` branch off `dev`
-  (see [Development](docs/documentation.md#13-development))
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+`main` holds releases, `dev` is the development branch, and feature branches
+(`feat-*`, `issueNN-*`) branch off `dev`. Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

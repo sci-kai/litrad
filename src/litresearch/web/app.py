@@ -1,7 +1,22 @@
-"""Local web UI (FastAPI + Jinja2, no external assets).
+"""The web UI (FastAPI + Jinja2, server-rendered, no external assets).
 
-Single-user and meant for 127.0.0.1. POST requests from other origins are
-rejected so that other websites cannot trigger actions in the background.
+How a request flows:
+
+1. ``require_login`` (middleware): with ``web.password_hash`` set, every page
+   except /login and /static needs the signed session cookie.
+2. The same middleware sends requests without a valid profile cookie to
+   /welcome and otherwise stores the chosen profile in ``CURRENT_PROFILE``.
+   Every route then works on that profile: ``current_cfg()`` merges
+   ``config.yaml`` with the profile's settings.yaml, ``open_session()`` opens
+   the profile's database.
+3. ``same_origin_only`` rejects POST requests from other websites.
+4. Pages are rendered with ``render()``, which adds the header (level, XP,
+   streak, queue size, recommendation reminder). Actions post a form and
+   redirect back (post/redirect/get); rewards travel as a short-lived token
+   (``Celebrations``) and are shown as toasts by static/app.js.
+
+Sections in ``create_app``: login · profile selection · pages · Paperpile
+library · profile · documentation · actions.
 """
 
 import asyncio
@@ -72,7 +87,7 @@ from litresearch.ingest.bibtex import normalize_doi
 from litresearch.ingest.check import FIELDS as BIB_FIELDS
 from litresearch.ingest.check import INSTRUCTIONS as BIB_INSTRUCTIONS
 from litresearch.ingest.check import check_bibtex
-from litresearch.papers import upsert_work
+from litresearch.papers import paper_link
 from litresearch.profile import ProfileError, active_rules, get_profile
 from litresearch.profiles import ProfilesError
 from litresearch.reading import (
@@ -80,6 +95,7 @@ from litresearch.reading import (
     add_note,
     drop_from_queue,
     drop_would_cost,
+    fetch_by_doi,
     find_paper,
     queue_add,
     queue_items,
@@ -93,8 +109,6 @@ from litresearch.recommend.engine import (
     days_since_last_batch,
     latest_batch,
 )
-from litresearch.sources.http import HttpError
-from litresearch.sources.openalex import OpenAlex
 from litresearch.web.auth import (
     COOKIE,
     SESSION_DAYS,
@@ -169,6 +183,7 @@ class Celebrations:
 
 
 def award_payload(award: Award | None, message: str, session: Session, kind="success") -> dict:
+    """The toast/confetti data of an action: points, events, level-ups, badges."""
     payload = {"kind": kind, "message": message, "events": [], "points": 0}
     if award is None:
         return payload
@@ -201,6 +216,7 @@ def award_payload(award: Award | None, message: str, session: Session, kind="suc
 
 
 def create_app(config_path: Path) -> FastAPI:
+    """Build the FastAPI app for the config file at ``config_path``."""
     config_path = Path(config_path)
     app = FastAPI(title="litresearch", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -218,13 +234,6 @@ def create_app(config_path: Path) -> FastAPI:
         "unknown authors" if not a else a[0].split(",")[0] + (" et al." if len(a) > 1 else "")
     )
     env.filters["pct"] = lambda v: f"{v * 100:.0f}%"
-
-    def paper_link(paper: Paper) -> str:
-        if paper.doi:
-            return f"https://doi.org/{paper.doi}"
-        if paper.pmid:
-            return f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}"
-        return paper.url or ""
 
     env.globals["paper_link"] = paper_link
 
@@ -299,6 +308,7 @@ def create_app(config_path: Path) -> FastAPI:
         return await call_next(request)
 
     def render(request: Request, name: str, session: Session, cfg, **context):
+        """Render a page with the header data every page needs (profile, XP, reminder)."""
         token = request.query_params.get("c")
         today = date.today()
         rules = active_rules(session, cfg)
@@ -350,6 +360,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/login")
     async def login(password: str = Form(...), next: str = Form("/")):
+        """Check the password; a wrong one costs a second, a right one sets the cookie."""
         password_hash = load_config(config_path).web.password_hash
         if not password_hash:
             return RedirectResponse("/", status_code=303)
@@ -394,6 +405,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.get("/welcome", response_class=HTMLResponse)
     def welcome(request: Request):
+        """The first screen: choose, create, take over or load a profile."""
         base = base_config()
         return templates.TemplateResponse(
             request,
@@ -451,6 +463,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/welcome/load")
     async def welcome_load(request: Request):
+        """A saved profile file (uploaded or from the backups) becomes a new profile."""
         form = await request.form()
         base = base_config()
         try:
@@ -489,6 +502,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard(request: Request, weeks: int = 4):
+        """Up next, weekly quest, latest recommendations, queue and weekly reports."""
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -538,6 +552,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.get("/recommendations", response_class=HTMLResponse)
     def recommendations(request: Request, batch: int | None = None, topics: bool = False):
+        """A recommendation set (the newest, or ``?batch=``), or the topic set-up."""
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -550,6 +565,7 @@ def create_app(config_path: Path) -> FastAPI:
                     else (batches[0] if batches else None)
                 )
                 recs = batch_items(session, current) if current else []
+                status = recommendation_status(session, recs)
                 return render(
                     request,
                     "recommendations.html",
@@ -558,7 +574,10 @@ def create_app(config_path: Path) -> FastAPI:
                     batch=current,
                     batches=batches,
                     recs=recs,
-                    rec_status=recommendation_status(session, recs),
+                    rec_status=status,
+                    # every paper of the set is handled (queued, read or not relevant):
+                    # the page shows a "finished" note; ?batch= still shows the list
+                    finished=bool(recs) and len(status) == len(recs) and batch is None,
                     queue_full=len(queue_items(session)) >= cfg.queue.max_size,
                     # first visit: ask for the topics of interest
                     onboarding=not cfg.topics and not topics_onboarded(),
@@ -573,6 +592,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/recommendations/topics")
     async def topics_save(request: Request):
+        """Save the topics of this profile (also ends the first-visit set-up)."""
         form = await request.form()
         data = {"excluded_terms": form.get("excluded_terms", "")}
         for key in ("topic_name", "topic_weight", "topic_queries"):
@@ -614,6 +634,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.post("/recommendations/build")
     def build(s2: bool = Form(True)):
+        """Get a new recommendation set now (takes about a minute)."""
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -638,6 +659,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.get("/queue", response_class=HTMLResponse)
     def queue_page(request: Request):
+        """The reading queue with read forms and removal costs."""
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -660,6 +682,7 @@ def create_app(config_path: Path) -> FastAPI:
 
     @app.get("/library", response_class=HTMLResponse)
     def library(request: Request, q: str = ""):
+        """Search all known papers to put them on the queue."""
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -1228,7 +1251,11 @@ def create_app(config_path: Path) -> FastAPI:
                     elif ref.strip():
                         paper = find_paper(session, ref)
                         if paper is None:
-                            paper = fetch_by_doi(cfg, session, normalize_doi(ref))
+                            http = make_http(cfg)
+                            try:
+                                paper = fetch_by_doi(session, cfg, http, normalize_doi(ref))
+                            finally:
+                                http.close()
                     else:
                         raise ReadingError("Enter a DOI, a reference or a title")
                     origin = source_of(session, paper, ref, source or None)
@@ -1248,20 +1275,6 @@ def create_app(config_path: Path) -> FastAPI:
                 )
         finally:
             engine.dispose()
-
-    def fetch_by_doi(cfg, session: Session, doi: str | None) -> Paper:
-        if not doi:
-            raise ReadingError("Not found. Enter a DOI, r1–r5, a citation key or title words.")
-        http = make_http(cfg)
-        try:
-            works = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email).works_by_doi([doi])
-        except HttpError as exc:
-            raise ReadingError(f"Could not fetch {doi}: {exc}") from exc
-        finally:
-            http.close()
-        if doi not in works:
-            raise ReadingError(f"OpenAlex does not know {doi}; add it by title instead")
-        return upsert_work(session, works[doi])
 
     @app.post("/queue/{paper_id}/move")
     def queue_move_action(paper_id: int, position: int = Form(...)):

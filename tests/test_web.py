@@ -10,9 +10,16 @@ from sqlmodel import Session, select
 import litresearch.web.app as web
 from conftest import SAMPLE_BIB, FakeApis, enter_profile, make_work, profile_cfg
 from litresearch.config import load_config
-from litresearch.db import Paper, QueueItem, XpEvent, init_db
+from litresearch.db import (
+    Paper,
+    QueueItem,
+    Recommendation,
+    RecommendationBatch,
+    XpEvent,
+    init_db,
+)
 from litresearch.ingest.pipeline import ingest_library
-from litresearch.web.settings import SettingsError, parse_form, save_settings
+from litresearch.web.settings import SettingsError, parse_form
 
 CONFIG = """\
 # my litresearch config
@@ -143,6 +150,27 @@ def test_build_and_show_evidence(app_env):
     assert "Settings used" in page
 
 
+def test_finished_recommendation_set(app_env):
+    client, path, _ = app_env
+    post(client, "/recommendations/build", {"s2": "false"})
+    engine = db(path)
+    with Session(engine) as session:
+        batch_id = session.exec(select(RecommendationBatch.id)).one()
+        ids = list(session.exec(select(Recommendation.paper_id)).all())
+    engine.dispose()
+    assert len(ids) == 2
+    post(client, "/queue/add", {"ref": f"#{ids[0]}", "source": "recommendation"})
+    assert "Finished this recommendation set" not in client.get("/recommendations").text
+    post(client, f"/papers/{ids[1]}/dismiss", {"next_url": "/recommendations"})
+    page = client.get("/recommendations").text
+    assert "Finished this recommendation set!" in page
+    assert "1 on your queue" in page and "1 not relevant" in page
+    assert "Clonal evolution of tumours" not in page.split("Finished")[1]  # list hidden
+    again = client.get(f"/recommendations?batch={batch_id}").text
+    assert "Finished this recommendation set" not in again and "Why was this recommended" in again
+    assert "all handled" in client.get("/").text
+
+
 def test_add_recommendation_then_drop_costs_xp(app_env):
     client, path, _ = app_env
     post(client, "/recommendations/build", {"s2": "false"})
@@ -156,16 +184,17 @@ def test_add_recommendation_then_drop_costs_xp(app_env):
     payload = celebration(response)
     assert payload["kind"] == "warning" and payload["points"] == -15 and payload["penalty"]
     ledger = client.get("/ledger?kind=penalty").text
-    assert "Picked recommendation left the queue unread" in ledger
+    assert "Queued paper left the queue unread" in ledger
 
 
-def test_manual_add_and_free_drop(app_env):
+def test_manual_add_and_drop_costs_xp(app_env):
     client, path, _ = app_env
     response = post(client, "/queue/add", {"title": "Preprint from the lab", "url": "https://x"})
     assert "Preprint from the lab" in celebration(response)["message"]
     pid = paper_id(path, title="Preprint from the lab")
+    assert "−15 XP if removed unread" in client.get("/queue").text
     payload = celebration(post(client, f"/queue/{pid}/drop"))
-    assert payload["points"] == 0 and payload["kind"] == "info"
+    assert payload["points"] == -15 and payload["penalty"] and payload["kind"] == "warning"
 
 
 def test_add_unknown_doi_and_errors(app_env):
@@ -367,30 +396,38 @@ def test_parse_form_units():
         parse_form(form)
 
 
-def test_save_settings_disabling_sources(tmp_path):
+def test_update_yaml_keeps_comments_and_topic_fields(tmp_path):
+    from litresearch.yamlfile import update_yaml
+
     path = tmp_path / "c.yaml"
-    path.write_text("paths:\n  bibtex: x.bib\nsources:\n  openalex: true  # keep\n")
-    cfg = save_settings(path, {"sources": {"openalex": False}})
-    assert cfg.sources.openalex is False and "# keep" in path.read_text()
+    path.write_text(
+        "sources:\n  openalex: true  # keep\n"
+        "topics:\n  - name: evo  # main topic\n    queries: [a]\n    mesh_terms: [M]\n"
+    )
+    update_yaml(
+        path,
+        {
+            "sources": {"openalex": False},
+            "topics": [{"name": "evo", "queries": ["b"]}, {"name": "new", "queries": ["c"]}],
+        },
+    )
+    text = path.read_text()
+    assert "# keep" in text and "# main topic" in text and "openalex: false" in text
+    assert "mesh_terms: [M]" in text and "- name: new" in text
+    assert path.with_name("c.yaml.bak").exists()
+    update_yaml(tmp_path / "fresh.yaml", {"web": {"host": "wlan0"}})  # created if missing
+    assert "host: wlan0" in (tmp_path / "fresh.yaml").read_text()
 
 
 def test_xp_events_unchanged_by_page_views(app_env):
     client, path, _ = app_env
-    for url in ("/", "/progress", "/weekly", "/ledger", "/how"):
+    for url in ("/", "/progress", "/recommendations", "/docs", "/profile"):
         client.get(url)
     engine = db(path)
     with Session(engine) as session:
         assert session.exec(select(XpEvent)).all() == []
         assert session.exec(select(QueueItem)).all() == []
     engine.dispose()
-
-
-def test_saving_settings_removes_old_detail_skim_keys(tmp_path):
-    path = tmp_path / "c.yaml"
-    path.write_text("paths:\n  bibtex: x.bib\nselection:\n  n_detail: 2  # old\n  n_skim: 3\n")
-    save_settings(path, {"selection": {"n_recommendations": 4}})
-    text = path.read_text()
-    assert "n_detail" not in text and "n_skim" not in text and "n_recommendations: 4" in text
 
 
 def test_library_paper_picked_from_recommendations_keeps_penalty(app_env):

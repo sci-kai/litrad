@@ -431,7 +431,7 @@ class GameRules(BaseModel):
     quest_xp: int = Field(50, ge=0, le=10000)
     # per unlocked badge
     badge_xp: int = Field(25, ge=0, le=10000)
-    # penalty: a picked recommendation leaves the queue unread
+    # penalty: a queued paper leaves the queue before it was at least skimmed
     drop_penalty: int = Field(15, ge=0, le=10000)
     levels: list[LevelDef] = Field(
         default_factory=lambda: [LevelDef(xp=x, title=t, icon=i) for x, t, i in DEFAULT_LEVELS]
@@ -477,6 +477,7 @@ class GameRules(BaseModel):
         }
 
     def badges(self) -> list[Badge]:
+        """The badge catalogue with this profile's targets."""
         result = []
         for definition in BADGE_CATALOG:
             target = self.badge_targets.get(definition.code, definition.target)
