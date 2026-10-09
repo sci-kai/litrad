@@ -19,7 +19,7 @@ timeliness: very recent *or* a landmark paper.
   data sent.
 
 **Status:** alpha (`v0.1.0-alpha.1`), ready for testing. Expect rough
-edges; please [report what breaks](CONTRIBUTING.md#reporting-problems-and-ideas).
+edges; please [test it](TESTING.md) and report what breaks.
 Runs on Linux (developed on a Raspberry Pi); a phone app (PWA) is planned.
 
 ## Install
@@ -59,13 +59,19 @@ Everything is in **[docs/documentation.md](docs/documentation.md)**:
 
 ## Roadmap
 
-1. ✅ Skeleton: config, database, CLI
-2. ✅ Library ingest and enrichment
-3. ✅ Candidate search, scoring, ≤ 5-paper lists on request (unread library papers included)
-4. ✅ Reading queue, reading log, gamification, local web UI, profiles · ⏳ phone app (PWA)
-5. LLM summaries via an OpenAI-compatible endpoint (LM Studio / Ollama)
-6. Obsidian export/sync, Paperpile write-back file · ✅ systemd service (`install.py --service`)
-7. Feedback loop: ✅ dismissals and good ratings already steer the S2 recommendations; ⏳ weight tuning
+`v0.1.0-alpha.1` is in testing; feedback decides the next steps. Planned, in
+this order unless testing says otherwise ([details](ROADMAP.md)):
+
+| Version | Focus |
+|---|---|
+| 0.1.x | alpha testing and fixes ([how to test](TESTING.md)) |
+| 0.2 | your reading library: recommended papers join it, a tab with all read papers, notes and ratings, search by author, journal and more |
+| 0.3 | PubMed and PubMed Central (free full texts) |
+| 0.4 | notes as Markdown files, compatible with an Obsidian vault |
+| 0.5 | summaries by a local LLM (LM Studio, Ollama) |
+| 0.6 | deeper Paperpile integration; Zotero, Mendeley, EndNote and others |
+| 0.7 | macOS, Windows, Docker, installable phone app |
+| 0.9 / 1.0 | beta with stable data format, then 1.0 |
 
 ## Contributing
 

@@ -6,7 +6,10 @@ reports of what breaks are the most useful contribution right now.
 ## Reporting problems and ideas
 
 Open an issue: **Bug report** for something that does not work as described
-in the [documentation](docs/documentation.md), **Feature request** for ideas.
+in the [documentation](docs/documentation.md), **Feature request** for ideas,
+**Testing feedback** for how it worked for you over a week or a month (see
+[TESTING.md](TESTING.md)). What is planned is in [ROADMAP.md](ROADMAP.md);
+please comment on an existing issue instead of opening a duplicate.
 Please include `litresearch version`, your system and the exact steps. Never
 paste your BibTeX export, notes, passwords or API keys. Security problems:
 see [SECURITY.md](SECURITY.md).

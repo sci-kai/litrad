@@ -1,0 +1,75 @@
+name: Testing feedback
+description: How litresearch worked for you after a week or a month of real use
+labels: [testing-feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! Short answers are fine; skip what you did not use.
+        Please do not paste private data (BibTeX export, notes, API keys).
+  - type: dropdown
+    id: period
+    attributes:
+      label: How long have you used it?
+      options:
+        - About a week
+        - About a month
+        - Longer
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Version, system and library size
+      placeholder: 0.1.0-alpha.1 · Raspberry Pi OS · Paperpile · 450 papers
+    validations:
+      required: true
+  - type: dropdown
+    id: relevance
+    attributes:
+      label: Of a typical set of 5 recommendations, how many were worth reading?
+      options: ["0", "1", "2", "3", "4", "5"]
+    validations:
+      required: true
+  - type: textarea
+    id: misses
+    attributes:
+      label: What were the misses?
+      description: Off-topic, too old, too obscure, already known, not a research paper ...
+  - type: dropdown
+    id: game
+    attributes:
+      label: Did the points, levels and badges motivate you?
+      options:
+        - Yes, a lot
+        - A little
+        - Neither
+        - They annoyed me
+  - type: textarea
+    id: rules
+    attributes:
+      label: Which rule felt unfair or too easy?
+      description: Points per depth, the penalty, queue limit, quest, level speed, badges ...
+  - type: textarea
+    id: missing
+    attributes:
+      label: What did you miss most? What did you never use?
+  - type: textarea
+    id: confusing
+    attributes:
+      label: Where did you get stuck or confused?
+  - type: textarea
+    id: speed
+    attributes:
+      label: How long did ingest and new recommendations take?
+      placeholder: ingest 4 min, recommendations 70 s
+  - type: dropdown
+    id: devices
+    attributes:
+      label: Where did you use it?
+      multiple: true
+      options:
+        - Same computer as the server
+        - Laptop in the local network
+        - Phone browser
+        - Command line

@@ -116,8 +116,8 @@ rclone config                     # once: create a remote called "gdrive"
 rclone copyto "gdrive:<path in Drive>/library.bib" data/profiles/kai/library.bib
 ```
 
-Run this before each ingest, e.g. from cron or a systemd timer
-(deployment files follow in a later milestone).
+Run this before each ingest, e.g. from cron or a systemd timer. Watching
+the export and re-importing automatically is planned (roadmap 0.6).
 
 ### 4. Configure
 
@@ -441,11 +441,11 @@ Safety rules:
 - The connection is plain HTTP. That is fine in your own home network, but do
   not expose the port to the internet; use a VPN such as Tailscale or
   WireGuard for access from outside.
-- To keep it running in the background, start it with `nohup` or a systemd
-  user service (planned: deployment files).
+- To keep it running in the background, install it as a systemd user
+  service: `python3 install.py --service` (see Setup).
 
 The pages also work on a phone browser in the same network; an installable
-phone app (PWA) is planned.
+phone app (PWA) is planned (roadmap 0.7).
 
 ### Pages
 
@@ -922,8 +922,6 @@ gallery grouped by theme (on **Progress & XP**) ([Web UI](#4-web-ui)).
 | `backup`, `restore FILE` | database snapshot + progress export / restore a snapshot | ✅ |
 | `export-progress FILE`, `import-progress FILE` | move or merge your progress between machines | ✅ |
 | `check` | database integrity, contents, last backup | ✅ |
-| `export`, `sync-notes` | Obsidian export and note round-trip | milestone 6 |
-| `export-paperpile` | BibTeX with reading-status keywords, for import into Paperpile | milestone 6 |
 
 Global options: `-p/--profile NAME` works on another profile than the current
 one; `-v/--verbose` shows HTTP requests and retries. Every command takes
@@ -945,7 +943,7 @@ during ingest), DOIs/PMIDs (OpenAlex, Semantic Scholar), your topic queries
 (Semantic Scholar recommendations; switch off with `sources.semanticscholar`).
 `api.contact_email` stays `n/a` unless you want the polite pools. Paperpile
 has no public API, so its BibTeX auto-export is the interface. Planned:
-PubMed, bioRxiv/medRxiv.
+PubMed and PubMed Central (roadmap 0.3).
 
 
 ## 9. Configuration
@@ -1087,7 +1085,7 @@ easier to set them on the welcome screen when you create a profile.
 
 See [Your data and backups](#10-your-data-and-backups).
 
-### `llm` *(planned, milestone 5)*
+### `llm` *(planned, roadmap 0.5)*
 
 Any OpenAI-compatible endpoint (LM Studio, Ollama, an institutional server):
 `enabled`, `base_url`, `model`, `api_key`.
@@ -1288,8 +1286,9 @@ library ─> S2 recommendations ────────────────
                                   S2 SPECTER2 / TF-IDF                        you pick ─> queue ─> read ─> XP
 ```
 
-Planned stages (see the roadmap in the README): phone app, LLM summaries,
-Obsidian export.
+Planned stages are described in `ROADMAP.md`: reading library and search,
+PubMed/PMC, Obsidian-compatible notes, local LLM summaries, more reference
+managers, more systems and devices.
 
 ### Ingest pipeline
 
@@ -1429,7 +1428,7 @@ line or a web UI, using only free services and without sending personal data.
   Semantic Scholar feeds, Scholar Inbox, ResearchRabbit, Litmaps,
   zotero-arxiv-daily and others. None combined Paperpile, own topics, impact
   weighting, a short reading list, reading-depth tracking and notes, so the
-  decision was to build. The plan and milestones are in the README roadmap.
+  decision was to build. The milestones ahead are in `ROADMAP.md`.
 - **Driven by real data.** Each stage was run against the user's real
   Paperpile export (145 entries) and the live APIs before being finalised.
   Several design decisions came directly from what that revealed

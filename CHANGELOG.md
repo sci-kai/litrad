@@ -5,7 +5,17 @@ All notable changes are listed here. Versions follow
 
 ## 0.2.0-dev (unreleased)
 
-Nothing yet.
+### Added
+
+- `ROADMAP.md`: milestones 0.2 to 1.0 (reading library and search, PubMed
+  and PMC, Obsidian-compatible notes, local LLM summaries, reference
+  managers, more systems and devices), principles and open questions.
+- `TESTING.md` and a *Testing feedback* issue template for the alpha phase.
+
+### Fixed
+
+- The documentation still listed the removed placeholder commands and
+  called the systemd service "planned".
 
 ## 0.1.0-alpha.1 (2026-10-09)
 
