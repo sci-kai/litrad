@@ -55,6 +55,10 @@
 - Paperpile page: library browser, last import and notices, upload with
   checks (check only / check & import), re-import, import history, export
   instructions; `check-bib` command.
+- `serve` never opens a browser (on a headless Pi this started a text-mode
+  browser); it prints the address(es) instead. `web.host` / `--network`
+  accept `local`, `all`, an interface name (`eth0`, `wlan0`) or an IP;
+  `--list-networks` and `--choose` (with saving) help pick one.
 - Offline test suite with recorded API responses; live smoke test behind
   `--network`.
 - Documentation in `docs/`.

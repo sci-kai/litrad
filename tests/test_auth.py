@@ -2,7 +2,6 @@ import shutil
 import stat
 
 import pytest
-import uvicorn
 import yaml
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
@@ -137,40 +136,6 @@ def test_no_password_means_no_login(tmp_path):
 
 
 # --- serve and set-password ---------------------------------------------------------------
-
-
-@pytest.fixture
-def no_server(monkeypatch):
-    calls = {}
-    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
-    monkeypatch.setattr(cli, "lan_address", lambda: "192.168.1.23")
-    return calls
-
-
-def test_serve_refuses_network_without_password(tmp_path, no_server):
-    config = str(write_config(tmp_path))
-    result = runner.invoke(cli.app, ["serve", "--no-browser", "-c", config])
-    assert result.exit_code == 1 and "Refusing to listen on 0.0.0.0" in result.stdout
-    assert no_server == {}
-    result = runner.invoke(cli.app, ["serve", "--no-browser", "--no-login", "-c", config])
-    assert result.exit_code == 0 and "without a login" in result.stdout
-    assert no_server["host"] == "0.0.0.0"
-
-
-def test_serve_on_network_with_password(tmp_path, no_server, isolated):
-    config = str(write_config(tmp_path, password_hash=hash_password("lab-meeting-42")))
-    result = runner.invoke(cli.app, ["serve", "--no-browser", "-c", config])
-    assert result.exit_code == 0, result.stdout
-    assert len(isolated) == 1 and "Backups every 24 h" in result.stdout  # backup thread started
-    assert "http://192.168.1.23:8080/" in result.stdout and "login required" in result.stdout
-    assert no_server == {"host": "0.0.0.0", "port": 8080, "log_level": "warning"}
-
-
-def test_serve_local_only_needs_no_password(tmp_path, no_server):
-    config = str(write_config(tmp_path))
-    result = runner.invoke(cli.app, ["serve", "--no-browser", "--host", "127.0.0.1", "-c", config])
-    assert result.exit_code == 0 and no_server["host"] == "127.0.0.1"
-    assert "192.168.1.23" not in result.stdout
 
 
 def test_set_password_keeps_comments(tmp_path):

@@ -145,7 +145,8 @@ class Schedule(_Base):
 
 
 class Web(_Base):
-    host: str = "127.0.0.1"
+    # local | all | interface name (eth0, wlan0) | IPv4 address; see web/network.py
+    host: str = "local"
     port: int = 8080
     password_hash: str | None = None
 

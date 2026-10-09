@@ -134,8 +134,10 @@ Any OpenAI-compatible endpoint (LM Studio, Ollama, an institutional server):
 ## `schedule` *(planned)* / `web`
 
 `schedule.cron`: when to build a new list (cron syntax).
-`web.host` is where `litresearch serve` listens: `127.0.0.1` (this computer
-only, no login needed) or `0.0.0.0` (whole local network; requires a
-password). `web.port` is the port. `web.password_hash` is set by
+`web.host` is where `litresearch serve` listens: `local` (this computer only,
+no login needed), `all` (every network), an interface name such as `eth0` or
+`wlan0` (only that network), or an IPv4 address of this computer. Everything
+except `local` requires a password. The older values `127.0.0.1` and `0.0.0.0`
+still work. `web.port` is the port. `web.password_hash` is set by
 `litresearch set-password`; never edit it by hand. See
 [web-ui.md](web-ui.md#using-it-from-your-laptop-local-network).

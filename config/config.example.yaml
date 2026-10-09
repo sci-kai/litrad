@@ -98,7 +98,12 @@ schedule:
   cron: "0 6 * * 1"
 
 web:
-  # 127.0.0.1 = this computer only; 0.0.0.0 = local network (needs `litresearch set-password`)
-  host: 127.0.0.1
+  # where `litresearch serve` listens:
+  #   local       = only this computer
+  #   all         = every network
+  #   eth0, wlan0 = only that network (see `litresearch serve --list-networks`)
+  #   or an IPv4 address of this computer
+  # anything but local needs a password (`litresearch set-password`)
+  host: local
   port: 8080
   password_hash: n/a

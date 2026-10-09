@@ -35,7 +35,8 @@ cp config/config.example.yaml config/config.yaml   # set paths.bibtex, topics, A
 .venv/bin/litresearch score
 ```
 
-Or use the web UI: `litresearch serve` opens it in your browser
+Or use the web UI: `litresearch serve` starts the web server and prints its
+address (choose the network with `--network` or `web.host`)
 (see [docs/web-ui.md](docs/web-ui.md)). The weekly workflow is described in
 [docs/usage.md](docs/usage.md).
 
@@ -57,7 +58,7 @@ Full instructions, including the Paperpile auto-export and Google Drive sync:
 | `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant | ✅ |
 | `score`, `history` | level, streak, weekly grade, badges / reading log | ✅ |
-| `serve [--host] [--port] [--no-browser]` | web UI, on this computer or for your local network | ✅ |
+| `serve [--network local\|all\|eth0\|wlan0\|IP] [--port] [--choose] [--list-networks]` | web server for this computer, all networks or one chosen network (never opens a browser) | ✅ |
 | `set-password [--remove]` | password for network access to the UI | ✅ |
 | `backup`, `restore FILE` | database snapshot + progress export / restore a snapshot | ✅ |
 | `export-progress FILE`, `import-progress FILE` | move or merge your progress between machines | ✅ |

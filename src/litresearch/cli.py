@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
+import click
 import typer
 from rich.console import Console
 from sqlmodel import Session, func, select
@@ -230,73 +231,89 @@ def show_batch(batch, items) -> None:
         )
 
 
-LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
+def choose_network(cfg: Config, config: Path) -> str:
+    """Ask where to serve; optionally save the answer as the default."""
+    from litresearch.web.network import interfaces
+    from litresearch.web.settings import write_values
 
-
-def lan_address() -> str | None:
-    """This machine's address in the local network (no packets are sent)."""
-    import socket
-
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-        try:
-            probe.connect(("192.0.2.1", 9))  # TEST-NET address, never routed
-            return probe.getsockname()[0]
-        except OSError:
-            return None
+    options = [("local", "only this computer (127.0.0.1)"), ("all", "all networks")]
+    options += [
+        (i.name, f"{i.kind}: {i.address}") for i in interfaces() if i.kind != "this computer only"
+    ]
+    console.print("[bold]Where should the web UI be reachable?[/bold]")
+    for number, (name, text) in enumerate(options, start=1):
+        console.print(f"  {number}. {name:<8} {text}")
+    picked = typer.prompt("Choose a number", type=click.IntRange(1, len(options)))
+    spec = options[picked - 1][0]
+    if typer.confirm(f"Save '{spec}' as the default (web.host in {config})?", default=True):
+        write_values(config, {"web": {"host": spec}})
+        console.print("Saved. Next time just run [bold]litresearch serve[/bold].")
+    return spec
 
 
 @app.command()
 def serve(
     config: Path = ConfigOpt,
-    host: str = typer.Option(
+    network: str = typer.Option(
         None,
-        help="Interface to listen on (default: web.host from the config). "
-        "127.0.0.1 = this computer only, 0.0.0.0 = whole local network.",
+        "--network",
+        "-n",
+        "--host",
+        help="Where to listen: local, all, an interface name (eth0, wlan0) or an IP address. "
+        "Default: web.host from the config.",
     ),
     port: int = typer.Option(None, help="Port (default: web.port from the config)"),
-    browser: bool = typer.Option(True, help="Open the UI in your browser"),
+    choose: bool = typer.Option(False, "--choose", help="Pick the network interactively"),
+    list_networks: bool = typer.Option(
+        False, "--list-networks", help="Show the available networks and exit"
+    ),
     no_login: bool = typer.Option(
         False, "--no-login", help="Allow network access without a password (not recommended)"
     ),
 ):
-    """Start the web UI (on this computer or for your local network)."""
-    import threading
-    import webbrowser
-
+    """Start the web server and print its address. No browser is opened."""
     import uvicorn
 
     from litresearch.web.app import create_app
+    from litresearch.web.network import NetworkError, interfaces, resolve
 
     cfg = load_config(config)
-    host = host or cfg.web.host
     port = port or cfg.web.port
-    local_only = host in LOCAL_HOSTS
-    if not local_only and not cfg.web.password_hash and not no_login:
+    if list_networks:
+        console.print("Networks of this computer (use the name with --network or web.host):")
+        console.print("  local    this computer only (127.0.0.1)")
+        console.print("  all      every network below")
+        for interface in interfaces():
+            if interface.kind != "this computer only":
+                console.print(f"  {interface.name:<8} {interface.kind}: {interface.address}")
+        return
+    spec = choose_network(cfg, config) if choose else (network or cfg.web.host)
+    try:
+        binding = resolve(spec, port)
+    except NetworkError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(code=1) from None
+    if not binding.local_only and not cfg.web.password_hash and not no_login:
         console.print(
-            f"[red]Refusing to listen on {host} without a password:[/red] anyone in your "
-            "network could read and change your data.\n"
-            "Set one with [bold]litresearch set-password[/bold], or use --host 127.0.0.1."
+            f"[red]Refusing to serve on {binding.description} without a password:[/red] anyone "
+            "in that network could read and change your data.\n"
+            "Set one with [bold]litresearch set-password[/bold], or use --network local."
         )
         raise typer.Exit(code=1)
-    if not local_only and not cfg.web.password_hash:
-        console.print(f"[yellow]WARNING: listening on {host} without a login.[/yellow]")
-    url = (
-        f"http://127.0.0.1:{port}/"
-        if host in ("0.0.0.0", "::") or local_only
-        else (f"http://{host}:{port}/")
-    )
-    console.print(f"litresearch UI on this computer: [bold]{url}[/bold]")
-    if host in ("0.0.0.0", "::"):
-        address = lan_address()
-        if address:
-            console.print(
-                f"  from other devices in your network: [bold]http://{address}:{port}/[/bold]"
-            )
-    if not local_only and cfg.web.password_hash:
+    if not binding.local_only and not cfg.web.password_hash:
+        console.print("[yellow]WARNING: serving to the network without a login.[/yellow]")
+
+    console.print(f"litresearch web server on [bold]{binding.description}[/bold]")
+    for url in binding.urls:
+        console.print(f"  open [bold]{url}[/bold]")
+    if binding.host not in ("127.0.0.1", "0.0.0.0"):
+        console.print(
+            f"  [dim]only reachable via {binding.host}, also from this computer itself[/dim]"
+        )
+    elif binding.host == "0.0.0.0":
+        console.print(f"  [dim]on this computer also http://127.0.0.1:{port}/[/dim]")
+    if not binding.local_only and cfg.web.password_hash:
         console.print("  login required (password set with litresearch set-password)")
-    console.print("Stop with Ctrl+C.")
-    if browser:
-        threading.Timer(1.2, webbrowser.open, args=(url,)).start()
     if cfg.backup.interval_hours > 0:
         from litresearch.backup import start_backup_thread
 
@@ -305,7 +322,8 @@ def serve(
             f"(keeping {cfg.backup.keep})"
         )
         start_backup_thread(config.resolve(), log=lambda msg: console.print(f"[dim]{msg}[/dim]"))
-    uvicorn.run(create_app(config.resolve()), host=host, port=port, log_level="warning")
+    console.print("Stop with Ctrl+C.")
+    uvicorn.run(create_app(config.resolve()), host=binding.host, port=port, log_level="warning")
 
 
 @app.command("set-password")

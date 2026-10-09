@@ -1,12 +1,40 @@
 # Web UI
 
 ```bash
-litresearch serve                 # host and port from web.host / web.port in the config
-litresearch serve --host 127.0.0.1 --port 8765 --no-browser
+litresearch serve                    # where and on which port: web.host / web.port in the config
+litresearch serve --list-networks    # which networks this computer has
+litresearch serve --network wlan0    # serve only on the WLAN (or eth0, all, local, an IP)
+litresearch serve --choose           # pick the network interactively, optionally save it
 ```
 
-The UI loads nothing from the internet (no fonts, CDNs or trackers). POST
-requests from other websites are rejected. Stop the server with Ctrl+C.
+`serve` only starts the web server and prints the address(es) to open; it
+never opens a browser on the server itself, so a Raspberry Pi without a
+screen never shows a text-mode browser. The UI loads nothing from the
+internet (no fonts, CDNs or trackers). POST requests from other websites are
+rejected. Stop the server with Ctrl+C.
+
+## Where the web server is reachable
+
+| `web.host` / `--network` | Reachable from |
+|---|---|
+| `local` (default) | only this computer (`127.0.0.1`); no password needed |
+| `all` | every network of this computer (cable, WLAN, VPN, …) |
+| `eth0`, `wlan0`, … | only that one network; other networks and `127.0.0.1` are refused |
+| an IPv4 address of this computer, e.g. `192.168.50.2` | only that address |
+
+Prefer interface **names** over addresses: the address is looked up at every
+start, so a new DHCP address does not break your setup.
+`litresearch serve --list-networks` shows the names, for example:
+
+```
+  local    this computer only (127.0.0.1)
+  all      every network below
+  eth0     cable (Ethernet): 192.168.50.2
+  wlan0    WLAN: 10.100.7.134
+```
+
+If the configured network does not exist (e.g. the WLAN is down), the server
+does not start and lists the available choices.
 
 ## Using it from your laptop (local network)
 
@@ -20,13 +48,14 @@ in the same network:
    litresearch set-password
    ```
 
-2. Listen on the whole network: `web.host: 0.0.0.0` in `config/config.yaml`,
-   or `litresearch serve --host 0.0.0.0`.
-3. Start it; the server prints the address for other devices:
+2. Choose the network: e.g. `web.host: wlan0` in `config/config.yaml`,
+   `litresearch serve --network wlan0`, or `litresearch serve --choose`.
+3. Start it; the server prints the address to open:
 
    ```
-   litresearch UI on this computer: http://127.0.0.1:8080/
-     from other devices in your network: http://192.168.178.47:8080/
+   litresearch web server on wlan0, WLAN
+     open http://10.100.7.134:8080/
+     only reachable via 10.100.7.134, also from this computer itself
      login required (password set with litresearch set-password)
    ```
 

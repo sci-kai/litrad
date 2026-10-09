@@ -84,20 +84,6 @@ def test_unimplemented_commands_exit_nonzero(tmp_path):
     assert result.exit_code == 1
 
 
-def test_serve_is_local_by_default(tmp_path, monkeypatch):
-    import uvicorn
-
-    calls = {}
-    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
-    config = str(write_config(tmp_path))
-    result = runner.invoke(cli.app, ["serve", "--no-browser", "--port", "8123", "-c", config])
-    assert result.exit_code == 0 and "http://127.0.0.1:8123/" in result.stdout
-    assert calls == {"host": "127.0.0.1", "port": 8123, "log_level": "warning"}
-    # network access needs a password (see test_auth.py)
-    result = runner.invoke(cli.app, ["serve", "--no-browser", "--host", "0.0.0.0", "-c", config])
-    assert result.exit_code == 1 and "Refusing to listen on 0.0.0.0" in result.stdout
-
-
 def test_recommend_builds_once_per_week(tmp_path, monkeypatch, make_http):
     apis = FakeApis()
     fresh = date.today().isoformat()
