@@ -6,6 +6,7 @@
   {% if paper.citation_count is not none %}· {{ "{:,}".format(paper.citation_count) }} citations{% endif %}
   {% if paper.in_library %}· <span class="chip">📁 in Paperpile</span>{% endif %}
   {% if paper_link(paper) %}· <a href="{{ paper_link(paper) }}" target="_blank" rel="noopener">open ↗</a>{% endif %}
+  {% if paper.pmcid %}· <a href="https://europepmc.org/article/PMC/{{ paper.pmcid }}" target="_blank" rel="noopener" title="free full text in PubMed Central">🔓 full text ↗</a>{% endif %}
 </div>
 {%- endmacro %}
 

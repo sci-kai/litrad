@@ -413,3 +413,17 @@ details.how[open] > summary { margin-bottom: .8rem; }
 .docs-body h4 { font-size: 1rem; color: var(--muted); }
 .finished-set { text-align: center; border: 2px solid var(--accent-2); }
 .finished-set .row { justify-content: center; }
+
+/* Find & add: search form and results */
+.search-where { gap: .4rem; }
+.pill { display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .8rem; border: 1px solid var(--border); border-radius: 99px; font-weight: 600; cursor: pointer; background: var(--surface); }
+.pill input { width: auto; margin: 0; }
+.pill:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+code.query { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.abstract-box summary { cursor: pointer; color: var(--accent); font-size: .88rem; margin-top: .3rem; }
+.paper .meta { color: var(--muted); font-size: .88rem; }
+.search-layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+@media (max-width: 900px) { .search-layout { grid-template-columns: 1fr; } }
+.years { flex-wrap: nowrap; }
+.years input { flex: 1 1 0; min-width: 0; width: auto; }
+.search-form label.row { flex-wrap: nowrap; }

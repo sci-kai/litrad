@@ -1,0 +1,358 @@
+{
+ "_about": "Recorded 2026-10-13 from Europe PMC and NCBI E-utilities (public metadata, trimmed).",
+ "europepmc_search": {
+  "hitCount": 11,
+  "resultList": {
+   "result": [
+    {
+     "id": "41372419",
+     "source": "MED",
+     "pmid": "41372419",
+     "pmcid": "PMC13190248",
+     "doi": "10.1038/s41586-025-09792-4",
+     "title": "Somatic evolution following cancer treatment in normal tissue.",
+     "authorString": "Pich O, Ward S, Rowan A, Naceur-Lombardelli C, Shutkever O, Martinez-Ruiz C, Harries S, Hessey S, Naidu B, Brenton JD, Le Quesne J, Thomas A, Richards C, Krebs MG, Turajlic S, Jogai S, Zaccaria S, Moore D, Hiley CT, PEACE Consortium, Swanton C, Jamal-Hanjani M, McGranahan N.",
+     "pubYear": "2026",
+     "firstPublicationDate": "2025-12-10",
+     "isOpenAccess": "Y",
+     "citedByCount": 11,
+     "abstractText": "The extent to which exogenous sources, including cancer treatment, contribute to somatic evolution in normal tissue remains unclear. Here we used high-depth duplex sequencing<sup>1</sup> (more than 30,000× coverage) to analyse 168 cancer-free samples representing 16 organs from 22 patients with metastatic cancer enroled in the PEACE research autopsy study. In every sample, we identified somatic mu",
+     "journalInfo": {
+      "journal": {
+       "title": "Nature"
+      }
+     },
+     "pubTypeList": {
+      "pubType": [
+       "research-article",
+       "Journal Article"
+      ]
+     },
+     "authorList": {
+      "author": [
+       {
+        "fullName": "Pich O"
+       },
+       {
+        "fullName": "Ward S"
+       },
+       {
+        "fullName": "Rowan A"
+       },
+       {
+        "fullName": "Naceur-Lombardelli C"
+       },
+       {
+        "fullName": "Shutkever O"
+       }
+      ]
+     }
+    },
+    {
+     "id": "38965439",
+     "source": "MED",
+     "pmid": "38965439",
+     "pmcid": "PMC11269168",
+     "doi": "10.1038/s41586-024-07738-w",
+     "title": "Author Correction: The evolution of lung cancer and impact of subclonal selection in TRACERx.",
+     "authorString": "Frankell AM, Dietzen M, Al Bakir M, Lim EL, Karasaki T, Ward S, Veeriah S, Colliver E, Huebner A, Bunkum A, Hill MS, Grigoriadis K, Moore DA, Black JRM, Liu WK, Thol K, Pich O, Watkins TBK, Naceur-Lombardelli C, Cook DE, Salgado R, Wilson GA, Bailey C, Angelova M, Bentham R, Martínez-Ruiz C, Abbosh C, Nicholson AG, Le Quesne J, Biswas D, Rosenthal R, Puttick C, Hessey S, Lee C, Prymas P, Toncheva A, Smith J, Xing W, Nicod J, Price G, Kerr KM, Naidu B, Middleton G, Blyth KG, Fennell DA, Forster MD, Lee SM, Falzon M, Hewish M, Shackcloth MJ, Lim E, Benafif S, Russell P, Boleti E, Krebs MG, Lester JF, Papadatos-Pastos D, Ahmad T, Thakrar RM, Lawrence D, Navani N, Janes SM, Dive C, Blackhall FH, Summers Y, Cave J, Marafioti T, Herrero J, Quezada SA, Peggs KS, Schwarz RF, Van Loo P, Miedema DM, Birkbak NJ, Hiley CT, Hackshaw A, Zaccaria S, TRACERx Consortium, Jamal-Hanjani M, McGranahan N, Swanton C.",
+     "pubYear": "2024",
+     "firstPublicationDate": "2024-07-01",
+     "isOpenAccess": "Y",
+     "citedByCount": 3,
+     "journalInfo": {
+      "journal": {
+       "title": "Nature"
+      }
+     },
+     "pubTypeList": {
+      "pubType": [
+       "Published Erratum",
+       "correction"
+      ]
+     },
+     "authorList": {
+      "author": [
+       {
+        "fullName": "Frankell AM"
+       },
+       {
+        "fullName": "Dietzen M"
+       },
+       {
+        "fullName": "Al Bakir M"
+       },
+       {
+        "fullName": "Lim EL"
+       },
+       {
+        "fullName": "Karasaki T"
+       }
+      ]
+     },
+     "abstractText": ""
+    },
+    {
+     "id": "37046093",
+     "source": "MED",
+     "pmid": "37046093",
+     "pmcid": "PMC10115639",
+     "doi": "10.1038/s41586-023-05706-4",
+     "title": "Genomic-transcriptomic evolution in lung cancer and metastasis.",
+     "authorString": "Martínez-Ruiz C, Black JRM, Puttick C, Hill MS, Demeulemeester J, Larose Cadieux E, Thol K, Jones TP, Veeriah S, Naceur-Lombardelli C, Toncheva A, Prymas P, Rowan A, Ward S, Cubitt L, Athanasopoulou F, Pich O, Karasaki T, Moore DA, Salgado R, Colliver E, Castignani C, Dietzen M, Huebner A, Al Bakir M, Tanić M, Watkins TBK, Lim EL, Al-Rashed AM, Lang D, Clements J, Cook DE, Rosenthal R, Wilson GA, Frankell AM, de Carné Trécesson S, East P, Kanu N, Litchfield K, Birkbak NJ, Hackshaw A, Beck S, Van Loo P, Jamal-Hanjani M, TRACERx Consortium, Swanton C, McGranahan N.",
+     "pubYear": "2023",
+     "firstPublicationDate": "2023-04-12",
+     "isOpenAccess": "Y",
+     "citedByCount": 201,
+     "abstractText": "Intratumour heterogeneity (ITH) fuels lung cancer evolution, which leads to immune evasion and resistance to therapy<sup>1</sup>. Here, using paired whole-exome and RNA sequencing data, we investigate intratumour transcriptomic diversity in 354 non-small cell lung cancer tumours from 347 out of the first 421 patients prospectively recruited into the TRACERx study<sup>2,3</sup>. Analyses of 947 tum",
+     "journalInfo": {
+      "journal": {
+       "title": "Nature"
+      }
+     },
+     "pubTypeList": {
+      "pubType": [
+       "Research Support, Non-U.S. Gov't",
+       "research-article",
+       "Journal Article"
+      ]
+     },
+     "authorList": {
+      "author": [
+       {
+        "fullName": "Martínez-Ruiz C"
+       },
+       {
+        "fullName": "Black JRM"
+       },
+       {
+        "fullName": "Puttick C"
+       },
+       {
+        "fullName": "Hill MS"
+       },
+       {
+        "fullName": "Demeulemeester J"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "pubmed_esearch": {
+  "esearchresult": {
+   "count": "11",
+   "idlist": [
+    "41372419",
+    "38965439",
+    "37046096"
+   ]
+  }
+ },
+ "pubmed_esummary": {
+  "result": {
+   "uids": [
+    "41372419",
+    "38965439",
+    "37046096"
+   ],
+   "41372419": {
+    "uid": "41372419",
+    "title": "Somatic evolution following cancer treatment in normal tissue.",
+    "authors": [
+     {
+      "name": "Pich O",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Ward S",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Rowan A",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Naceur-Lombardelli C",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Shutkever O",
+      "authtype": "Author",
+      "clusterid": ""
+     }
+    ],
+    "source": "Nature",
+    "fulljournalname": "Nature",
+    "pubdate": "2026 May",
+    "sortpubdate": "2026/05/01 00:00",
+    "pubtype": [
+     "Journal Article"
+    ],
+    "articleids": [
+     {
+      "idtype": "pubmed",
+      "idtypen": 1,
+      "value": "41372419"
+     },
+     {
+      "idtype": "pmc",
+      "idtypen": 8,
+      "value": "PMC13190248"
+     },
+     {
+      "idtype": "pmcid",
+      "idtypen": 5,
+      "value": "pmc-id: PMC13190248;"
+     },
+     {
+      "idtype": "doi",
+      "idtypen": 3,
+      "value": "10.1038/s41586-025-09792-4"
+     },
+     {
+      "idtype": "pii",
+      "idtypen": 4,
+      "value": "10.1038/s41586-025-09792-4"
+     }
+    ]
+   },
+   "38965439": {
+    "uid": "38965439",
+    "title": "Author Correction: The evolution of lung cancer and impact of subclonal selection in TRACERx.",
+    "authors": [
+     {
+      "name": "Frankell AM",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Dietzen M",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Al Bakir M",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Lim EL",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Karasaki T",
+      "authtype": "Author",
+      "clusterid": ""
+     }
+    ],
+    "source": "Nature",
+    "fulljournalname": "Nature",
+    "pubdate": "2024 Jul",
+    "sortpubdate": "2024/07/01 00:00",
+    "pubtype": [
+     "Published Erratum"
+    ],
+    "articleids": [
+     {
+      "idtype": "pubmed",
+      "idtypen": 1,
+      "value": "38965439"
+     },
+     {
+      "idtype": "pmc",
+      "idtypen": 8,
+      "value": "PMC11269168"
+     },
+     {
+      "idtype": "pmcid",
+      "idtypen": 5,
+      "value": "pmc-id: PMC11269168;"
+     },
+     {
+      "idtype": "doi",
+      "idtypen": 3,
+      "value": "10.1038/s41586-024-07738-w"
+     },
+     {
+      "idtype": "pii",
+      "idtypen": 4,
+      "value": "10.1038/s41586-024-07738-w"
+     }
+    ]
+   },
+   "37046096": {
+    "uid": "37046096",
+    "title": "The evolution of lung cancer and impact of subclonal selection in TRACERx.",
+    "authors": [
+     {
+      "name": "Frankell AM",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Dietzen M",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Al Bakir M",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Lim EL",
+      "authtype": "Author",
+      "clusterid": ""
+     },
+     {
+      "name": "Karasaki T",
+      "authtype": "Author",
+      "clusterid": ""
+     }
+    ],
+    "source": "Nature",
+    "fulljournalname": "Nature",
+    "pubdate": "2023 Apr",
+    "sortpubdate": "2023/04/01 00:00",
+    "pubtype": [
+     "Journal Article",
+     "Research Support, Non-U.S. Gov't"
+    ],
+    "articleids": [
+     {
+      "idtype": "pubmed",
+      "idtypen": 1,
+      "value": "37046096"
+     },
+     {
+      "idtype": "pmc",
+      "idtypen": 8,
+      "value": "PMC10115649"
+     },
+     {
+      "idtype": "pmcid",
+      "idtypen": 5,
+      "value": "pmc-id: PMC10115649;"
+     },
+     {
+      "idtype": "doi",
+      "idtypen": 3,
+      "value": "10.1038/s41586-023-05783-5"
+     },
+     {
+      "idtype": "pii",
+      "idtypen": 4,
+      "value": "10.1038/s41586-023-05783-5"
+     }
+    ]
+   }
+  }
+ }
+}

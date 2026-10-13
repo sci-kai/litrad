@@ -32,6 +32,9 @@ Tick what worked; report what did not.
 - [ ] Reading the evidence tree of one recommendation: is it understandable?
 - [ ] Adding papers to the queue: from the recommendations, from your
       library, by DOI, by title
+- [ ] *Library → Find & add*: search Europe PMC and PubMed by keywords,
+      author, journal and years; did you find what you looked for? Add a
+      result to the queue
 - [ ] Logging a read with depth, rating and a note; the XP pop-up
 - [ ] The documentation in the web UI (📖): did you find what you looked for?
 

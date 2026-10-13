@@ -83,7 +83,6 @@ from litresearch.game import (
     week_progress,
     weekly_summaries,
 )
-from litresearch.ingest.bibtex import normalize_doi
 from litresearch.ingest.check import FIELDS as BIB_FIELDS
 from litresearch.ingest.check import INSTRUCTIONS as BIB_INSTRUCTIONS
 from litresearch.ingest.check import check_bibtex
@@ -95,7 +94,7 @@ from litresearch.reading import (
     add_note,
     drop_from_queue,
     drop_would_cost,
-    fetch_by_doi,
+    fetch_paper,
     find_paper,
     queue_add,
     queue_items,
@@ -109,6 +108,8 @@ from litresearch.recommend.engine import (
     days_since_last_batch,
     latest_batch,
 )
+from litresearch.search import SORTS, SOURCES, SearchQuery, enabled_sources, search_library
+from litresearch.search import search as literature_search
 from litresearch.web.auth import (
     COOKIE,
     SESSION_DAYS,
@@ -680,27 +681,48 @@ def create_app(config_path: Path) -> FastAPI:
         finally:
             engine.dispose()
 
+    def _year(text: str) -> int | None:
+        return int(text) if text.strip().isdigit() else None
+
     @app.get("/library", response_class=HTMLResponse)
-    def library(request: Request, q: str = ""):
-        """Search all known papers to put them on the queue."""
+    def library(
+        request: Request,
+        q: str = "",
+        title: str = "",
+        author: str = "",
+        journal: str = "",
+        year_from: str = "",
+        year_to: str = "",
+        oa: bool = False,
+        where: str = "",
+        sort: str = "relevance",
+    ):
+        """Find papers in your library, Europe PMC or PubMed and put them on the queue."""
         cfg, engine = open_session()
+        query = SearchQuery(
+            keywords=q,
+            title=title,
+            author=author,
+            journal=journal,
+            year_from=_year(year_from),
+            year_to=_year(year_to),
+            open_access=oa,
+        )
+        where = where if where in ("library", "databases", *SOURCES) else "databases"
+        enabled = enabled_sources(cfg)
+        sort = sort if sort in SORTS else "relevance"
         try:
             with Session(engine) as session:
-                results = []
-                if q.strip():
-                    words = q.lower().split()
-                    for paper in session.exec(select(Paper)).all():
-                        haystack = " ".join(
-                            [
-                                paper.title,
-                                " ".join(paper.authors),
-                                paper.bibtex_key or "",
-                                paper.doi or "",
-                                " ".join(paper.folders),
-                            ]
-                        ).lower()
-                        if all(w in haystack for w in words):
-                            results.append(paper)
+                local, found = [], None
+                if not query.is_empty() and where == "library":
+                    local = search_library(session, query)
+                elif not query.is_empty():
+                    sources = enabled if where == "databases" else [where]
+                    http = make_http(cfg)
+                    try:
+                        found = literature_search(query, cfg, http, session, sources, sort=sort)
+                    finally:
+                        http.close()
                 queued = set(session.exec(select(QueueItem.paper_id)).all())
                 readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
                 return render(
@@ -708,11 +730,23 @@ def create_app(config_path: Path) -> FastAPI:
                     "library.html",
                     session,
                     cfg,
-                    q=q,
-                    results=results[:100],
-                    n_results=len(results),
+                    query=query,
+                    where=where,
+                    sort=sort,
+                    sources=SOURCES,
+                    sorts=SORTS,
+                    # where to search: all enabled databases, each one, or offline
+                    places=[("databases", "🌍 " + " + ".join(SOURCES[s] for s in enabled))]
+                    + ([(s, SOURCES[s]) for s in enabled] if len(enabled) > 1 else [])
+                    + [("library", "📁 My library")],
+                    results=local[:100],
+                    n_results=len(local),
+                    found=found,
                     queued=queued,
                     readings=readings,
+                    here=str(request.url.path)
+                    + (f"?{request.url.query}" if request.url.query else ""),
+                    queue_full=len(queued) >= cfg.queue.max_size,
                 )
         finally:
             engine.dispose()
@@ -1253,7 +1287,7 @@ def create_app(config_path: Path) -> FastAPI:
                         if paper is None:
                             http = make_http(cfg)
                             try:
-                                paper = fetch_by_doi(session, cfg, http, normalize_doi(ref))
+                                paper = fetch_paper(session, cfg, http, ref)
                             finally:
                                 http.close()
                     else:

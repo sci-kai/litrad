@@ -43,6 +43,8 @@ class Topic(_Base):
 
 class Sources(_Base):
     semanticscholar: bool = True
+    # literature search (Library → Find & add, `litresearch search`)
+    europepmc: bool = True
     pubmed: bool = True
     biorxiv: bool = True
     openalex: bool = True
@@ -57,6 +59,8 @@ class Api(_Base):
     semanticscholar_key: str | None = None
     openalex_key: str | None = None
     contact_email: str | None = None
+    # optional free NCBI key: PubMed allows 10 instead of 3 requests per second
+    ncbi_key: str | None = None
 
 
 class Embeddings(_Base):

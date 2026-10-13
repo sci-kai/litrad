@@ -64,6 +64,9 @@ def make_http(cfg: Config) -> HttpClient:
             "api.semanticscholar.org": s2_interval,
             "api.crossref.org": 0.2,
             "api.openalex.org": 0.1,
+            # NCBI: 3 requests/s without key, 10 with one
+            "eutils.ncbi.nlm.nih.gov": 0.11 if cfg.api.ncbi_key else 0.34,
+            "www.ebi.ac.uk": 0.1,
         },
     )
 

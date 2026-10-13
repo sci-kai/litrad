@@ -52,3 +52,27 @@ def test_live_recommendations(cfg):
     finally:
         http.close()
         engine.dispose()
+
+
+@pytest.mark.network
+def test_live_search_and_add(cfg):
+    from litresearch.reading import fetch_paper
+    from litresearch.search import SearchQuery, search
+
+    http = make_http(cfg)
+    engine = init_db(cfg.paths.database)
+    try:
+        with Session(engine) as session:
+            query = SearchQuery(
+                keywords="circulating tumor DNA", journal="Nature Medicine", year_from=2023
+            )
+            found = search(query, cfg, http, session, limit=10)
+            assert not found.errors, found.errors
+            assert found.totals["europepmc"] > 0 and found.totals["pubmed"] > 0
+            assert any(len(r.hit.found_in) == 2 for r in found.results)  # merged
+            paper = fetch_paper(session, cfg, http, "pmid:28445469")
+            assert paper.doi == "10.1038/nature22364" and paper.pmcid == "PMC5812436"
+            assert paper.abstract and paper.citation_count
+    finally:
+        http.close()
+        engine.dispose()

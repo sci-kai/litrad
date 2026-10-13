@@ -7,6 +7,19 @@ All notable changes are listed here. Versions follow
 
 ### Added
 
+- **Paper search in Europe PMC and PubMed** (Library → Find & add and
+  `litresearch search`): keywords (title and abstract), title, author,
+  journal, publication years, open access only; several authors or journals
+  separated by `;`; sorted by relevance, date or citations. Results of both
+  databases are merged by DOI/PMID and show where they were found, citations,
+  free full texts (PMC), the abstract, and whether you already have the
+  paper; one click (or `--add N`) puts a result on the queue. The queries
+  sent are shown. The same fields also search your own library offline.
+- Papers can be added by `pmid:N` and `PMCn` everywhere (also `queue add`),
+  not only by DOI; OpenAlex, Europe PMC and PubMed complement each other.
+- Papers store their PubMed Central id and link to the free full text.
+- Settings `sources.europepmc` and `api.ncbi_key` (optional, more PubMed
+  requests per second).
 - `ROADMAP.md`: milestones 0.2 to 1.0 (reading library and search, PubMed
   and PMC, Obsidian-compatible notes, local LLM summaries, reference
   managers, more systems and devices), principles and open questions.

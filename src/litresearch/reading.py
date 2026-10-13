@@ -25,11 +25,14 @@ from litresearch.db import (
 )
 from litresearch.game import Award, award_reading, level_for, total_xp
 from litresearch.ingest.bibtex import normalize_doi
-from litresearch.papers import upsert_work
+from litresearch.papers import upsert_hit, upsert_work
 from litresearch.profile import active_rules, ensure_profile, profile_rules
 from litresearch.recommend.engine import latest_batch
+from litresearch.sources.europepmc import EuropePMC
+from litresearch.sources.hits import Hit
 from litresearch.sources.http import HttpClient, HttpError
 from litresearch.sources.openalex import OpenAlex
+from litresearch.sources.pubmed import PubMed
 
 
 class ReadingError(ValueError):
@@ -40,12 +43,16 @@ class ReadingError(ValueError):
 
 REF_HELP = (
     "r<N> (recommendation), q<N> (queue position), #<id>, a DOI, "
-    "pmid:<N>, a Paperpile citation key, or words from the title"
+    "pmid:<N>, PMC<N>, a Paperpile citation key, or words from the title"
 )
 
 
+PMID_REF = re.compile(r"pmid:\s*(\d+)", re.IGNORECASE)
+PMC_REF = re.compile(r"(PMC\d+)", re.IGNORECASE)
+
+
 def find_paper(session: Session, ref: str) -> Paper | None:
-    """Resolve a reference; None only for DOIs that are not stored yet."""
+    """Resolve a reference; None only for DOIs, PMIDs and PMC ids not stored yet."""
     ref = ref.strip()
     if match := re.fullmatch(r"[rR](\d+)", ref):
         batch = latest_batch(session)
@@ -74,11 +81,10 @@ def find_paper(session: Session, ref: str) -> Paper | None:
         return paper
     if doi := normalize_doi(ref):
         return session.exec(select(Paper).where(Paper.doi == doi)).first()
-    if match := re.fullmatch(r"pmid:(\d+)", ref, re.IGNORECASE):
-        paper = session.exec(select(Paper).where(Paper.pmid == match.group(1))).first()
-        if not paper:
-            raise ReadingError(f"No stored paper with PMID {match.group(1)}")
-        return paper
+    if match := PMID_REF.fullmatch(ref):  # None: not stored yet, fetch_paper gets it
+        return session.exec(select(Paper).where(Paper.pmid == match.group(1))).first()
+    if match := PMC_REF.fullmatch(ref):
+        return session.exec(select(Paper).where(Paper.pmcid == match.group(1).upper())).first()
     paper = session.exec(select(Paper).where(Paper.bibtex_key == ref)).first()
     if paper:
         return paper
@@ -213,17 +219,66 @@ def drop_would_cost(session: Session, cfg: Config, paper: Paper) -> int:
     return active_rules(session, cfg).drop_penalty
 
 
-def fetch_by_doi(session: Session, cfg: Config, http: HttpClient, doi: str | None) -> Paper:
-    """Store a paper that is not in the database yet, with OpenAlex metadata."""
-    if not doi:
-        raise ReadingError("Not found. Enter a DOI, r1–r5, a citation key or title words.")
+def fetch_paper(session: Session, cfg: Config, http: HttpClient, ref: str) -> Paper:
+    """Store a paper that is not in the database yet: by DOI, ``pmid:N`` or ``PMCn``.
+
+    OpenAlex supplies metrics for DOIs; Europe PMC the PMID, the PMC id and the
+    abstract; PubMed is the fallback for PMIDs that Europe PMC does not know.
+    A failing source is skipped as long as one of them knows the paper.
+    """
+    ref = ref.strip()
+    doi = normalize_doi(ref)
+    pmid = match.group(1) if (match := PMID_REF.fullmatch(ref)) else None
+    pmcid = match.group(1).upper() if (match := PMC_REF.fullmatch(ref)) else None
+    if not (doi or pmid or pmcid):
+        raise ReadingError(
+            "Not found. Enter a DOI, pmid:<N>, PMC<N>, r1–r5, a citation key or title words."
+        )
+    problems = []
+    paper = None
+    if not doi:  # PMID or PMC id: Europe PMC, then PubMed
+        hit = _lookup(cfg, http, problems, pmid=pmid, pmcid=pmcid)
+        if hit is None and pmid and cfg.sources.pubmed:
+            try:
+                hits = PubMed(http, cfg.api.ncbi_key).summaries([pmid])
+                hit = hits[0] if hits else None
+            except HttpError as error:
+                problems.append(f"PubMed: {error}")
+        if hit is None:
+            raise ReadingError(f"Could not find {ref}" + _because(problems))
+        paper = upsert_hit(session, hit)
+        doi = hit.doi
+    if doi:  # metrics from OpenAlex; identifiers and abstract from Europe PMC
+        try:
+            works = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email).works_by_doi([doi])
+        except HttpError as error:
+            works = {}
+            problems.append(f"OpenAlex: {error}")
+        if doi in works:
+            paper = upsert_work(session, works[doi])
+        # Europe PMC adds PMID, PMC id (free full text) and abstract where they are missing
+        if paper is None or not (paper.pmid and paper.pmcid and paper.abstract):
+            hit = _lookup(cfg, http, problems, doi=doi)
+            if hit is not None:
+                paper = upsert_hit(session, hit)
+    if paper is None:
+        raise ReadingError(f"No database knows {doi}; add it by title instead" + _because(problems))
+    session.flush()
+    return paper
+
+
+def _lookup(cfg: Config, http: HttpClient, problems: list[str], **ids) -> Hit | None:
+    if not cfg.sources.europepmc:
+        return None
     try:
-        works = OpenAlex(http, cfg.api.openalex_key, cfg.api.contact_email).works_by_doi([doi])
+        return EuropePMC(http).lookup(**ids)
     except HttpError as error:
-        raise ReadingError(f"Could not fetch {doi}: {error}") from error
-    if doi not in works:
-        raise ReadingError(f"OpenAlex does not know {doi}; add it by title instead")
-    return upsert_work(session, works[doi])
+        problems.append(f"Europe PMC: {error}")
+        return None
+
+
+def _because(problems: list[str]) -> str:
+    return f" ({'; '.join(p[:120] for p in problems)})" if problems else ""
 
 
 def queue_move(session: Session, paper: Paper, position: int) -> None:

@@ -65,12 +65,13 @@ this order unless testing says otherwise ([details](ROADMAP.md)):
 | Version | Focus |
 |---|---|
 | 0.1.x | alpha testing and fixes ([how to test](TESTING.md)) |
-| 0.2 | your reading library: recommended papers join it, a tab with all read papers, notes and ratings, search by author, journal and more |
-| 0.3 | PubMed and PubMed Central (free full texts) |
-| 0.4 | notes as Markdown files, compatible with an Obsidian vault |
-| 0.5 | summaries by a local LLM (LM Studio, Ollama) |
-| 0.6 | deeper Paperpile integration; Zotero, Mendeley, EndNote and others |
-| 0.7 | macOS, Windows, Docker, installable phone app |
+| 0.2 | **next:** find papers in Europe PMC and PubMed by keywords, title, author, journal and year, and queue them (built, in testing) |
+| 0.3 | your reading library: recommended papers join it, a tab with all read papers, notes and ratings |
+| 0.4 | PubMed and PubMed Central for recommendations and free full texts |
+| 0.5 | notes as Markdown files, compatible with an Obsidian vault |
+| 0.6 | summaries by a local LLM (LM Studio, Ollama) |
+| 0.7 | deeper Paperpile integration; Zotero, Mendeley, EndNote and others |
+| 0.8 | macOS, Windows, Docker, installable phone app |
 | 0.9 / 1.0 | beta with stable data format, then 1.0 |
 
 ## Contributing

@@ -8,27 +8,105 @@
   <a href="/paperpile" class="{{ 'active' if active == 'paperpile' }}">📁 Paperpile library</a>
   <a href="/library" class="{{ 'active' if active == 'library' }}">🔍 Find &amp; add</a>
 </nav>
-<div class="grid two">
-  <div class="card">
-    <h2>Search your library and known papers</h2>
-    <form method="get" class="row">
-      <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title words, author, citation key, DOI, Paperpile folder…" autofocus>
-      <button class="primary">Search</button>
-    </form>
-  </div>
-  <div class="card">
-    <h2>Add any paper by DOI</h2>
-    <form method="post" action="/queue/add" class="row">
-      <input type="hidden" name="next_url" value="/library">
-      <input class="grow" type="text" name="ref" placeholder="10.1038/…" required>
-      <button class="primary">➕ Queue it</button>
-    </form>
-    <p class="muted" style="margin:.4rem 0 0">Queue: {{ header.queue }}/{{ cfg.queue.max_size }}. Titles without a DOI can be added on the <a href="/queue">queue page</a>.</p>
+
+<div class="grid search-layout">
+  <form method="get" class="card search-form">
+    <h2>Search papers</h2>
+    <div class="row search-where" role="radiogroup" aria-label="Search in">
+      {% for value, label in places %}
+      <label class="pill"><input type="radio" name="where" value="{{ value }}" {{ "checked" if where == value }}> {{ label }}</label>
+      {% endfor %}
+    </div>
+    <div class="field" style="margin-top:.6rem">
+      <label for="q">Keywords</label>
+      <input id="q" type="search" name="q" value="{{ query.keywords }}" placeholder="e.g. clonal evolution ctDNA (anywhere in title, abstract, keywords)" autofocus>
+    </div>
+    <div class="grid two" style="gap:.6rem">
+      <div class="field"><label for="title">Title contains</label>
+        <input id="title" type="text" name="title" value="{{ query.title }}" placeholder="e.g. phylogenetic"></div>
+      <div class="field"><label for="author">Author</label>
+        <input id="author" type="text" name="author" value="{{ query.author }}" placeholder="e.g. Swanton C; Turajlic S"></div>
+      <div class="field"><label for="journal">Journal</label>
+        <input id="journal" type="text" name="journal" value="{{ query.journal }}" placeholder="e.g. Nature; Cancer Cell"></div>
+      <div class="field"><label>Published</label>
+        <div class="row years">
+          <input type="number" name="year_from" value="{{ query.year_from or '' }}" placeholder="from" min="1800" max="3000" step="1" aria-label="from year">
+          <span>–</span>
+          <input type="number" name="year_to" value="{{ query.year_to or '' }}" placeholder="to" min="1800" max="3000" step="1" aria-label="to year">
+        </div></div>
+    </div>
+    <div class="row" style="justify-content: space-between; margin-top:.4rem">
+      <div class="row">
+        <label class="row" style="font-weight:400"><input type="checkbox" name="oa" value="true" {{ "checked" if query.open_access }} style="width:auto"> open access only</label>
+        <label class="row" style="font-weight:400">sort
+          <select name="sort">{% for value, label in sorts.items() %}<option value="{{ value }}" {{ "selected" if sort == value }}>{{ label }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="row"><a class="button ghost" href="/library">Clear</a><button class="primary">🔍 Search</button></div>
+    </div>
+    <p class="muted" style="margin:.5rem 0 0">Several authors or journals: separate them with “;”. Keywords may use the databases' own syntax (AND, OR, quotes). Only what you type is sent.</p>
+  </form>
+
+  <div class="grid">
+    <div class="card">
+      <h3>➕ Add by identifier</h3>
+      <form method="post" action="/queue/add" class="grid" style="gap:.5rem">
+        <input type="hidden" name="next_url" value="{{ here }}">
+        <input type="text" name="ref" placeholder="DOI, pmid:12345678 or PMC1234567" required>
+        <button class="primary" {{ "disabled" if queue_full }}>➕ Queue it</button>
+      </form>
+      <p class="muted" style="margin:.4rem 0 0">Queue: {{ header.queue }}/{{ cfg.queue.max_size }}. Titles without any identifier: <a href="/queue">queue page</a>.</p>
+    </div>
+    {% if found and found.query %}
+    <details class="card">
+      <summary>🔬 The queries that were sent</summary>
+      {% if "europepmc" in found.totals or "europepmc" in found.errors %}<p><b>Europe PMC</b><br><code class="query">{{ found.query.europepmc() }}</code></p>{% endif %}
+      {% if "pubmed" in found.totals or "pubmed" in found.errors %}<p><b>PubMed</b><br><code class="query">{{ found.query.pubmed() }}</code></p>{% endif %}
+    </details>
+    {% endif %}
   </div>
 </div>
 
-{% if q %}
-<h2 style="margin-top:1.2rem">{{ n_results }} result{{ "s" if n_results != 1 }} for “{{ q }}”{% if n_results > results | length %} (first {{ results | length }}){% endif %}</h2>
+{% if queue_full %}<div class="notice warn" style="margin-top:1rem">📚 Your queue is full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}). Read or remove a paper before adding new ones.</div>{% endif %}
+
+{% if found %}
+<h2 style="margin-top:1.2rem">{{ found.results | length }} result{{ "s" if found.results | length != 1 }} <small class="muted">{{ found.query.describe() }}</small></h2>
+<p class="muted">{% for source, total in found.totals.items() %}{{ sources[source] }}: {{ "{:,}".format(total) }} match{{ "es" if total != 1 }}{{ " (showing the first 25)" if total > 25 }}{{ " · " if not loop.last }}{% endfor %}</p>
+{% for source, problem in found.errors.items() %}<div class="notice warn">⚠️ {{ sources[source] }} did not answer: {{ problem }}</div>{% endfor %}
+<div class="grid">
+  {% for r in found.results %}
+  {% set h = r.hit %}
+  <div class="card paper-card">
+    <div class="paper">
+      <div class="title">{% if r.paper_id %}<a href="/papers/{{ r.paper_id }}">{{ h.title }}</a>{% else %}<a href="{{ h.url }}" target="_blank" rel="noopener">{{ h.title }}</a>{% endif %}</div>
+      <div class="meta">{{ h.authors[:3] | join(", ") }}{{ " et al." if h.authors | length > 3 }}{% if h.year %} ({{ h.pub_date.isoformat() if h.pub_date else h.year }}){% endif %}{% if h.journal %} · {{ h.journal }}{% endif %}{% if h.cited_by is not none %} · {{ h.cited_by }} citations{% endif %}</div>
+      <div class="row">
+        {% for s in h.found_in %}<span class="chip">{{ sources[s] }}</span>{% endfor %}
+        {% if h.open_access %}<a class="chip fresh" href="{{ h.url }}" target="_blank" rel="noopener">🔓 free full text</a>{% endif %}
+        {% if h.pmid %}<span class="chip">PMID {{ h.pmid }}</span>{% endif %}
+        {% for t in h.pub_types if t in ("Review", "review-article", "Preprint", "preprint") %}<span class="chip">{{ t | lower }}</span>{% endfor %}
+        {% if r.in_library %}<span class="chip">📁 in your library</span>{% endif %}
+        {% if r.queued %}<span class="chip queued">📚 on your queue</span>
+        {% elif r.status %}<span class="chip">{{ status_icons.get(r.status, "") }} {{ r.status }}</span>{% endif %}
+      </div>
+      {% if h.abstract %}<details class="abstract-box"><summary>Abstract</summary><p class="abstract">{{ h.abstract }}</p></details>{% endif %}
+    </div>
+    <div class="actions">
+      {% if not r.queued and h.ref %}
+      <form class="inline" method="post" action="/queue/add">
+        <input type="hidden" name="ref" value="{{ h.ref }}"><input type="hidden" name="source" value="manual">
+        <input type="hidden" name="next_url" value="{{ here }}">
+        <button class="small primary" {{ "disabled" if queue_full }}>➕ Add to queue</button>
+      </form>
+      {% endif %}
+      {% if h.doi %}<a class="button small ghost" href="https://doi.org/{{ h.doi }}" target="_blank" rel="noopener">DOI ↗</a>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card">Nothing found. Try fewer fields, other spellings (authors as “Surname Initials”), or the other database.</div>
+  {% endfor %}
+</div>
+{% elif where == "library" and not query.is_empty() %}
+<h2 style="margin-top:1.2rem">{{ n_results }} paper{{ "s" if n_results != 1 }} in your library <small class="muted">{{ query.describe() }}</small></h2>
 <div class="grid">
   {% for paper in results %}
   <div class="card paper-card">
@@ -42,12 +120,14 @@
       {% elif readings.get(paper.id) and depth(readings[paper.id].status) >= 2 %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>
       {% else %}
       <form class="inline" method="post" action="/queue/add">
-        <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="/library?q={{ q | urlencode }}">
-        <button class="small primary">➕ Add to queue</button>
+        <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="next_url" value="{{ here }}">
+        <button class="small primary" {{ "disabled" if queue_full }}>➕ Add to queue</button>
       </form>
       {% endif %}
     </div>
   </div>
+  {% else %}
+  <div class="card">Nothing in your library matches. Search Europe PMC or PubMed instead.</div>
   {% endfor %}
 </div>
 {% endif %}

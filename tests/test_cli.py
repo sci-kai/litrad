@@ -166,7 +166,7 @@ def test_queue_add_unknown_doi_fetches_metadata(tmp_path, monkeypatch, make_http
     code, out = invoke("queue", "add", "https://doi.org/10.9/NEW", "-c", config)
     assert code == 0 and "A brand new paper" in out
     code, out = invoke("queue", "add", "10.9/missing", "-c", config)
-    assert code == 1 and "does not know 10.9/missing" in out
+    assert code == 1 and "No database knows 10.9/missing" in out
 
 
 def test_move_and_dismiss(tmp_path, monkeypatch, make_http):

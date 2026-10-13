@@ -55,6 +55,10 @@ class FakeApis:
         self.sources = recorded["sources"]
         self.s2 = recorded["s2"]
         self.crossref_johnson = json.loads((DATA / "crossref_johnson.json").read_text("utf-8"))
+        literature = json.loads((DATA / "literature_search.json").read_text("utf-8"))
+        self.epmc_search = literature["europepmc_search"]
+        self.pubmed_esearch = literature["pubmed_esearch"]
+        self.pubmed_esummary = literature["pubmed_esummary"]
         self.s2_status = s2_status
         self.down = down
         # OpenAlex search results, keyed by "fresh" / "landmark"
@@ -77,6 +81,17 @@ class FakeApis:
             return httpx.Response(200, json={"message": {"items": items}})
         if host == "api.openalex.org":
             return httpx.Response(200, json={"results": self._openalex(request)})
+        if host == "www.ebi.ac.uk":
+            return httpx.Response(200, json=self._europepmc(request.url.params["query"]))
+        if host == "eutils.ncbi.nlm.nih.gov":
+            if request.url.path.endswith("esearch.fcgi"):
+                return httpx.Response(200, json=self.pubmed_esearch)
+            wanted = request.url.params["id"].split(",")
+            result = self.pubmed_esummary["result"]
+            uids = [u for u in result["uids"] if u in wanted]
+            return httpx.Response(
+                200, json={"result": {"uids": uids, **{u: result[u] for u in uids}}}
+            )
         if host == "api.semanticscholar.org":
             if self.s2_status != 200:
                 return httpx.Response(self.s2_status, text="rate limited")
@@ -86,6 +101,16 @@ class FakeApis:
             ids = json.loads(request.content)["ids"]
             return httpx.Response(200, json=[self._s2(i) for i in ids])
         return httpx.Response(404)
+
+    def _europepmc(self, query: str) -> dict:
+        """Searches return the recorded results; look-ups by id are answered from them."""
+        records = self.epmc_search["resultList"]["result"]
+        for field, key in (("EXT_ID:", "pmid"), ("PMCID:", "pmcid"), ("DOI:", "doi")):
+            if query.startswith(field):
+                value = query[len(field) :].split(" ")[0].strip('"').lower()
+                found = [r for r in records if (r.get(key) or "").lower() == value]
+                return {"hitCount": len(found), "resultList": {"result": found}}
+        return self.epmc_search
 
     def _openalex(self, request):
         filters = request.url.params["filter"]

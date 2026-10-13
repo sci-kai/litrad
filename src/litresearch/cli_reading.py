@@ -29,7 +29,6 @@ from litresearch.game import (
     total_xp,
     week_progress,
 )
-from litresearch.ingest.bibtex import normalize_doi
 from litresearch.papers import paper_link
 from litresearch.profile import active_rules
 from litresearch.reading import (
@@ -37,7 +36,7 @@ from litresearch.reading import (
     ReadingError,
     add_note,
     drop_from_queue,
-    fetch_by_doi,
+    fetch_paper,
     find_paper,
     queue_add,
     queue_items,
@@ -45,6 +44,8 @@ from litresearch.reading import (
     record_reading,
     source_of,
 )
+from litresearch.search import SORTS, SOURCES, SearchQuery, enabled_sources, search_library
+from litresearch.search import search as literature_search
 
 queue_app = typer.Typer(help="Your short, ordered reading queue.", invoke_without_command=True)
 app.add_typer(queue_app, name="queue")
@@ -167,7 +168,7 @@ def queue_add_cmd(
             if paper is None:  # an unknown DOI
                 http = make_http(cfg)
                 try:
-                    paper = fetch_by_doi(session, cfg, http, normalize_doi(ref))
+                    paper = fetch_paper(session, cfg, http, ref)
                     session.commit()
                 finally:
                     http.close()
@@ -208,6 +209,103 @@ def queue_move_cmd(
 
 
 # --- reading ------------------------------------------------------------------
+
+
+@app.command("search")
+def search_cmd(
+    keywords: str = typer.Argument("", help="Words anywhere in title, abstract or keywords"),
+    title: str = typer.Option("", "--title", "-t", help="Words in the title"),
+    author: str = typer.Option("", "--author", "-a", help='e.g. "Swanton C"; several with ";"'),
+    journal: str = typer.Option("", "--journal", "-j", help='e.g. "Nature"; several with ";"'),
+    year_from: int = typer.Option(None, "--from", help="Published from this year"),
+    year_to: int = typer.Option(None, "--to", help="Published up to this year"),
+    open_access: bool = typer.Option(False, "--oa", help="Only papers free to read"),
+    source: str = typer.Option(
+        "all", "--source", "-s", help="all (enabled databases), europepmc, pubmed or library"
+    ),
+    sort: str = typer.Option("relevance", help="relevance, newest or cited"),
+    limit: int = typer.Option(10, help="Results per database (max 100)"),
+    add: int = typer.Option(None, "--add", help="Put result number N on your queue"),
+    config: Path = ConfigOpt,
+):
+    """Search Europe PMC, PubMed or your library by keywords, title, author, journal, year."""
+    query = SearchQuery(
+        keywords=keywords,
+        title=title,
+        author=author,
+        journal=journal,
+        year_from=year_from,
+        year_to=year_to,
+        open_access=open_access,
+    )
+    if query.is_empty():
+        raise typer.BadParameter(
+            "Give keywords or at least one of --title/--author/--journal/--from"
+        )
+    if sort not in SORTS:
+        raise typer.BadParameter(f"--sort must be one of {', '.join(SORTS)}")
+    with open_db(config) as (cfg, session):
+        if source == "library":
+            papers = search_library(session, query)
+            console.print(f"{len(papers)} paper(s) in your library: {query.describe()}")
+            for number, paper in enumerate(papers[:limit], start=1):
+                console.print(f"[bold cyan]{number:>2}[/bold cyan]  {paper.title}")
+                console.print(f"     {paper_line(paper)} · #{paper.id}")
+            if add:
+                if not 1 <= add <= min(len(papers), limit):
+                    raise ReadingError(f"There is no result {add}")
+                item = queue_add(session, cfg, papers[add - 1], source_of(session, papers[add - 1]))
+                console.print(f"Added to the queue at q{item.position}.")
+            return
+        if source == "all":
+            sources = enabled_sources(cfg)
+        elif source in SOURCES:
+            sources = [source]
+        else:
+            raise ReadingError("--source must be all, europepmc, pubmed or library")
+        http = make_http(cfg)
+        try:
+            found = literature_search(query, cfg, http, session, sources, limit, sort)
+            totals = ", ".join(f"{SOURCES[s]} {n:,}" for s, n in found.totals.items())
+            console.print(f"{query.describe()}  [dim]({totals or 'no answer'})[/dim]")
+            for name, problem in found.errors.items():
+                console.print(f"[yellow]{SOURCES[name]} did not answer: {problem}[/yellow]")
+            for number, result in enumerate(found.results, start=1):
+                hit = result.hit
+                marks = [SOURCES[s] for s in hit.found_in]
+                if hit.open_access:
+                    marks.append("free full text")
+                if result.queued:
+                    marks.append("ON YOUR QUEUE")
+                elif result.status:
+                    marks.append(result.status.upper())
+                elif result.in_library:
+                    marks.append("in your library")
+                authors = ", ".join(hit.authors[:3]) + (" et al." if len(hit.authors) > 3 else "")
+                console.print(f"\n[bold cyan]{number:>2}[/bold cyan]  [bold]{hit.title}[/bold]")
+                console.print(
+                    f"     {authors} ({hit.year or 'n.d.'}) · {hit.journal or '?'}"
+                    + (f" · {hit.cited_by} citations" if hit.cited_by is not None else "")
+                )
+                console.print(f"     [dim]{hit.ref or ''} · {' · '.join(marks)}[/dim]")
+            if not found.results:
+                console.print("Nothing found. Try fewer fields or another spelling.")
+            if add:
+                if not 1 <= add <= len(found.results):
+                    raise ReadingError(f"There is no result {add}")
+                hit = found.results[add - 1].hit
+                paper = find_paper(session, hit.ref) or fetch_paper(session, cfg, http, hit.ref)
+                item = queue_add(session, cfg, paper, "manual")
+                console.print(
+                    f"\nAdded to the queue at q{item.position}: [bold]{paper.title}[/bold]"
+                )
+            elif found.results:
+                console.print(
+                    "\nAdd one with [bold]--add N[/bold] or "
+                    "[bold]litresearch queue add <DOI|pmid:N>[/bold]."
+                )
+        finally:
+            http.close()
 
 
 @app.command("next")

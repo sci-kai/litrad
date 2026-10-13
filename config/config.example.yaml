@@ -41,6 +41,8 @@ excluded_terms: ["veterinary"]
 
 sources:
   semanticscholar: true
+  # paper search (Library → Find & add, `litresearch search`)
+  europepmc: true
   pubmed: true
   biorxiv: true
   openalex: true
@@ -52,6 +54,8 @@ api:
   openalex_key: n/a
   # used for the OpenAlex polite pool and NCBI E-utilities
   contact_email: n/a
+  # optional free NCBI key: PubMed allows 10 instead of 3 requests per second
+  ncbi_key: n/a
 
 embeddings:
   # s2 = precomputed SPECTER2 from Semantic Scholar;

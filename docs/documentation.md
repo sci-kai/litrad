@@ -117,7 +117,7 @@ rclone copyto "gdrive:<path in Drive>/library.bib" data/profiles/kai/library.bib
 ```
 
 Run this before each ingest, e.g. from cron or a systemd timer. Watching
-the export and re-importing automatically is planned (roadmap 0.6).
+the export and re-importing automatically is planned (roadmap 0.7).
 
 ### 4. Configure
 
@@ -247,7 +247,8 @@ To get a new list automatically every Monday morning, add a cron job
 litresearch queue add r1              # a recommendation
 litresearch queue add r3 --top        # ... straight to position 1
 litresearch queue add Barkley2022-ri  # a paper from your Paperpile library
-litresearch queue add 10.1038/s41586-024-07894-z   # any DOI (metadata from OpenAlex)
+litresearch queue add 10.1038/s41586-024-07894-z   # any DOI (OpenAlex, Europe PMC)
+litresearch queue add pmid:35931863   # any PubMed ID, or a PubMed Central id: PMC5812436
 litresearch queue add --title "Preprint from the lab meeting" --url https://...
 litresearch queue                     # show it
 litresearch queue move q4 1           # reorder
@@ -259,6 +260,24 @@ until you read or drop something. That limit is intentional. Removing a paper
 before you at least skimmed it costs the penalty set in your game profile
 (default 15 XP), wherever it came from: the queue is a commitment.
 
+#### Finding papers in Europe PMC and PubMed
+
+```bash
+litresearch search "circulating tumor DNA" --journal "Nature Medicine" --from 2023
+litresearch search --author "Swanton C; Turajlic S" --title evolution --sort cited
+litresearch search "ctDNA" --oa --source pubmed --limit 20     # only free full texts, only PubMed
+litresearch search "ctDNA" --author "Swanton C" --add 2        # put result 2 on the queue
+litresearch search clonal -s library                          # only papers you already have
+```
+
+Keywords are searched in title and abstract; `--title`, `--author`,
+`--journal`, `--from`/`--to` and `--oa` narrow the search; several authors or
+journals are separated by `;`. By default both databases are searched
+(those enabled in `sources`) and the results merged; each result shows its
+DOI or `pmid:`, where it was found, whether it is free to read, and whether
+it is already in your library, on your queue or read. The same search is on
+the web page **Library → Find & add**.
+
 #### Referring to papers
 
 | Form | Meaning |
@@ -267,7 +286,8 @@ before you at least skimmed it costs the penalty set in your game profile
 | `q1` | position 1 in the queue (positions renumber as papers leave) |
 | `#123` | internal paper id (shown by `show`) |
 | `10.1038/...`, `https://doi.org/...` | DOI |
-| `pmid:35931863` | PubMed ID |
+| `pmid:35931863` | PubMed ID (fetched from Europe PMC or PubMed if not stored yet) |
+| `PMC5812436` | PubMed Central id |
 | `Barkley2022-ri` | Paperpile citation key |
 | `clonal melanoma` | words from the title (must match exactly one paper) |
 
@@ -445,7 +465,7 @@ Safety rules:
   service: `python3 install.py --service` (see Setup).
 
 The pages also work on a phone browser in the same network; an installable
-phone app (PWA) is planned (roadmap 0.7).
+phone app (PWA) is planned (roadmap 0.8).
 
 ### Pages
 
@@ -462,7 +482,7 @@ page.
 | Reading | ✨ **Recommendations** | on the first visit: set up the topics of your profile (or skip and use your library only). Then: **Get new recommendations** whenever you like (a reminder appears after `selection.reminder_days`, default 7); the list ranked by score with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; add to your queue or mark not relevant; once every paper of a set is handled the page says **Finished this recommendation set!** (the set stays available in the drop-down menu); your topics with an inline editor; **How recommendations are made**: every rule with your current values |
 | Progress | 🏆 **Progress & XP** | level ring, streak, Reading Impact Factor, discipline and depth, XP per week (12 weeks), reading calendar (26 weeks), personal bests, badge gallery with progress, career ladder, the **XP ledger** (every transaction with running balance, filter by kind, totals, TSV export) and **how points work** (the locked rules of your profile) |
 | Library | 📁 **Paperpile library** | your library without PDFs (search, folder and read-status filters, queue buttons), last import and notices when it is outdated, upload of a new BibTeX export with checks, re-import, export instructions, import history |
-| Library | 🔍 **Find & add** | search your library and all known papers (title, author, citation key, DOI, folder) and queue them; add any DOI |
+| Library | 🔍 **Find & add** | search **Europe PMC and PubMed** (or only one of them, or your own library) by keywords, title, author, journal, publication years and open access, sorted by relevance, date or citations; results show where they were found, citations, free full texts, the abstract and whether you already have them; queue a result with one click; the queries sent are shown; add any paper by DOI, `pmid:` or PMC id |
 | | ⚙️ **Settings** | the profile's topics, excluded terms and every recommendation and queue parameter; data & backups of the profile |
 | | 📖 **Documentation** | this documentation, one page per chapter, with a linked table of contents of all chapters and sections and previous/next links; pages link to the matching chapter (e.g. Recommendations → chapter 5) |
 | (chip) | 🎮 **Profile** | the locked rules and fingerprint; save, download and compare profiles; your other profiles; switch or create a profile |
@@ -913,6 +933,7 @@ gallery grouped by theme (on **Progress & XP**) ([Web UI](#4-web-ui)).
 | `profile list\|create\|adopt\|use\|show\|save\|load\|compare` | profiles: list, create (rules locked), take over existing data, choose the current one, show its rules, save, load a saved one as a new profile, compare | ✅ |
 | `check-bib [FILE]` | check a Paperpile BibTeX export | ✅ |
 | `queue [add\|drop\|move]` | the short, ordered reading queue | ✅ |
+| `search [KEYWORDS] [--title] [--author] [--journal] [--from] [--to] [--oa] [--source all\|europepmc\|pubmed\|library] [--sort relevance\|newest\|cited] [--add N]` | find papers in Europe PMC and PubMed and queue them | ✅ |
 | `next`, `show REF` | top paper / any paper with abstract, status, notes | ✅ |
 | `read REF LEVEL [--rating] [--note]` | log reading and earn XP | ✅ |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant | ✅ |
@@ -936,14 +957,20 @@ is sent:
 - [Crossref](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) for DOIs
 - [OpenAlex](https://docs.openalex.org/) for metrics, identifiers and topic searches
 - [Semantic Scholar](https://www.semanticscholar.org/product/api) for SPECTER2, TLDRs and recommendations
+- [Europe PMC](https://europepmc.org/RestfulWebService) and
+  [PubMed](https://www.ncbi.nlm.nih.gov/books/NBK25501/) (NCBI E-utilities) for
+  the paper search and for adding papers by PMID or PMC id
 
 What leaves your machine: titles of library papers without DOI (Crossref,
-during ingest), DOIs/PMIDs (OpenAlex, Semantic Scholar), your topic queries
-(OpenAlex), and the DOIs of library, well-rated and dismissed papers
+during ingest), DOIs/PMIDs (OpenAlex, Semantic Scholar, Europe PMC, PubMed),
+your topic queries (OpenAlex), what you type into the paper search (Europe
+PMC, PubMed), and the DOIs of library, well-rated and dismissed papers
 (Semantic Scholar recommendations; switch off with `sources.semanticscholar`).
+PubMed requests carry `tool=litresearch` but no e-mail address.
 `api.contact_email` stays `n/a` unless you want the polite pools. Paperpile
 has no public API, so its BibTeX auto-export is the interface. Planned:
-PubMed and PubMed Central (roadmap 0.3).
+PubMed as a source for recommendations and PubMed Central full texts
+(roadmap 0.4).
 
 
 ## 9. Configuration
@@ -1006,8 +1033,9 @@ Papers whose title or abstract contains one of these terms
 ### `sources`
 
 Switch individual data sources on or off (`true`/`false`): `semanticscholar`,
-`openalex`, and *(planned)* `pubmed`, `biorxiv` (OpenAlex already indexes
-PubMed and bioRxiv). `--no-s2` skips Semantic Scholar for a single `ingest`
+`openalex`; `europepmc` and `pubmed` for the paper search (Find & add,
+`litresearch search`; at least Europe PMC is used if both are off); and
+*(planned)* `biorxiv` (OpenAlex and Europe PMC already index bioRxiv). `--no-s2` skips Semantic Scholar for a single `ingest`
 or `recommend` run.
 
 ### `api`
@@ -1017,6 +1045,7 @@ or `recommend` run.
 | `semanticscholar_key` | Optional free key, which gives the tool its own rate limit (1 request/s). Without one, requests may hit HTTP 429; affected steps are skipped with a warning. |
 | `openalex_key` | Optional. Without a key OpenAlex grants a small daily budget (≈ 1000 credits). An ingest uses ≈ 6 credits; a recommendation batch ≈ 20 per topic query (two searches) plus a few look-ups, i.e. ≈ 110 with the example config. |
 | `contact_email` | Optional; sent as `mailto` to Crossref and OpenAlex (polite pool). Leave it `n/a` to send no personal data. |
+| `ncbi_key` | Optional free NCBI API key ([how to get one](https://support.nlm.nih.gov/kbArticle/?pn=KA-05317)): PubMed then allows 10 instead of 3 requests per second. Not needed for normal use. |
 
 **Privacy.** The tool sends no personal data unless you set `contact_email`.
 What leaves your machine: titles/authors of library papers without a DOI
@@ -1085,7 +1114,7 @@ easier to set them on the welcome screen when you create a profile.
 
 See [Your data and backups](#10-your-data-and-backups).
 
-### `llm` *(planned, roadmap 0.5)*
+### `llm` *(planned, roadmap 0.6)*
 
 Any OpenAI-compatible endpoint (LM Studio, Ollama, an institutional server):
 `enabled`, `base_url`, `model`, `api_key`.
@@ -1368,6 +1397,8 @@ All constants are settings; the full criteria are in
 | Crossref | DOI by title | free; polite pool with `mailto` |
 | OpenAlex | metrics, IDs, venues, topic search | metered (~1000 credits/day); batch lookups cost 1 credit per 50 papers, a search 10 credits |
 | Semantic Scholar | SPECTER2, TLDR | one rate limit shared by all anonymous users → HTTP 429 is common; free key = 1 request/s |
+| Europe PMC | paper search, look-up by DOI/PMID/PMC id (abstract, PMC id) | free, no key; litresearch waits 0.1 s between requests |
+| PubMed (E-utilities) | paper search, look-up by PMID | 3 requests/s without key (10 with `api.ncbi_key`); litresearch keeps to it |
 
 All responses are cached in `data/cache/http_cache.sqlite`: Crossref for
 1 year, OpenAlex look-ups for 14 days, searches and S2 recommendations for
@@ -1487,7 +1518,9 @@ Layers, from the bottom up:
 | `sources/crossref.py` | ~70 | Title/author/year → DOI with verification (type, title similarity, year, author, prefix rule) |
 | `sources/openalex.py` | ~170 | Batched works/sources look-ups, title/abstract search, abstract reconstruction, tolerant parsing |
 | `sources/semanticscholar.py` | ~90 | Batched paper look-up (SPECTER2, TLDR, influential citations), recommendations |
-| `papers.py` | ~30 | Store OpenAlex works as papers without overwriting Paperpile metadata |
+| `papers.py` | ~80 | Store OpenAlex works and search hits as papers without overwriting Paperpile metadata; links |
+| `search.py` | ~220 | Structured paper search: one query translated into Europe PMC and PubMed syntax, merged results with your status; the same search offline in your library |
+| `sources/europepmc.py`, `sources/pubmed.py`, `sources/hits.py` | ~250 | Europe PMC and PubMed clients; a common `Hit` record with merging |
 | `recommend/engine.py` | ~330 | Candidate gathering with provenance, filters with funnel counts, embeddings, batch persistence with parameter snapshot |
 | `recommend/scoring.py` | ~450 | Eligibility, relevance (kNN without self-matches + topic bonus), impact, timeliness, MMR, evidence tree |
 | `recommend/text.py` | ~40 | Dependency-free TF-IDF fallback |
@@ -1735,6 +1768,8 @@ All are free; no API key is required and no personal data is sent (see Key algor
 | [OpenAlex](https://openalex.org) (OurResearch) | metadata, citation counts, FWCI, citation percentiles, topics, venue statistics, topic searches | data CC0; metered free API |
 | [Semantic Scholar Academic Graph API](https://www.semanticscholar.org/product/api) (Allen Institute for AI) | SPECTER2 embeddings, TLDRs, influential citations, recommendations | API license agreement (linked from the API page); shared rate limit without a key |
 | [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) | DOI look-up by title, author and year (during ingest) | open metadata; polite use |
+| [Europe PMC REST API](https://europepmc.org/RestfulWebService) (EMBL-EBI) | paper search (title and abstract, authors, journals, years, open access), abstracts, PMC ids, citation counts | free; article texts under their own licences |
+| [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) (PubMed) | paper search, summaries by PMID | free; usage policy of 3 requests/s without key |
 | [Paperpile](https://paperpile.com) | source of the library (BibTeX auto-export) | no API used |
 
 ### Literature
@@ -1755,6 +1790,11 @@ Data sources and models:
   arXiv:2211.13308.
 - Cachola, I., Lo, K., Cohan, A., & Weld, D. S. (2020). *TLDR: Extreme
   summarization of scientific documents.* Findings of EMNLP 2020.
+- Europe PMC Consortium (2015). *Europe PMC: a full-text literature database
+  for the life sciences and platform for innovation.* Nucleic Acids Research,
+  43(D1), D1042–D1048.
+- Sayers, E. (2010). *A General Introduction to the E-utilities.* In: Entrez
+  Programming Utilities Help. National Center for Biotechnology Information.
 
 Methods:
 

@@ -94,7 +94,6 @@ def test_find_paper_reference_forms(db):
         ("r9", "No recommendation"),
         ("q3", "no position"),
         ("#999", "No paper"),
-        ("pmid:9", "No stored paper"),
         ("zebrafish", "Nothing matches"),
         ("clonal evolution", "matches 2 papers"),
     ],
@@ -103,6 +102,14 @@ def test_find_paper_errors(db, ref, message):
     _, session, _ = db
     with pytest.raises(ReadingError, match=message):
         find_paper(session, ref)
+
+
+def test_unknown_identifiers_are_not_errors(db):
+    # unknown DOIs, PMIDs and PMC ids are fetched by fetch_paper when added
+    _, session, _ = db
+    assert find_paper(session, "pmid:9") is None
+    assert find_paper(session, "PMC123") is None
+    assert find_paper(session, "10.9/unknown") is None
 
 
 def test_source_of(db):

@@ -49,6 +49,8 @@ class Paper(SQLModel, table=True):
     entry_type: str | None = None
     doi: str | None = Field(default=None, index=True, unique=True)
     pmid: str | None = Field(default=None, index=True)
+    # PubMed Central id ("PMC1234567"): the paper is free to read there
+    pmcid: str | None = None
     arxiv_id: str | None = None
     s2_id: str | None = Field(default=None, index=True)
     openalex_id: str | None = None
@@ -71,7 +73,7 @@ class Paper(SQLModel, table=True):
     # Paperpile folders ("a/b/c") and flat labels / author keywords
     folders: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    # how the DOI was obtained: bibtex | crossref | openalex | None (unresolved)
+    # where the record came from: bibtex | crossref | openalex | europepmc | pubmed
     resolved_via: str | None = None
     enriched_at: NaiveDatetime | None = None
     created_at: NaiveDatetime = Field(default_factory=now)

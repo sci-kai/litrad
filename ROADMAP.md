@@ -9,12 +9,13 @@ Status: `v0.1.0-alpha.1` is out for testing (2026-10-09).
 
 ```
 0.1.x  Alpha testing and fixes        ◄── now
-0.2    Your reading library and search
-0.3    PubMed and PubMed Central
-0.4    Notes, compatible with Obsidian
-0.5    Local LLM summaries
-0.6    Reference managers: Paperpile and others
-0.7    More systems and devices
+0.2    Find papers: Europe PMC and PubMed search   ◄── next (built on dev, in testing)
+0.3    Your reading library
+0.4    PubMed and PubMed Central for recommendations and full texts
+0.5    Notes, compatible with Obsidian
+0.6    Local LLM summaries
+0.7    Reference managers: Paperpile and others
+0.8    More systems and devices
 0.9    Beta: feature freeze, stable data format
 1.0    Stable release
 ```
@@ -75,7 +76,44 @@ answers above are collected in a summary issue that adjusts this roadmap.
 
 ---
 
-## 0.2 · Your reading library and search
+## 0.2 · Find papers: Europe PMC and PubMed search
+
+**Status:** built on `dev` (2026-10-13), to be tested; released as
+`0.2.0-alpha.1` once testers have tried it.
+
+Adding a paper should not need its DOI. Search the literature from within
+litresearch and put results straight on the queue:
+
+- One search form (**Library → Find & add**) and command (`litresearch
+  search`) with **keywords** (title and abstract), **title**, **author**,
+  **journal**, **publication years** and **open access only**; several authors
+  or journals separated by `;`; sorted by relevance, date or citations.
+- Searches **Europe PMC** (PubMed, PubMed Central, preprints) and **PubMed**
+  (NCBI E-utilities), together or separately, or offline in your own library.
+  Results of both are merged by DOI/PMID and show where they were found.
+- Each result: authors, journal, date, citations, free full text (PMC),
+  abstract, and whether it is already in your library, on your queue or read.
+  **Add to queue** with one click (CLI: `--add N`).
+- Adding works by DOI, `pmid:N` or `PMCn` everywhere (also `queue add`):
+  OpenAlex supplies metrics, Europe PMC the PMID, PMC id and abstract, PubMed
+  is the fallback.
+- Transparent and private: the queries sent to each database are shown;
+  only what you type is sent (no e-mail, even to NCBI); free use within the
+  limits (3 requests/s for PubMed, 10 with an optional free key).
+
+**Questions for testing:** Do Europe PMC and PubMed find what you look for?
+Is the keyword search in title and abstract the right default (Europe PMC
+can also search full texts)? Which other fields are missed (MeSH terms,
+affiliation, article type, language)? Should results be paged beyond the
+first 25 per database?
+
+**Done when:** tested by several testers with their own searches; both
+databases' outages are handled (one failing database never hides the
+other's results).
+
+---
+
+## 0.3 · Your reading library
 
 Closing the gaps in the daily workflow found so far.
 
@@ -89,7 +127,7 @@ Closing the gaps in the daily workflow found so far.
 - Papers you queued count as library papers for the similarity score, so the
   recommendations learn from your picks, not only from Paperpile.
 - *Open questions:* should a dropped paper stay in the library? Should
-  "recommended" papers be exported to Paperpile automatically (see 0.6) or
+  "recommended" papers be exported to Paperpile automatically (see 0.7) or
   only on request?
 
 ### Read papers: your reading history
@@ -99,37 +137,25 @@ Closing the gaps in the daily workflow found so far.
   and the XP earned.
 - Sort and filter by date, depth, rating, topic, folder and origin; full-text
   search in notes; open a paper to read and edit its notes.
-- Export the list (TSV) and the notes (Markdown, see 0.4).
+- Export the list (TSV) and the notes (Markdown, see 0.5).
 - *Open questions:* show dismissed papers here or separately? A "re-read"
   reminder for highly rated papers?
 
-### Search when adding papers
-
-- Find and add papers by **author, journal, year, title words, DOI, PMID**,
-  combined (e.g. *author: Swanton, journal: Nature, 2020–2024*), in your
-  library and in OpenAlex (and PubMed from 0.3).
-- Results show citations, journal and whether the paper is already in your
-  library, queue or reading history.
-- Searches use OpenAlex's search API, within its daily free budget, and are
-  cached.
-
-**Done when:** the three features are tested with a real library; the data
+**Done when:** both features are tested with a real library; the data
 migration from 0.1 keeps all progress.
 
 ---
 
-## 0.3 · PubMed and PubMed Central
+## 0.4 · PubMed and PubMed Central for recommendations and full texts
 
-- **PubMed** (NCBI E-utilities) as a search source for topics and manual
-  search: MeSH terms (already in the topic settings) and PubMed queries.
-  Results are merged with OpenAlex candidates by DOI/PMID; the funnel and
-  evidence tree show which source found a paper.
+- **PubMed and Europe PMC as recommendation sources** (the search clients
+  exist since 0.2): topic queries and MeSH terms (already in the topic
+  settings) find candidates there too. Results are merged with OpenAlex
+  candidates by DOI/PMID; the funnel and evidence tree show which source
+  found a paper.
 - **PubMed Central** for open-access papers: link to the free full text, and
   download it (JATS XML) on request for the reading view and for summaries
-  (0.5).
-- Free use without key (3 requests/s; an optional free NCBI key allows 10/s).
-  NCBI asks for a contact e-mail; it stays optional and off by default,
-  as with the other services.
+  (0.6).
 - *Open questions:* is PubMed better than OpenAlex for your topics (compare
   sets side by side during testing)? Also bioRxiv/medRxiv directly, or is
   OpenAlex's coverage enough?
@@ -139,7 +165,7 @@ testers; outages of NCBI are handled like those of the other services.
 
 ---
 
-## 0.4 · Notes, compatible with Obsidian
+## 0.5 · Notes, compatible with Obsidian
 
 - A **note per paper** in Markdown, stored as a plain `.md` file: front
   matter with title, authors, DOI, citation key, status, rating, tags and
@@ -156,7 +182,7 @@ testers; outages of NCBI are handled like those of the other services.
 - Dataview-friendly front matter, so Obsidian users can build their own
   tables.
 - *Open questions:* one folder per profile or per topic? Should highlights
-  from PDFs be imported (needs PDF access, see 0.6)?
+  from PDFs be imported (needs PDF access, see 0.7)?
 
 **Done when:** a round trip (edit in litresearch → edit in Obsidian → back)
 loses nothing, tested with a real vault; the vault folder can be synced by
@@ -164,17 +190,17 @@ the user's own tool (Obsidian Sync, Syncthing).
 
 ---
 
-## 0.5 · Local LLM summaries
+## 0.6 · Local LLM summaries
 
 - Summaries by a **model you run yourself** through an OpenAI-compatible
   endpoint (LM Studio, Ollama, llama.cpp server, an institutional server);
   configured in `llm` (already validated in the config, unused until now).
   No cloud AI by default.
-- From the abstract, or the full text where it is available (PMC, 0.3, or a
+- From the abstract, or the full text where it is available (PMC, 0.4, or a
   PDF you provide): a short summary, key findings, methods, limitations, and
   why it matches your library and topics.
 - Shown on the paper page and the queue, and written into the note's summary
-  section (0.4), marked as AI-generated with model name and date.
+  section (0.5), marked as AI-generated with model name and date.
 - Optional: a summary of a whole recommendation set ("what is new this
   week"), and questions to the paper.
 - Everything is optional and cached; without a model, nothing changes.
@@ -187,7 +213,7 @@ the UI.
 
 ---
 
-## 0.6 · Reference managers: Paperpile and others
+## 0.7 · Reference managers: Paperpile and others
 
 ### Deeper Paperpile integration
 
@@ -221,7 +247,7 @@ the reference manager keeps all progress.
 
 ---
 
-## 0.7 · More systems and devices
+## 0.8 · More systems and devices
 
 - **macOS and Windows**: replace the Linux-only parts (network interface
   detection, systemd) with portable code; installers for each system
