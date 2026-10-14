@@ -49,7 +49,7 @@ def test_ingest_and_status(tmp_path, monkeypatch, make_http):
 
     result = runner.invoke(cli.app, ["ingest", "-c", str(config)])
     assert result.exit_code == 0, result.output
-    assert "BibTeX entries:        7" in result.stdout
+    assert "Entries:               7" in result.stdout
     assert "SPECTER2 embeddings:   3" in result.stdout
 
     result = runner.invoke(cli.app, ["status", "-c", str(config)])

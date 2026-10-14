@@ -1,6 +1,7 @@
 # litresearch documentation
 
-litresearch is a personal literature radar built on a Paperpile library. On
+litresearch is a personal literature radar built on your reference-manager
+libraries (Paperpile, Zotero, Mendeley, EndNote …). On
 request it proposes **up to 5 papers**, ranked by similarity to your library
 (SPECTER2 embeddings), the topics you define, paper impact and timeliness
 (very recent *or* a landmark). You choose which go on your short, ordered
@@ -78,46 +79,65 @@ then `cp config/config.example.yaml config/config.yaml`. Each GitHub release
 also has a wheel (`pip install litresearch-*.whl`); then run litresearch in a
 folder of your choice, where it keeps `config/` and `data/`.
 
-### 2. Export the Paperpile library
+### 2. Export your library from your reference manager
 
-Paperpile has no public API, so the tool reads a BibTeX file that Paperpile
-keeps up to date automatically:
+litresearch reads your library from an export file, so it works with any
+reference manager and never needs its password or PDFs. Several libraries
+can be imported side by side (e.g. one per manager, project or lab).
 
-1. In Paperpile, click your profile picture (top right) → *Workflows and
-   Integrations* and add a **BibTeX export** of the whole library (or of a
-   folder/label) to **Google Drive**. A one-off manual export (Export →
-   BibTeX) works as well.
-2. In the export options, include **DOI**, **PMID**, **abstract**, **URL** and
-   **keywords** (keywords carry your folders and labels). The option names can
-   differ between Paperpile versions. Without DOIs every paper has to be
-   matched by title, which is slower and less reliable.
-3. Prefer a file name without spaces, e.g. `library.bib`.
-4. Check what arrived: `litresearch check-bib FILE`, or upload the file on the
-   **Paperpile** page of the web UI (with *Check only* first, if you like).
-   Errors (e.g. an empty or broken file) block the import; warnings name the
-   missing fields.
+| Reference manager | How to export | Format |
+|---|---|---|
+| **Paperpile** (tested) | *Export → BibTeX*; or automatically: profile picture (top right) → *Workflows and Integrations* → *BibTeX export* to Google Drive (see step 3) | BibTeX |
+| **Zotero** | *File → Export Library…* → BibTeX (or Better BibTeX with *Keep updated*), RIS or CSL JSON | BibTeX, RIS, CSL-JSON |
+| **Mendeley** | *File → Export…* → BibTeX or RIS | BibTeX, RIS |
+| **EndNote** | *File → Export…* with the output style *RefMan (RIS) Export* | RIS |
+| **JabRef**, **Citavi** | export as BibTeX (Citavi also RIS) | BibTeX, RIS |
 
-What the tool uses from the export:
+Only Paperpile's BibTeX export has been tested with real libraries so far;
+the other formats are supported and covered by tests, and reports of how
+they work with real exports are very welcome.
 
-| BibTeX field | Used for |
-|---|---|
-| `doi`, `pmid`, `url` | identifiers (a DOI inside `url` is picked up as well) |
-| `title`, `author`, `year`, `month`, `journal`, `abstract` | metadata; BibTeX wins over API data |
-| `keywords` | Paperpile **folders** (items containing `/`) and **labels** / author keywords (other items) |
+### What an export must contain
 
-The export does not contain the date a paper was added to Paperpile.
+The import checks every file and says what is missing; nothing is imported
+when it finds an error. These fields are used:
 
-### 3. Sync the export to the machine running the tool
+| Field | BibTeX | RIS | CSL-JSON | Needed? | Why it matters |
+|---|---|---|---|---|---|
+| Title | `title` | `TI` | `title` | **required** | needed for everything |
+| DOI | `doi` (or inside `url`) | `DO` | `DOI` | strongly recommended | the key to metrics, embeddings and recommendations; entries without DOI need a slower, less reliable title look-up |
+| Authors | `author` | `AU` | `author` | recommended | shown in lists; used to verify DOI look-ups |
+| Year (and month) | `year`, `month` | `PY`, `DA` | `issued` | recommended | decides whether a paper is fresh or a landmark |
+| Abstract | `abstract` | `AB` | `abstract` | recommended | text-similarity fallback and the paper page |
+| Journal | `journal` | `JO`, `T2` | `container-title` | recommended | shown in lists |
+| Folders and labels | `keywords` | `KW` | `keyword` | optional | where a paper sits in your reference manager; filters on the library page |
+| PMID | `pmid` | `AN` | `PMID` | optional | second identifier |
+| URL | `url` | `UR` | `URL` | optional | link; a DOI inside it is picked up |
+| Citation key | entry key | `ID` | `id` | optional | recognises a paper again on the next import (otherwise DOI, PMID or title + year) |
 
-Use [rclone](https://rclone.org/drive/) to pull the file from Google Drive:
+In **Paperpile's** export options, include **DOI**, **PMID**, **abstract**,
+**URL** and **keywords** (keywords carry your folders and labels; folder
+paths contain `/`). In **Zotero**, include notes only if you want them as
+keywords; abstracts are exported by default. Prefer file names without
+spaces, e.g. `library.bib`. Check a file without importing it on the import
+page (*Check only*) or with `litresearch check-bib FILE`.
+
+### 3. Keep the export up to date (optional)
+
+A library can be updated from its file at any time (*Update from file* on its
+page, or `litresearch ingest` for all libraries). For a file that your
+reference manager keeps up to date, e.g. Paperpile's auto-export to Google
+Drive, pull it to the machine running litresearch with
+[rclone](https://rclone.org/drive/):
 
 ```bash
 rclone config                     # once: create a remote called "gdrive"
-rclone copyto "gdrive:<path in Drive>/library.bib" data/profiles/kai/library.bib
+rclone copyto "gdrive:<path in Drive>/library.bib" ~/litresearch-exports/paperpile.bib
+litresearch library import ~/litresearch-exports/paperpile.bib --new "Paperpile"   # once
+litresearch ingest                # then e.g. daily from cron: updates every library from its file
 ```
 
-Run this before each ingest, e.g. from cron or a systemd timer. Watching
-the export and re-importing automatically is planned (roadmap 0.7).
+Watching the file and re-importing automatically is planned (roadmap 0.7).
 
 ### 4. Configure
 
@@ -138,29 +158,31 @@ Recommended (both free):
 - **Contact e-mail** (`api.contact_email`), which puts requests into the
   Crossref and OpenAlex "polite pools".
 
-### 5. Create your profile and import the library
+### 5. Create your profile and import your library
 
-Easiest in the web UI: `litresearch serve`, open the printed address and
-create a profile; then upload the export on **Library → Paperpile library**.
-On the command line:
+Easiest in the web UI: `litresearch serve`, open the printed address, create a
+profile, then **Library → Import**: choose the file, give the new library a
+name (and a description if you like) and press *Check & import*. On the
+command line:
 
 ```bash
 .venv/bin/litresearch profile create "Kai"      # rules are locked from now on
-cp library.bib data/profiles/kai/library.bib   # the profile's Paperpile export
-.venv/bin/litresearch ingest      # add -v to see every HTTP request
+.venv/bin/litresearch library import library.bib --new "Paperpile" --description "everything"
 .venv/bin/litresearch status
 ```
 
 If you used litresearch before profiles existed, `litresearch profile adopt
-NAME` (or the welcome screen) turns the existing data into a profile.
+NAME` (or the welcome screen) turns the existing data into a profile; its
+library becomes "My library".
 
 Example output for a 145-paper library:
 
 ```
-BibTeX entries:        145
+Library:               Paperpile (BibTeX)
+Entries:               145
   added / updated:     145 / 0
   removed from library:  0
-DOI from BibTeX:       140
+DOI from the file:     140
 New DOI via Crossref:  1
 New DOI via PMID:      0
 Not found anywhere:    2 Turajlic2017-zn, Rossi2021-qy
@@ -169,7 +191,7 @@ Enriched (S2):         142
 SPECTER2 embeddings:   142
 ```
 
-The ingest is idempotent: run it as often as you like. API responses are
+Imports are idempotent: run them as often as you like. API responses are
 cached in `data/cache/`, so repeated runs make almost no network requests.
 
 ### Troubleshooting
@@ -177,10 +199,10 @@ cached in `data/cache/`, so repeated runs make almost no network requests.
 | Symptom | Cause / fix |
 |---|---|
 | `WARNING: Semantic Scholar: ... HTTP 429` | Shared anonymous rate limit. Add `api.semanticscholar_key`, or rerun later. Everything else still gets imported. |
-| A paper is listed under "Not found anywhere" | It has no DOI/PMID and its title could not be matched. Typical causes: conference talks without a DOI, or a broken title in Paperpile (e.g. the abstract pasted into the title field). Fix the entry in Paperpile; the next ingest picks it up. |
-| `Duplicate DOIs: key (doi)` | Two Paperpile entries share a DOI. The second one is kept without DOI; merge the duplicates in Paperpile. |
-| `duplicate BibTeX key ...` | Two entries share a citation key; only the first is used. |
-| `ValueError: ... BibTeX block(s) failed to parse` | The export is broken (e.g. truncated download). Nothing is changed in the database; re-sync the file. |
+| A paper is listed under "Not found anywhere" | It has no DOI/PMID and its title could not be matched. Typical causes: conference talks without a DOI, or a broken title in Paperpile (e.g. the abstract pasted into the title field). Fix the entry in your reference manager; the next import picks it up. |
+| `Duplicates (skipped): key (doi)` | Two entries of the file are the same paper (same DOI, PMID or title + year). The first one is used; merge the duplicates in your reference manager. |
+| `duplicate citation key ...` | Two entries share a citation key; only the first is used. |
+| `Not valid BibTeX/RIS/CSL-JSON: ...` | The export is broken (e.g. truncated download) or in another format. Nothing is changed; export or sync the file again. |
 
 
 ## 2. The weekly loop on the command line
@@ -231,7 +253,7 @@ Every paper is either **fresh** (published within `fresh_window_months`) or a
 **landmark** (top `100 - landmark_min_percentile` % cited in its field and
 year). The list is ranked by score; how deeply you read each paper is your
 choice. Papers you marked skimmed, read or thorough, dismissed or queued
-never show up; unread papers from your Paperpile library can. A paper that
+never show up; unread papers from your libraries can. A paper that
 was recommended but not picked can come back after `cooldown_weeks`.
 
 To get a new list automatically every Monday morning, add a cron job
@@ -246,7 +268,7 @@ To get a new list automatically every Monday morning, add a cron job
 ```bash
 litresearch queue add r1              # a recommendation
 litresearch queue add r3 --top        # ... straight to position 1
-litresearch queue add Barkley2022-ri  # a paper from your Paperpile library
+litresearch queue add Barkley2022-ri  # a paper from one of your libraries (citation key)
 litresearch queue add 10.1038/s41586-024-07894-z   # any DOI (OpenAlex, Europe PMC)
 litresearch queue add pmid:35931863   # any PubMed ID, or a PubMed Central id: PMC5812436
 litresearch queue add --title "Preprint from the lab meeting" --url https://...
@@ -288,7 +310,7 @@ the web page **Library → Find & add**.
 | `10.1038/...`, `https://doi.org/...` | DOI |
 | `pmid:35931863` | PubMed ID (fetched from Europe PMC or PubMed if not stored yet) |
 | `PMC5812436` | PubMed Central id |
-| `Barkley2022-ri` | Paperpile citation key |
+| `Barkley2022-ri` | citation key from one of your libraries |
 | `clonal melanoma` | words from the title (must match exactly one paper) |
 
 ### 3. Read
@@ -333,7 +355,7 @@ For how points, levels and badges work, see [Gamification](#6-gamification).
 
 ## 3. Profiles
 
-Everything personal belongs to a **profile**: the Paperpile library, the
+Everything personal belongs to a **profile**: its libraries, the
 topics and recommendation settings, the recommendations, the reading queue,
 readings, notes, XP, badges and the locked game rules. Several profiles can
 live side by side, e.g. one per person or project, and never mix.
@@ -481,14 +503,49 @@ page.
 | Reading | 📚 **Reading queue** | the ordered queue (q1 = up next): log a reading (level, star rating, notes), reorder, remove; add papers by DOI, PubMed ID, citation key, title words or title only |
 | Reading | ✨ **Recommendations** | on the first visit: set up the topics of your profile (or skip and use your library only). Then: **Get new recommendations** whenever you like (a reminder appears after `selection.reminder_days`, default 7); the list ranked by score with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; add to your queue or mark not relevant; once every paper of a set is handled the page says **Finished this recommendation set!** (the set stays available in the drop-down menu); your topics with an inline editor; **How recommendations are made**: every rule with your current values |
 | Progress | 🏆 **Progress & XP** | level ring, streak, Reading Impact Factor, discipline and depth, XP per week (12 weeks), reading calendar (26 weeks), personal bests, badge gallery with progress, career ladder, the **XP ledger** (every transaction with running balance, filter by kind, totals, TSV export) and **how points work** (the locked rules of your profile) |
-| Library | 📁 **Paperpile library** | your library without PDFs (search, folder and read-status filters, queue buttons), last import and notices when it is outdated, upload of a new BibTeX export with checks, re-import, export instructions, import history |
+| Library | 🗂️ **Libraries** | all your libraries at a glance (name, description, papers, read, last update), the **Reading queue** as a library you can export, and **Recommended**; each library has its own page: papers without PDFs (search, folder/label and read-status filters, queue buttons), **Export** (BibTeX or RIS, optionally with your reading status), **Update from file**, edit name, description and whether it is used for recommendations, delete, import history |
+| Library | ⬆️ **Import** | import an export file (BibTeX, RIS, CSL-JSON) into a **new library** (with name and description) or an **existing** one (add its papers, or replace the library with it); *Check only* first if you like; a link explains what the export must contain |
 | Library | 🔍 **Find & add** | search **Europe PMC and PubMed** (or only one of them, or your own library) by keywords, title, author, journal, publication years and open access, sorted by relevance, date or citations; results show where they were found, citations, free full texts, the abstract and whether you already have them; queue a result with one click; the queries sent are shown; add any paper by DOI, `pmid:` or PMC id |
 | | ⚙️ **Settings** | the profile's topics, excluded terms and every recommendation and queue parameter; data & backups of the profile |
 | | 📖 **Documentation** | this documentation, one page per chapter, with a linked table of contents of all chapters and sections and previous/next links; pages link to the matching chapter (e.g. Recommendations → chapter 5) |
 | (chip) | 🎮 **Profile** | the locked rules and fingerprint; save, download and compare profiles; your other profiles; switch or create a profile |
 | | 📄 **Paper** | abstract, TL;DR, metrics, notes (timestamped), status, every recommendation of it with its evidence tree, the XP it earned |
 
-Old addresses (`/weekly`, `/ledger`, `/how`) lead to their new places.
+Old addresses (`/weekly`, `/ledger`, `/how`, `/paperpile`) lead to their new places.
+
+### Libraries: import and export
+
+A profile can have several **libraries**, each with a name and a description,
+e.g. one per reference manager, project or lab. A paper exists only once,
+even if it is in several libraries; its reading status, notes and points are
+shared.
+
+- **Import** (Library → Import, `litresearch library import`) reads an export
+  file. Choose where it goes:
+  - **a new library**: the file becomes the library, and *Update from file* /
+    `litresearch ingest` read it again later;
+  - **an existing library**, either **adding** the file's papers (e.g. a few
+    new references) or **replacing** the library with it (an updated full
+    export; papers missing in it leave this library, nothing else changes).
+  The file is checked first; an invalid file changes nothing. What an export
+  must contain: [Setup](#what-an-export-must-contain).
+- **Export** (on a library's page, `litresearch library export`) writes a
+  library as **BibTeX** (Paperpile, Zotero, Mendeley, JabRef) or **RIS**
+  (EndNote, Citavi). *With reading status* adds keywords such as
+  `litresearch-read` and `litresearch-rating-4`, which become labels in the
+  reference manager.
+- **Recommended** is kept by litresearch: a recommendation joins it when you
+  put it on your reading queue, and only then. It stays there after you read
+  it; remove a paper with ✖.
+- **Reading queue** is also shown as a library and can be exported; it always
+  contains exactly the papers on your queue now (at most `queue.max_size`).
+- 🎯 **Used for recommendations**: by default the imported libraries make up
+  "your library" for the similarity score; switch it per library (e.g. off
+  for a side project, or on for *Recommended*).
+
+Databases from before libraries existed are migrated automatically: their
+library becomes **My library**, with its file, folders, labels and import
+history.
 
 Keyboard shortcuts (outside text fields): `n` go to the queue, `r`
 recommendations, `p` progress.
@@ -607,10 +664,10 @@ A candidate is removed (counted in the funnel) if it
 Papers without a DOI are skipped, since the pipeline is keyed on DOIs
 (`without_doi` in the funnel).
 
-Papers in your **Paperpile library are not excluded**: adding a paper to
-Paperpile does not mean you have read it. Only your markings in litresearch
-count. A library paper that is recommended carries the note "in your
-Paperpile, not read yet".
+Papers in your **libraries are not excluded**: adding a paper to a
+reference manager does not mean you have read it. Only your markings in
+litresearch count. A library paper that is recommended carries the note "in
+your library, not read yet".
 
 ### 3. Eligibility: current *or* important
 
@@ -873,7 +930,7 @@ few bonuses) is worth about 200–300 XP.
 | Breadth | 🧩 Polymath | Read papers from 8 different research topics | `polymath` |
 | Breadth | 🎨 Renaissance Mind | Read papers from 20 different topics | `renaissance` |
 | Breadth | 🧗 Trailblazer | Read 10 papers from your recommendations | `trailblazer` |
-| Breadth | 📁 Library Diver | Read 10 papers from your Paperpile library | `library_diver` |
+| Breadth | 📁 Library Diver | Read 10 papers from your libraries | `library_diver` |
 | Breadth | 🪁 Free Spirit | Read 5 papers you added yourself | `free_spirit` |
 | Experience | 💰 Thousand Club | Earn 1000 XP | `thousand_club` |
 | Experience | 🖐️ High Five | Earn 5000 XP | `high_five` |
@@ -927,11 +984,12 @@ gallery grouped by theme (on **Progress & XP**) ([Web UI](#4-web-ui)).
 | Command | Purpose | Status |
 |---|---|---|
 | `db-init` | create the SQLite database | ✅ |
-| `ingest [--no-s2]` | import the Paperpile export; resolve DOIs; fetch metrics and embeddings | ✅ |
-| `status` | library summary: coverage, top folders | ✅ |
+| `ingest [--no-s2]` | update every library from its file (e.g. synced by rclone); resolve DOIs; fetch metrics and embeddings | ✅ |
+| `library list\|import\|export\|edit\|delete` | libraries: `import FILE --new NAME` or `--to NAME [--replace]` (`--check` only checks), `export NAME\|queue [FILE] [--format bibtex\|ris] [--status]`, `edit NAME [--name] [--description] [--recommendations/--no-recommendations]` | ✅ |
+| `status` | summary of your libraries: coverage, top folders, papers per library | ✅ |
 | `recommend [--new] [--no-s2]` | your latest ≤ 5 papers, ranked; `--new` gets new ones | ✅ |
 | `profile list\|create\|adopt\|use\|show\|save\|load\|compare` | profiles: list, create (rules locked), take over existing data, choose the current one, show its rules, save, load a saved one as a new profile, compare | ✅ |
-| `check-bib [FILE]` | check a Paperpile BibTeX export | ✅ |
+| `check-bib [FILE]` | check an export (BibTeX, RIS, CSL-JSON) without importing it | ✅ |
 | `queue [add\|drop\|move]` | the short, ordered reading queue | ✅ |
 | `search [KEYWORDS] [--title] [--author] [--journal] [--from] [--to] [--oa] [--source all\|europepmc\|pubmed\|library] [--sort relevance\|newest\|cited] [--add N]` | find papers in Europe PMC and PubMed and queue them | ✅ |
 | `next`, `show REF` | top paper / any paper with abstract, status, notes | ✅ |
@@ -998,8 +1056,8 @@ Sections marked *(planned)* are already validated but not used yet.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `profiles_dir` | `data/profiles` | one folder per profile (database, Paperpile export, settings) |
-| `bibtex` | `data/paperpile/library.bib` | Paperpile BibTeX export *before profiles*; a profile reads `library.bib` in its folder unless its `settings.yaml` sets `paths.bibtex` |
+| `profiles_dir` | `data/profiles` | one folder per profile (database, export files, settings) |
+| `bibtex` | `data/paperpile/library.bib` | an export file that `litresearch ingest` imports into **My library** when no library has a file yet (the way libraries were set up before 0.2); a profile uses `library.bib` in its folder unless its `settings.yaml` sets `paths.bibtex`. Libraries themselves are managed under Library (see [Libraries](#libraries-import-and-export)) |
 | `database` | `data/litresearch.sqlite` | database *before profiles*; a profile always uses `litresearch.sqlite` in its folder |
 | `cache_dir` | `data/cache` | HTTP response cache |
 | `obsidian_vault` | `n/a` | Obsidian export target *(planned)* |
@@ -1008,7 +1066,7 @@ Sections marked *(planned)* are already validated but not used yet.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `ignore_labels` | `["Import Mendeley"]` | Paperpile labels without topical meaning; matched case-insensitively |
+| `ignore_labels` | `["Import Mendeley"]` | labels/keywords without topical meaning (e.g. Paperpile's import labels), ignored on import; matched case-insensitively |
 
 ### `topics`
 
@@ -1142,8 +1200,9 @@ profile:
 data/profiles/
 ├── .current                  the profile the command line uses (set by the web UI and `profile use`)
 ├── kai/
-│   ├── litresearch.sqlite    progress, queue, recommendations, library metadata
-│   ├── library.bib           the profile's Paperpile export (unless settings.yaml points elsewhere)
+│   ├── litresearch.sqlite    progress, queue, recommendations, libraries and their papers
+│   ├── libraries/            uploaded export files, one per library (1_paperpile.bib, …)
+│   ├── library.bib           paths.bibtex: read into "My library" by `ingest` if no library has a file yet
 │   └── settings.yaml         topics and recommendation settings of the profile
 └── grace/ ...
 ```
@@ -1151,7 +1210,8 @@ data/profiles/
 | What | Where (default) | Rebuildable? |
 |---|---|---|
 | **Your progress**: reading statuses, ratings, notes, history, queue, XP, badges, recommendation lists, locked rules | `data/profiles/<profile>/litresearch.sqlite` | **no**, back it up |
-| Library metadata, metrics, embeddings | same database | yes, `litresearch ingest` |
+| Libraries, paper metadata, metrics, embeddings | same database | yes, from the export files (`litresearch ingest`, or import again) |
+| Uploaded export files | `data/profiles/<profile>/libraries/` | yes, export again from your reference manager |
 | Topics and recommendation settings | `data/profiles/<profile>/settings.yaml` | no; small, included in every backup |
 | Machine settings and defaults | `config/config.yaml` | no; small, keep a copy |
 | Cached API answers (shared by all profiles) | `data/cache/http_cache.sqlite` | yes, delete any time |
@@ -1251,7 +1311,7 @@ databases are refused.
 # on the old machine
 litresearch export-progress progress.json          # or take the latest backup JSON
 
-# on the new machine (after ingest of the same Paperpile library)
+# on the new machine (libraries come along in the file)
 litresearch import-progress progress.json --dry-run   # preview
 litresearch import-progress progress.json
 ```
@@ -1298,11 +1358,12 @@ How the merge works:
 ### Overview
 
 ```
-Paperpile ──auto-export──> Google Drive ──rclone──> library.bib
+Paperpile / Zotero / Mendeley / EndNote ──export──> .bib / .ris / .json
+                       (or auto-export ──> Google Drive ──rclone──> file)
                                                        │
-                                         ingest/bibtex.py (parse)
+                              ingest/formats.py, bibtex.py (parse, check)
                                                        │
-                                        ingest/pipeline.py ──> SQLite
+                 ingest/pipeline.py ──> SQLite: libraries, papers (shared)
                                          │       │       │
                                    Crossref  OpenAlex  Semantic Scholar
                                    (DOIs)   (metrics)  (SPECTER2, TLDR)
@@ -1436,7 +1497,7 @@ library, data service and method it relies on.
 
 ### Purpose in one paragraph
 
-litresearch reads a Paperpile library (BibTeX export) and enriches it with
+litresearch reads reference-manager libraries (BibTeX, RIS or CSL-JSON exports) and enriches them with
 open bibliographic data. On request it recommends up to five papers, ranked
 by similarity to the library and to self-defined topics, by paper impact,
 and by being either recent or a landmark. The user picks papers into a
@@ -1511,9 +1572,13 @@ Layers, from the bottom up:
 |---|---:|---|
 | `config.py` | ~190 | Pydantic models of `config.yaml`; `n/a` → None; validation (e.g. ≤ 5 papers); `ConfigError` with readable messages |
 | `db.py` | ~220 | SQLModel tables; reading levels; embedding storage as float32 bytes; additive migration; durable SQLite connection settings |
-| `ingest/bibtex.py` | ~180 | Paperpile BibTeX → `BibEntry`: LaTeX decoding, month/day parsing, DOI normalisation, folder/label split, duplicate keys |
-| `ingest/pipeline.py` | ~260 | Library sync, DOI resolution, OpenAlex and Semantic Scholar enrichment; per-source error isolation; `IngestReport`; import history |
-| `ingest/check.py` | ~140 | Checks of a Paperpile export (required fields, coverage, duplicates) and export instructions |
+| `ingest/bibtex.py` | ~180 | BibTeX → `BibEntry`: LaTeX decoding, Paperpile's month/day format, DOI normalisation, folder/label split, duplicate keys |
+| `ingest/formats.py` | ~230 | RIS and CSL-JSON parsers, format detection, one `read_references` for all formats |
+| `ingest/pipeline.py` | ~380 | Import into a library (new, add, replace) with matching by citation key, DOI, PMID, title + year; DOI resolution, OpenAlex and Semantic Scholar enrichment; per-source error isolation; `IngestReport`; import history |
+| `ingest/check.py` | ~150 | Checks of an export (required fields, coverage, duplicates) and export instructions |
+| `libraries.py` | ~340 | Libraries: create, edit, delete, members, the Recommended library, derived flags (`in_library`, folders), libraries for recommendations, stored uploads, migration |
+| `export.py` | ~170 | Libraries and the queue as BibTeX or RIS, optionally with reading status |
+| `cli_library.py` | ~210 | `library` commands |
 | `sources/http.py` | ~170 | JSON client: SQLite response cache with max age, per-host throttling, retries with `Retry-After`/exponential backoff, typed `HttpError` |
 | `sources/crossref.py` | ~70 | Title/author/year → DOI with verification (type, title similarity, year, author, prefix rule) |
 | `sources/openalex.py` | ~170 | Batched works/sources look-ups, title/abstract search, abstract reconstruction, tolerant parsing |
@@ -1541,7 +1606,8 @@ Layers, from the bottom up:
 
 | Table | Content |
 |---|---|
-| `paper` | library papers, candidates and manually added papers: identifiers (DOI, PMID, citation key, OpenAlex, S2), metadata, metrics, folders/tags |
+| `paper` | library papers, candidates and manually added papers: identifiers (DOI, PMID, PMC id, citation key, OpenAlex, S2), metadata, metrics, folders/tags of all its libraries |
+| `library` / `librarypaper` | libraries (name, description, kind, format, file, used for recommendations) and which papers they contain, with each library's citation key, folders and labels |
 | `embedding` | `(paper, model)` → float32 vector (SPECTER2, 768 dimensions) |
 | `recommendationbatch` / `recommendation` | recommendation lists with funnel and settings snapshot; per paper: rank, category, score, evidence, reason |
 | `queueitem` | the reading queue (position 1 = up next) and where each item came from |
@@ -1550,7 +1616,7 @@ Layers, from the bottom up:
 | `xpevent` | every point earned or lost, with kind and reason; the score is their sum |
 | `achievement` | unlocked badges |
 | `profile` | the game profile: name, start, a locked copy of the rules, fingerprint |
-| `ingestrun` | every import of the Paperpile export: time, source, file hash, counts, check results |
+| `ingestrun` | every import: library, mode (new/add/replace), format, time, source, file hash, counts, check results |
 
 Design choices:
 
@@ -1703,7 +1769,7 @@ Design choices:
 | `test_backup.py` | snapshots during writes, rotation, export/import merge, restore |
 | `test_profile.py` | rule validation, locking, custom rules, save/load/merge/reset, checksums, comparison, new badges |
 | `test_profiles.py` | profile folders, settings overlay, taking over existing data, loading saved files, welcome screen and profile gate, separation of profiles, topic set-up, reminders, merged pages, profile CLI, backups of all profiles |
-| `test_paperpile.py` | export checks, import history, upload (check only, import, invalid), library browsing and filters, notices |
+| `test_libraries.py` | export checks, BibTeX/RIS/CSL-JSON, libraries and import modes, no duplicates across libraries, exports (round trip), Recommended and queue libraries, migration, library pages, CLI, profile files |
 | `test_cli.py`, `test_web.py`, `test_auth.py` | interfaces, settings round trip, login |
 | `test_robustness.py` | failure scenarios (see above) |
 | `test_live.py` | real APIs (opt-in) |
@@ -1770,7 +1836,7 @@ All are free; no API key is required and no personal data is sent (see Key algor
 | [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) | DOI look-up by title, author and year (during ingest) | open metadata; polite use |
 | [Europe PMC REST API](https://europepmc.org/RestfulWebService) (EMBL-EBI) | paper search (title and abstract, authors, journals, years, open access), abstracts, PMC ids, citation counts | free; article texts under their own licences |
 | [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) (PubMed) | paper search, summaries by PMID | free; usage policy of 3 requests/s without key |
-| [Paperpile](https://paperpile.com) | source of the library (BibTeX auto-export) | no API used |
+| [Paperpile](https://paperpile.com) and other reference managers | source of the libraries (BibTeX/RIS/CSL-JSON exports; tested with Paperpile's BibTeX auto-export) | no API used |
 
 ### Literature
 
@@ -1912,7 +1978,7 @@ git push -u origin feat-scoring  # pull request into dev
 | `test_robustness.py` | crashes mid-action, concurrency, restarts, broken inputs, hostile content, calendar edges, scale, randomised sessions with invariants |
 | `test_profile.py` | game rules, locking, save/load/merge/reset, checksums, comparison, badges |
 | `test_profiles.py` | profile folders and settings, welcome screen, profile gate, separation of profiles, topic set-up, reminders, merged pages, profile CLI |
-| `test_paperpile.py` | BibTeX export checks, import history, upload flows, library page, `check-bib` |
+| `test_libraries.py` | export checks, formats, import modes, exports, special libraries, migration, library pages, `library` CLI, `check-bib` |
 | `test_config.py`, `test_db.py` | config validation, status history |
 | `test_live.py` | smoke test against the real APIs (`--network`) |
 

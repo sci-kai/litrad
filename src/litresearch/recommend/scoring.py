@@ -444,7 +444,7 @@ def describe(item: Scored) -> str:
     if paper.venue:
         parts.append(paper.venue)
     if paper.in_library:
-        parts.append("in your Paperpile, not read yet")
+        parts.append("in your library, not read yet")
     if item.candidate.topics:
         parts.append("topic: " + ", ".join(sorted(item.candidate.topics)))
     elif "s2-recs" in item.candidate.sources:

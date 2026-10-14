@@ -1,10 +1,10 @@
-{% macro paper_meta(paper) -%}
+{% macro paper_meta(paper, library_chip=True) -%}
 <div class="meta">
   {{ paper.authors | authors }}
   ({{ paper.pub_date.isoformat() if paper.pub_date else (paper.year or "n.d.") }})
   {% if paper.venue %}· {{ paper.venue }}{% endif %}
   {% if paper.citation_count is not none %}· {{ "{:,}".format(paper.citation_count) }} citations{% endif %}
-  {% if paper.in_library %}· <span class="chip">📁 in Paperpile</span>{% endif %}
+  {% if library_chip and paper.in_library %}· <span class="chip">📁 in your library</span>{% endif %}
   {% if paper_link(paper) %}· <a href="{{ paper_link(paper) }}" target="_blank" rel="noopener">open ↗</a>{% endif %}
   {% if paper.pmcid %}· <a href="https://europepmc.org/article/PMC/{{ paper.pmcid }}" target="_blank" rel="noopener" title="free full text in PubMed Central">🔓 full text ↗</a>{% endif %}
 </div>
@@ -219,3 +219,10 @@
     </div>
   </div>
 {% endmacro %}
+
+{# the results of checking an export file (ingest/check.py) #}
+{% macro findings(check) -%}
+  {% for f in check.findings %}
+  <div class="hint"><span>{{ {"error": "❌", "warning": "⚠️", "info": "ℹ️", "ok": "✅"}[f.level] }}</span><span class="{{ 'neg' if f.level == 'error' }}">{{ f.message }}</span></div>
+  {% endfor %}
+{%- endmacro %}

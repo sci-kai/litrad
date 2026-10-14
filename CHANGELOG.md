@@ -7,6 +7,21 @@ All notable changes are listed here. Versions follow
 
 ### Added
 
+- **Libraries** (Library → Libraries, `litresearch library …`): several
+  libraries per profile, each with a name and a description, from any
+  reference manager. Import BibTeX (tested with Paperpile), RIS (EndNote,
+  Citavi, Zotero, Mendeley) or CSL-JSON (Zotero) into a new library or an
+  existing one (add its papers, or replace the library with an updated
+  export); the file is checked first. A paper exists once, however many
+  libraries contain it (matched by citation key, DOI, PMID, title + year).
+- **Export** any library as BibTeX or RIS, optionally with reading status and
+  rating as keywords; the **reading queue** is a library too and exports
+  exactly the current queue.
+- **Recommended** library: a recommendation joins it when you put it on the
+  queue, and only then.
+- Per library: use it for the recommendation similarity or not.
+- Documentation: "What an export must contain" (fields per format and
+  reference manager), linked from the import page and the import history.
 - **Paper search in Europe PMC and PubMed** (Library → Find & add and
   `litresearch search`): keywords (title and abstract), title, author,
   journal, publication years, open access only; several authors or journals
@@ -25,8 +40,20 @@ All notable changes are listed here. Versions follow
   managers, more systems and devices), principles and open questions.
 - `TESTING.md` and a *Testing feedback* issue template for the alpha phase.
 
+### Changed
+
+- "Paperpile library" is now **Library** with the tabs Libraries, Import and
+  Find & add (`/search`); `/paperpile` and old Find & add links redirect.
+  Existing data is migrated to a library called "My library".
+- `litresearch ingest` updates every library from its file; `check-bib`
+  checks BibTeX, RIS and CSL-JSON. The import report says "Entries" instead
+  of "BibTeX entries".
+- Profile files contain the libraries and their papers (not the files).
+
 ### Fixed
 
+- Recommendation sets are dated with the day they were built for, so the
+  cooldown is exact in tests that build sets for other days.
 - The documentation still listed the removed placeholder commands and
   called the systemd service "planned".
 

@@ -297,7 +297,7 @@ def test_ingest_without_bibtex_file(tmp_path):
         f"paths:\n  bibtex: {tmp_path / 'missing.bib'}\n  database: {tmp_path / 'db.sqlite'}\n"
     )
     result = runner.invoke(cli.app, ["ingest", "-c", str(path)])
-    assert result.exit_code == 1 and "No BibTeX file" in result.stdout
+    assert result.exit_code == 1 and "No library has a file to import yet" in result.stdout
     assert not (tmp_path / "db.sqlite").exists()  # nothing was created
 
 

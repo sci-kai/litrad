@@ -1,15 +1,27 @@
-"""Library ingest: BibTeX -> database, DOI resolution, metadata enrichment."""
+"""Importing a reference-manager export into a library, then enriching its papers.
+
+``import_into`` reads a BibTeX, RIS or CSL-JSON file into one library, either
+adding to it or replacing its content (the file is the complete library, e.g.
+Paperpile's auto-export). Papers are matched to stored ones by the library's
+citation key, then DOI, PMID and title + year, so a paper that is in several
+libraries (or was recommended earlier) exists only once. Then missing DOIs are
+resolved (Crossref) and metrics and embeddings fetched (OpenAlex, Semantic
+Scholar) for the imported papers.
+"""
 
 import hashlib
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlmodel import Session, select
 
+from litresearch import libraries
 from litresearch.config import Config
-from litresearch.db import IngestRun, Paper, now, store_embedding
-from litresearch.ingest.bibtex import BibEntry, parse_bibtex
+from litresearch.db import IngestRun, Library, LibraryPaper, Paper, now, store_embedding
+from litresearch.ingest.bibtex import BibEntry
 from litresearch.ingest.check import BibCheck, check_entries
+from litresearch.ingest.formats import FORMATS, read_references
 from litresearch.sources import crossref
 from litresearch.sources.http import HttpClient, HttpError
 from litresearch.sources.openalex import OpenAlex
@@ -20,6 +32,8 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class IngestReport:
+    library: str = ""
+    format: str = "bibtex"
     entries: int = 0
     added: int = 0
     updated: int = 0
@@ -37,10 +51,11 @@ class IngestReport:
 
     def lines(self) -> list[str]:
         out = [
-            f"BibTeX entries:        {self.entries}",
+            f"Library:               {self.library} ({FORMATS.get(self.format, self.format)})",
+            f"Entries:               {self.entries}",
             f"  added / updated:     {self.added} / {self.updated}",
             f"  removed from library:{self.removed:>3}",
-            f"DOI from BibTeX:       {self.doi_from_bibtex}",
+            f"DOI from the file:     {self.doi_from_bibtex}",
             f"New DOI via Crossref:  {self.doi_from_crossref}",
             f"New DOI via PMID:      {self.doi_from_openalex}",
             f"Not found anywhere:    {len(self.unresolved)} {', '.join(self.unresolved)}".rstrip(),
@@ -49,51 +64,67 @@ class IngestReport:
             f"SPECTER2 embeddings:   {self.embeddings}",
         ]
         if self.duplicates:
-            out.append(f"Duplicate DOIs:        {', '.join(self.duplicates)}")
+            out.append(f"Duplicates (skipped):  {', '.join(self.duplicates)}")
         out += [f"WARNING: {error}" for error in self.errors]
         return out
 
 
-def _apply_bibtex(paper: Paper, entry: BibEntry) -> None:
-    paper.bibtex_key = entry.key
+def _apply_entry(paper: Paper, entry: BibEntry) -> None:
+    """The reference manager's metadata wins over what the APIs say."""
     paper.entry_type = entry.entry_type
     paper.title = entry.title
-    paper.authors = list(entry.authors)
-    paper.year = entry.year
+    paper.authors = list(entry.authors) or paper.authors
+    paper.year = entry.year or paper.year
     paper.pub_date = entry.pub_date or paper.pub_date
     paper.venue = entry.journal or paper.venue
     paper.abstract = entry.abstract or paper.abstract
     paper.pmid = entry.pmid or paper.pmid
-    paper.url = entry.url
-    paper.folders = list(entry.folders)
-    paper.tags = list(entry.tags)
-    paper.in_library = True
+    paper.url = entry.url or paper.url
     paper.updated_at = now()
 
 
-def sync_library(session: Session, entries: list[BibEntry], report: IngestReport) -> list[Paper]:
-    """Upsert BibTeX entries; papers missing from the export leave the library."""
-    by_key = {
-        paper.bibtex_key: paper
-        for paper in session.exec(select(Paper).where(Paper.bibtex_key.is_not(None)))
-    }
-    by_doi = {
-        paper.doi: paper for paper in session.exec(select(Paper).where(Paper.doi.is_not(None)))
-    }
-    seen_keys, library = set(), []
+def _title_key(title: str, year: int | None) -> str:
+    return " ".join(title.lower().split()) + f"|{year or ''}"
+
+
+def sync_library(
+    session: Session,
+    library: Library,
+    entries: list[BibEntry],
+    report: IngestReport,
+    replace: bool = True,
+) -> list[Paper]:
+    """Put the entries into ``library``; with ``replace``, papers that are no
+    longer in the file leave the library (they stay in others and in your
+    reading history)."""
+    links = session.exec(select(LibraryPaper).where(LibraryPaper.library_id == library.id)).all()
+    by_link_key = {link.citation_key: link.paper_id for link in links if link.citation_key}
+    before = {link.paper_id for link in links}
+    papers = session.exec(select(Paper)).all()
+    by_doi = {p.doi: p for p in papers if p.doi}
+    by_pmid = {p.pmid: p for p in papers if p.pmid}
+    # papers without a DOI in the file: also matched by title + year (their DOI may
+    # have been found by litresearch since, e.g. via Crossref)
+    by_title = {_title_key(p.title, p.year): p for p in papers}
+    seen: set[int] = set()
+    imported = []
     for entry in entries:
-        seen_keys.add(entry.key)
-        paper = by_key.get(entry.key)
-        if paper is None and entry.doi and entry.doi in by_doi:
-            # e.g. a recommended paper that has since been added to Paperpile
-            candidate = by_doi[entry.doi]
-            paper = candidate if candidate.bibtex_key is None else None
+        paper = None
+        if entry.key in by_link_key:
+            paper = session.get(Paper, by_link_key[entry.key])
+        if paper is None and entry.doi:
+            paper = by_doi.get(entry.doi)
+        if paper is None and entry.pmid:
+            paper = by_pmid.get(entry.pmid)
+        if paper is None and not entry.doi:
+            paper = by_title.get(_title_key(entry.title, entry.year))
+        if paper is not None and paper.id in seen:
+            # the same paper twice in one file (same DOI, PMID or title): keep the first
+            report.duplicates.append(f"{entry.key} ({entry.doi or entry.pmid or 'same title'})")
+            continue
         if paper is None:
             paper = Paper(title=entry.title)
-            report.added += 1
-        else:
-            report.updated += 1
-        _apply_bibtex(paper, entry)
+        _apply_entry(paper, entry)
         if entry.doi and paper.doi != entry.doi:
             owner = by_doi.get(entry.doi)
             if owner is not None and owner is not paper:
@@ -105,15 +136,25 @@ def sync_library(session: Session, entries: list[BibEntry], report: IngestReport
             paper.resolved_via = "bibtex"
             report.doi_from_bibtex += 1
         session.add(paper)
-        library.append(paper)
+        session.flush()  # assigns the id of new papers
+        seen.add(paper.id)
+        if paper.id in before:
+            report.updated += 1
+        else:
+            report.added += 1
+        libraries.link(session, library, paper, entry.key, entry.folders, entry.tags)
+        imported.append(paper)
 
-    for key, paper in by_key.items():
-        if key not in seen_keys and paper.in_library:
-            paper.in_library = False
-            session.add(paper)
-            report.removed += 1
+    removed = set()
+    if replace:
+        for link in links:
+            if link.paper_id not in seen:
+                session.delete(link)
+                removed.add(link.paper_id)
+        report.removed = len(removed)
     session.flush()
-    return library
+    libraries.refresh_flags(session, seen | removed)
+    return imported
 
 
 def resolve_missing_dois(
@@ -223,30 +264,63 @@ def enrich_semanticscholar(
             report.embeddings += 1
 
 
-def ingest_library(
-    cfg: Config, session: Session, http: HttpClient, use_s2: bool = True, source: str = "file"
+MODES = {
+    "new": "a new library",
+    "add": "add to the library",
+    "replace": "replace the library's content",
+}
+
+
+def import_into(
+    cfg: Config,
+    session: Session,
+    http: HttpClient,
+    library: Library,
+    path: Path,
+    mode: str = "replace",
+    source: str = "file",
+    use_s2: bool = True,
+    fmt: str | None = None,
 ) -> IngestReport:
-    """Import the Paperpile export: sync, resolve DOIs, enrich. Idempotent."""
-    report = IngestReport()
-    duplicate_keys = []
-    entries = parse_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels, duplicate_keys)
+    """Import an export file into ``library`` and enrich its papers.
+
+    ``mode``: ``new`` (a library created for this file), ``add`` (keep what
+    the library has) or ``replace`` (the file is the complete library). With
+    ``new`` and ``replace`` the file becomes the library's source file, which
+    re-imports (``litresearch ingest``, *Update from file*) read again.
+    Raises ValueError for files that cannot be parsed, before anything changes.
+    """
+    duplicate_keys: list[str] = []
+    fmt, entries = read_references(path, cfg.library.ignore_labels, duplicate_keys, fmt)
+    report = IngestReport(library=library.name, format=fmt)
     report.errors += [
-        f"duplicate BibTeX key {key}: only the first entry is used" for key in duplicate_keys
+        f"duplicate citation key {key}: only the first entry is used" for key in duplicate_keys
     ]
     report.entries = len(entries)
     report.check = check_entries(entries, duplicate_keys)
-    papers = sync_library(session, entries, report)
+    report.check.format = fmt
+    papers = sync_library(session, library, entries, report, replace=mode != "add")
     resolve_missing_dois(session, papers, http, cfg, report)
     if cfg.sources.openalex:
         enrich_openalex(session, papers, http, cfg, report)
     if use_s2 and cfg.sources.semanticscholar:
         enrich_semanticscholar(session, papers, http, cfg, report)
-    report.unresolved = [p.bibtex_key for p in papers if not (p.doi or p.openalex_id)]
-    raw = cfg.paths.bibtex.read_bytes()
+    report.unresolved = [
+        p.bibtex_key or p.title[:40] for p in papers if not (p.doi or p.openalex_id)
+    ]
+    library.format = fmt
+    if mode in ("new", "replace"):
+        library.source_path = str(path.resolve())
+    library.updated_at = now()
+    session.add(library)
+    raw = path.read_bytes()
     session.add(
         IngestRun(
+            library_id=library.id,
+            mode=mode,
+            format=fmt,
             source=source,
-            file_name=cfg.paths.bibtex.name,
+            file_name=path.name,
             sha256=hashlib.sha256(raw).hexdigest(),
             size=len(raw),
             entries=report.entries,
@@ -261,5 +335,52 @@ def ingest_library(
     return report
 
 
-def last_ingest(session: Session) -> IngestRun | None:
-    return session.exec(select(IngestRun).order_by(IngestRun.id.desc())).first()
+def ingest_library(
+    cfg: Config, session: Session, http: HttpClient, use_s2: bool = True, source: str = "file"
+) -> IngestReport:
+    """Import ``paths.bibtex`` (e.g. kept up to date by rclone) into its library.
+
+    That is the library whose source file it is, else "My library" (created
+    if needed). For all libraries with a source file: ``refresh_libraries``.
+    """
+    libraries.migrate(session, cfg)
+    target = cfg.paths.bibtex.resolve()
+    library = next(
+        (lib for lib in libraries.all_libraries(session) if lib.source_path == str(target)),
+        None,
+    )
+    if library is None:
+        try:
+            library = libraries.find(session, libraries.DEFAULT_NAME)
+        except libraries.LibraryError:
+            library = libraries.create(session, libraries.DEFAULT_NAME)
+    return import_into(cfg, session, http, library, cfg.paths.bibtex, "replace", source, use_s2)
+
+
+def refresh_libraries(
+    cfg: Config, session: Session, http: HttpClient, use_s2: bool = True
+) -> list[tuple[Library, IngestReport | str]]:
+    """Re-import every library from its source file; problems are reported per library."""
+    results = []
+    for library in libraries.all_libraries(session):
+        if library.kind != libraries.IMPORTED or not library.source_path:
+            continue
+        path = Path(library.source_path)
+        if not path.exists():
+            results.append((library, f"its file {path} does not exist"))
+            continue
+        try:
+            report = import_into(cfg, session, http, library, path, "replace", "file", use_s2)
+        except (ValueError, OSError, UnicodeDecodeError) as error:
+            session.rollback()
+            results.append((library, f"not imported: {error}"))
+            continue
+        results.append((library, report))
+    return results
+
+
+def last_ingest(session: Session, library: Library | None = None) -> IngestRun | None:
+    query = select(IngestRun).order_by(IngestRun.id.desc())
+    if library is not None:
+        query = query.where(IngestRun.library_id == library.id)
+    return session.exec(query).first()

@@ -1,0 +1,6 @@
+{# tabs of the Library section; needs `active` #}
+<nav class="tabs" aria-label="Library">
+  <a href="/library" class="{{ 'active' if active in ('libraries', 'library') }}">🗂️ Libraries</a>
+  <a href="/library/import" class="{{ 'active' if active == 'import' }}">⬆️ Import</a>
+  <a href="/search" class="{{ 'active' if active == 'search' }}">🔍 Find &amp; add</a>
+</nav>

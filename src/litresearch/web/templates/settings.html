@@ -43,7 +43,7 @@
   <table>
     <tr><td>Profile folder</td><td><code>{{ settings_file.parent.resolve() }}</code></td></tr>
     <tr><td>Database (your progress lives here)</td><td><code>{{ cfg.paths.database.resolve() }}</code></td></tr>
-    <tr><td>Paperpile export</td><td><code>{{ cfg.paths.bibtex.resolve() }}</code></td></tr>
+    <tr><td>Libraries</td><td><a href="/library">manage your libraries</a> (imports, files, exports)</td></tr>
     <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · automatic every {{ cfg.backup.interval_hours | round(1) }} h while the server runs</td></tr>
     <tr><td>Last backup</td><td>{% if last_backup %}{{ last_backup.isoformat() }}{% else %}<span class="neg">none yet</span>{% endif %}</td></tr>
   </table>

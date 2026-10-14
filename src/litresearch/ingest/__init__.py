@@ -1,1 +1,1 @@
-"""Reading the Paperpile export: BibTeX parsing, checks and the ingest pipeline."""
+"""Reading reference-manager exports: BibTeX, RIS, CSL-JSON, checks, import pipeline."""

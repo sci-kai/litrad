@@ -241,7 +241,7 @@ def test_unread_library_papers_can_be_recommended(setup):
         paper_id = paper.id
     _, items = build(setup)
     rec = next(r for r, p in items if p.doi == library_doi)
-    assert "in your Paperpile, not read yet" in rec.reason
+    assert "in your library, not read yet" in rec.reason
     # a library paper is never its own nearest neighbour
     neighbours = rec.breakdown["evidence"]["relevance"]["neighbours"]
     assert paper_id not in [n["paper_id"] for n in neighbours]

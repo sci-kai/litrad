@@ -41,7 +41,7 @@
   <h2>2 · 🧹 Filters</h2>
   <p>A candidate is removed if it is</p>
   <ul>
-    <li>already skimmed, read or read thoroughly, or marked not relevant (papers in your Paperpile library stay eligible until you mark them);</li>
+    <li>already skimmed, read or read thoroughly, or marked not relevant (papers in your libraries stay eligible until you mark them);</li>
     <li>on your reading queue;</li>
     <li>recommended within the last <code>{{ s.cooldown_weeks }}</code> weeks (it may come back afterwards);</li>
     <li>containing an excluded term: {% for t in cfg.excluded_terms %}<code>{{ t }}</code>{{ ", " if not loop.last }}{% else %}<i>none set</i>{% endfor %};</li>

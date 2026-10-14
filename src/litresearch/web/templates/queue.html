@@ -57,7 +57,7 @@
     {% else %}
     <form method="post" action="/queue/add" class="grid" style="gap:.6rem">
       <div class="field" style="margin:0">
-        <label for="ref">DOI, PubMed ID, recommendation (r1), Paperpile key or title words</label>
+        <label for="ref">DOI, PubMed ID, recommendation (r1), citation key or title words</label>
         <input type="text" id="ref" name="ref" placeholder="10.1038/s41586-024-07894-z · pmid:35931863 · r2 · Barkley2022-ri">
         <span class="help">Unknown DOIs are looked up on OpenAlex (title, authors, journal, metrics).</span>
       </div>
@@ -69,7 +69,7 @@
         </div>
       </details>
       <label class="row"><input type="checkbox" name="top" value="true" style="width:auto"> Read it next (put it at q1)</label>
-      <div><button class="primary">➕ Add to queue</button> <a class="button ghost" href="/library">🔍 Search your library</a></div>
+      <div><button class="primary">➕ Add to queue</button> <a class="button ghost" href="/search">🔍 Find papers</a></div>
     </form>
     {% endif %}
   </div>

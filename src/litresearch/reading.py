@@ -11,6 +11,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
+from litresearch import libraries
 from litresearch.config import Config
 from litresearch.db import (
     Paper,
@@ -43,7 +44,7 @@ class ReadingError(ValueError):
 
 REF_HELP = (
     "r<N> (recommendation), q<N> (queue position), #<id>, a DOI, "
-    "pmid:<N>, PMC<N>, a Paperpile citation key, or words from the title"
+    "pmid:<N>, PMC<N>, a citation key from your library, or words from the title"
 )
 
 
@@ -143,6 +144,9 @@ def queue_add(
     _renumber(items)
     for item in items:
         session.add(item)
+    if source == "recommendation":
+        # recommendations join the "Recommended" library only once you queue them
+        libraries.add_recommended(session, paper)
     session.commit()
     return new
 
@@ -300,7 +304,7 @@ def source_of(
     """Where a queued paper came from (shown in the UI and used for badges).
 
     A paper picked from the recommendations counts as "recommendation" even
-    when it is also in the Paperpile library.
+    when it is also in one of your libraries.
     """
     if hint in ("recommendation", "library", "manual"):
         return hint

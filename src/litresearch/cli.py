@@ -17,7 +17,7 @@ from litresearch.db import Embedding, Paper, init_db
 from litresearch.papers import paper_link
 from litresearch.sources.http import HttpClient, ResponseCache
 
-app = typer.Typer(help="Personal literature radar on top of a Paperpile library.")
+app = typer.Typer(help="Personal literature radar on top of your reference-manager libraries.")
 
 console = Console(highlight=False)
 
@@ -104,43 +104,67 @@ def ingest(
     config: Path = ConfigOpt,
     s2: bool = typer.Option(True, help="Fetch embeddings/TLDRs from Semantic Scholar"),
 ):
-    """Import the Paperpile BibTeX export and enrich it with metadata."""
-    from litresearch.ingest.pipeline import ingest_library
+    """Update every library from its file (e.g. Paperpile's auto-export synced by rclone)."""
+    from litresearch import libraries
+    from litresearch.ingest.pipeline import ingest_library, refresh_libraries
 
     cfg = load_cfg(config)
-    if not cfg.paths.bibtex.exists():
+
+    def nothing_to_import():
         console.print(
-            f"[red]No BibTeX file at {cfg.paths.bibtex}.[/red] Export your Paperpile library "
-            "(see docs/documentation.md, Setup) or fix paths.bibtex."
+            "[red]No library has a file to import yet.[/red] Import an export with "
+            "[bold]litresearch library import FILE --new NAME[/bold] "
+            "(see docs/documentation.md, Setup)."
         )
         raise typer.Exit(code=1)
+
+    if not cfg.paths.database.exists() and not cfg.paths.bibtex.exists():
+        nothing_to_import()  # without creating an empty database
     engine = init_db(cfg.paths.database)
     http = make_http(cfg)
     try:
         with Session(engine) as session:
-            report = ingest_library(cfg, session, http, use_s2=s2, source="cli")
+            libraries.migrate(session, cfg)
+            results = refresh_libraries(cfg, session, http, use_s2=s2)
+            if not results:
+                if not cfg.paths.bibtex.exists():
+                    nothing_to_import()
+                # first run: paths.bibtex becomes "My library"
+                library_report = ingest_library(cfg, session, http, use_s2=s2, source="cli")
+                results = [(None, library_report)]
     finally:
         http.close()
         engine.dispose()
-    typer.echo("\n".join(report.lines()))
-    if report.check:
-        for finding in report.check.findings:
-            if finding.level in ("error", "warning"):
-                typer.echo(f"CHECK: {finding.message}")
+    failed = False
+    for library, report in results:
+        if isinstance(report, str):
+            console.print(f"[red]{library.name}: {report}[/red]")
+            failed = True
+            continue
+        typer.echo("\n".join(report.lines()))
+        if report.check:
+            for finding in report.check.findings:
+                if finding.level in ("error", "warning"):
+                    typer.echo(f"CHECK: {finding.message}")
+        typer.echo("")
+    if failed:
+        raise typer.Exit(code=1)
 
 
 @app.command("check-bib")
 def check_bib(
-    bibtex: Path = typer.Argument(None, help="BibTeX file (default: paths.bibtex)"),
+    bibtex: Path = typer.Argument(None, help="BibTeX, RIS or CSL-JSON file"),
     config: Path = ConfigOpt,
 ):
-    """Check a Paperpile BibTeX export: does it contain what litresearch needs?"""
-    from litresearch.ingest.check import FIELDS, INSTRUCTIONS, check_bibtex
+    """Check an export (BibTeX, RIS, CSL-JSON): does it contain what litresearch needs?"""
+    from litresearch.ingest.check import FIELDS, INSTRUCTIONS, check_file
+    from litresearch.ingest.formats import FORMATS
 
     cfg = load_cfg(config)
     path = bibtex or cfg.paths.bibtex
-    result = check_bibtex(path, cfg.library.ignore_labels)
-    console.print(f"[bold]{path}[/bold]: {result.entries} entries")
+    result = check_file(path, cfg.library.ignore_labels)
+    kind = f" ({FORMATS[result.format]})" if result.format else ""
+    console.print(f"[bold]{path}[/bold]: {result.entries} entries{kind}")
     for rule in FIELDS:
         if rule.name in result.coverage:
             console.print(f"  {rule.label:<28} {result.coverage[rule.name]:>5.0%}")
@@ -153,7 +177,7 @@ def check_bib(
     for finding in result.findings:
         console.print(f"{icons[finding.level]}: {finding.message}")
     if not result.ok or any(f.level == "warning" for f in result.findings):
-        console.print("\nHow to export from Paperpile:")
+        console.print("\nHow to export:")
         for number, step in enumerate(INSTRUCTIONS, start=1):
             console.print(f"  {number}. {step}")
     if not result.ok:
@@ -162,7 +186,7 @@ def check_bib(
 
 @app.command()
 def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of folders to list")):
-    """Summarise the library stored in the database."""
+    """Summarise your libraries (all imported libraries together, then each)."""
     cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
@@ -188,6 +212,18 @@ def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of
     typer.echo("Top folders:")
     for folder, count in folders.most_common(top):
         typer.echo(f"  {count:>4}  {folder}")
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        from litresearch import libraries
+
+        libraries.migrate(session, cfg)
+        rows = libraries.summaries(session)
+    engine.dispose()
+    if rows:
+        typer.echo("Libraries:")
+        for row in rows:
+            mark = " (for recommendations)" if row.library.use_for_recommendations else ""
+            typer.echo(f"  {row.papers:>4}  {row.library.name}{mark}")
 
 
 def short_authors(authors: list[str]) -> str:
@@ -415,7 +451,7 @@ def set_password(
 
 
 # reading queue, reading log and score commands register themselves on ``app``
-from litresearch import cli_data, cli_reading  # noqa: E402, F401, I001
+from litresearch import cli_data, cli_library, cli_reading  # noqa: E402, F401, I001
 
 
 if __name__ == "__main__":

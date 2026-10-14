@@ -1,13 +1,16 @@
-"""Checks for a Paperpile BibTeX export: is everything there that litresearch uses?
+"""Checks for a reference-manager export: is everything there that litresearch uses?
 
-Paperpile lets you choose which fields its BibTeX export contains. The tool
+Reference managers let you choose which fields an export contains. The tool
 works with less, but every missing field costs something (see ``FIELDS``).
+What each manager's export should contain is documented in
+docs/documentation.md ("What an export must contain").
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from litresearch.ingest.bibtex import BibEntry, parse_bibtex
+from litresearch.ingest.bibtex import BibEntry
+from litresearch.ingest.formats import FORMATS, detect_format, read_references
 
 
 @dataclass(frozen=True)
@@ -35,7 +38,7 @@ FIELDS = (
     FieldRule(
         "folders",
         "Folders / labels (keywords)",
-        "show where a paper sits in your Paperpile; used as topics",
+        "show where a paper sits in your reference manager",
         0.3,
     ),
     FieldRule("journal", "Journal", "shown in lists", 0.5),
@@ -44,14 +47,12 @@ FIELDS = (
 )
 
 INSTRUCTIONS = [
-    "In Paperpile, export your library (or a folder/label) as BibTeX: manually via "
-    "Export → BibTeX, or automatically via your profile picture (top right) → "
-    "Workflows and Integrations → BibTeX export (e.g. to Google Drive).",
-    "In the BibTeX export options, include the fields DOI, PMID, abstract, URL and "
-    "keywords (which carry your folders and labels). The exact option names can differ "
-    "between Paperpile versions; the checks below show what actually arrived.",
-    "Upload the .bib file here, or let rclone keep paths.bibtex up to date and press "
-    "'Re-import'. PDFs are never needed or read.",
+    "Paperpile: Export → BibTeX (or automatically: profile picture → Workflows and "
+    "Integrations → BibTeX export to Google Drive). Include DOI, PMID, abstract, URL and "
+    "keywords (your folders and labels).",
+    "Zotero, Mendeley, JabRef, Citavi: export as BibTeX (or RIS / CSL-JSON) with abstracts "
+    "and keywords; EndNote: export as RIS.",
+    "PDFs are never needed or read. Details: docs/documentation.md, 'What an export must contain'.",
 ]
 
 
@@ -64,6 +65,7 @@ class Finding:
 @dataclass
 class BibCheck:
     entries: int = 0
+    format: str | None = None
     coverage: dict[str, float] = field(default_factory=dict)
     findings: list[Finding] = field(default_factory=list)
     duplicate_keys: list[str] = field(default_factory=list)
@@ -75,6 +77,7 @@ class BibCheck:
     def to_dict(self) -> dict:
         return {
             "entries": self.entries,
+            "format": self.format,
             "coverage": self.coverage,
             "findings": [{"level": f.level, "message": f.message} for f in self.findings],
         }
@@ -91,7 +94,7 @@ def check_entries(entries: list[BibEntry], duplicate_keys=()) -> BibCheck:
     """Check parsed entries: required fields, coverage of useful fields, duplicates."""
     result = BibCheck(entries=len(entries), duplicate_keys=list(duplicate_keys))
     if not entries:
-        result.findings.append(Finding("error", "The file contains no BibTeX entries."))
+        result.findings.append(Finding("error", "The file contains no references."))
         return result
     for rule in FIELDS:
         share = sum(_present(e, rule.name) for e in entries) / len(entries)
@@ -105,8 +108,7 @@ def check_entries(entries: list[BibEntry], duplicate_keys=()) -> BibCheck:
             result.findings.append(
                 Finding(
                     "warning",
-                    f"{rule.label}: missing in all entries. Include it in "
-                    f"the Paperpile BibTeX export ({rule.why}).",
+                    f"{rule.label}: missing in all entries. Include it in the export ({rule.why}).",
                 )
             )
         elif share < rule.warn_below:
@@ -126,13 +128,21 @@ def check_entries(entries: list[BibEntry], duplicate_keys=()) -> BibCheck:
     return result
 
 
-def check_bibtex(path: Path, ignore_labels=()) -> BibCheck:
-    """Parse and check a file; parse problems become an error finding."""
+def check_file(path: Path, ignore_labels=(), fmt: str | None = None) -> BibCheck:
+    """Parse and check an export; parse problems become an error finding."""
     duplicates: list[str] = []
     try:
-        entries = parse_bibtex(path, ignore_labels, duplicates)
+        fmt = fmt or detect_format(path)
+        fmt, entries = read_references(path, ignore_labels, duplicates, fmt)
     except (OSError, UnicodeDecodeError) as error:
         return BibCheck(findings=[Finding("error", f"Cannot read the file: {error}")])
     except ValueError as error:
-        return BibCheck(findings=[Finding("error", f"Not valid BibTeX: {error}")])
-    return check_entries(entries, duplicates)
+        name = FORMATS.get(fmt or "", "a supported format")
+        return BibCheck(findings=[Finding("error", f"Not valid {name}: {error}")])
+    result = check_entries(entries, duplicates)
+    result.format = fmt
+    return result
+
+
+# the original name, used before other formats were supported
+check_bibtex = check_file

@@ -30,8 +30,8 @@
       <div class="group">Progress</div>
       <a href="/progress" class="sub {{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress &amp; XP</a>
       <div class="group">Library</div>
-      <a href="/paperpile" class="sub {{ 'active' if active == 'paperpile' }}"><span class="icon">📁</span>Paperpile library</a>
-      <a href="/library" class="sub {{ 'active' if active == 'library' }}"><span class="icon">🔍</span>Find &amp; add</a>
+      <a href="/library" class="sub {{ 'active' if active in ('libraries', 'library', 'import') }}"><span class="icon">🗂️</span>Libraries</a>
+      <a href="/search" class="sub {{ 'active' if active == 'search' }}"><span class="icon">🔍</span>Find &amp; add</a>
       <div class="group"></div>
       <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="icon">⚙️</span>Settings</a>
       <a href="/docs" class="{{ 'active' if active == 'docs' }}"><span class="icon">📖</span>Documentation</a>

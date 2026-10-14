@@ -362,7 +362,7 @@ BADGE_CATALOG = [
     BadgeDef(
         "library_diver",
         "Library Diver",
-        "Read {target} papers from your Paperpile library",
+        "Read {target} papers from your libraries",
         "from_library",
         10,
         "📁",

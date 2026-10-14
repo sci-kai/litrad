@@ -427,3 +427,29 @@ code.query { display: block; white-space: pre-wrap; overflow-wrap: anywhere; fon
 .years { flex-wrap: nowrap; }
 .years input { flex: 1 1 0; min-width: 0; width: auto; }
 .search-form label.row { flex-wrap: nowrap; }
+
+/* libraries */
+.library-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.library-card { display: flex; flex-direction: column; gap: .4rem; color: var(--text); }
+a.library-card:hover { text-decoration: none; border-color: var(--accent); }
+.library-card h2 { margin: 0; font-size: 1.1rem; }
+.library-card p { margin: 0; }
+.library-card.special { background: var(--surface-2); }
+.library-card.placeholder { border-style: dashed; }
+.lib-stats { font-size: .95rem; }
+.export-form { gap: .4rem; flex-wrap: wrap; }
+.export-form select { width: auto; }
+.export-form label { font-weight: 400; font-size: .88rem; }
+.sub-card { border: 1px solid var(--border); border-radius: 12px; padding: .7rem .9rem; }
+.sub-card h3 { margin: 0 0 .4rem; }
+.sub-card summary { cursor: pointer; }
+.import-targets { display: grid; gap: .8rem; }
+.import-target { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: .4rem 1rem; align-items: start; }
+.import-target .choice { display: flex; gap: .5rem; align-items: start; font-weight: 400; cursor: pointer; }
+.import-target .choice input, .import-target .mode input { width: auto; margin-top: .25rem; flex: none; }
+.import-target .mode { display: flex; gap: .5rem; align-items: start; font-weight: 400; }
+.import-target .choice-body { display: grid; gap: .4rem; }
+@media (max-width: 700px) { .import-target { grid-template-columns: 1fr; } }
+/* only the chosen import target shows its fields */
+.import-targets:has(input[name="target"][value="new"]:checked) .existing-body,
+.import-targets:has(input[name="target"][value="existing"]:checked) .new-body { display: none; }

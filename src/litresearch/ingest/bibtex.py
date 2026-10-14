@@ -1,4 +1,4 @@
-"""Parse Paperpile BibTeX exports into plain records."""
+"""Parse BibTeX exports (developed with Paperpile's) into plain records."""
 
 import re
 from dataclasses import dataclass, field

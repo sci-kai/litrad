@@ -18,8 +18,10 @@ from litresearch.db import (
     Recommendation,
     RecommendationBatch,
     load_embedding,
+    now,
     store_embedding,
 )
+from litresearch.libraries import recommendation_library
 from litresearch.papers import upsert_work
 from litresearch.recommend.scoring import Candidate, LibraryProfile, describe, rank_candidates
 from litresearch.sources.http import HttpClient, HttpError
@@ -111,7 +113,7 @@ def gather_s2_candidates(
     session: Session, s2: SemanticScholar, openalex: OpenAlex, out: Gathered
 ) -> None:
     """Recently published papers similar to the library and to well-rated papers."""
-    library = session.exec(select(Paper).where(Paper.in_library, Paper.doi.is_not(None))).all()
+    library = [p for p in recommendation_library(session) if p.doi]
     liked = session.exec(
         select(Paper)
         .join(Reading, Reading.paper_id == Paper.id)
@@ -259,7 +261,8 @@ def build_recommendations(
         fetch_embeddings(session, [c.paper for c in candidates], s2, gathered.warnings)
     session.flush()
 
-    library = session.exec(select(Paper).where(Paper.in_library)).all()
+    # the papers of the libraries chosen for recommendations (Library page)
+    library = recommendation_library(session)
     lib_vectors = vectors_for(session, [p.id for p in library])
     cand_vectors = vectors_for(session, [c.paper.id for c in candidates])
     for c in candidates:
@@ -285,6 +288,8 @@ def build_recommendations(
         "candidates_embedded": len(cand_vectors),
     }
     batch = RecommendationBatch(
+        # the set belongs to the day it was built for (the cooldown counts from it)
+        created_at=datetime.combine(today, now().time()).replace(microsecond=0),
         week_start=week_start(today),
         n_candidates=len(candidates),
         warnings=gathered.warnings,

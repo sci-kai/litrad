@@ -278,7 +278,7 @@ def test_adopt_existing_data_in_the_browser(client, base):
     page = client.get("/welcome").text
     assert "EXISTING DATA FOUND" in page and "1 library papers" in page
     enter_profile(client, "Kai")
-    assert "Old library paper" in client.get("/paperpile").text
+    assert "Old library paper" in client.get("/library/1").text
     assert "EXISTING DATA FOUND" not in client.get("/welcome").text
 
 
@@ -410,7 +410,13 @@ def test_merged_pages(client):
     assert "Badges" in progress and "/ledger.tsv" in progress
     assert "No transactions" in client.get("/progress?kind=penalty").text
     nav = client.get("/queue").text
-    for label in ("Reading queue", "Recommendations", "Progress &amp; XP", "Paperpile library"):
+    for label in (
+        "Reading queue",
+        "Recommendations",
+        "Progress &amp; XP",
+        "Libraries",
+        "Find &amp; add",
+    ):
         assert label in nav
     assert 'href="/how"' not in nav and 'href="/ledger"' not in nav
 

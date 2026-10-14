@@ -9,12 +9,12 @@ Status: `v0.1.0-alpha.1` is out for testing (2026-10-09).
 
 ```
 0.1.x  Alpha testing and fixes        ◄── now
-0.2    Find papers: Europe PMC and PubMed search   ◄── next (built on dev, in testing)
-0.3    Your reading library
+0.2    Find papers (Europe PMC, PubMed) and libraries   ◄── next (built on dev, in testing)
+0.3    Your reading history
 0.4    PubMed and PubMed Central for recommendations and full texts
 0.5    Notes, compatible with Obsidian
 0.6    Local LLM summaries
-0.7    Reference managers: Paperpile and others
+0.7    Reference managers: write-back and automatic updates
 0.8    More systems and devices
 0.9    Beta: feature freeze, stable data format
 1.0    Stable release
@@ -107,28 +107,42 @@ can also search full texts)? Which other fields are missed (MeSH terms,
 affiliation, article type, language)? Should results be paged beyond the
 first 25 per database?
 
-**Done when:** tested by several testers with their own searches; both
-databases' outages are handled (one failing database never hides the
-other's results).
+### Libraries (built on `dev`, 2026-10-14)
+
+- **Several libraries** per profile, each with a name and a description,
+  e.g. one per reference manager, project or lab; an overview with size,
+  reading progress and last update. A paper exists once, however many
+  libraries contain it.
+- **Import** from any reference manager: BibTeX (tested with Paperpile), RIS
+  (EndNote, Citavi, Zotero, Mendeley) and CSL-JSON (Zotero), into a **new**
+  library or an **existing** one (add, or replace with an updated export).
+  The file is always checked first; what an export must contain is
+  documented and linked from the import page.
+- **Export** any library as BibTeX or RIS, optionally with your reading
+  status and rating as keywords (labels in the reference manager).
+- **Recommended**: recommendations join their own library when you put them
+  on the queue, and only then.
+- The **reading queue** as a library that can be exported and always holds
+  exactly the current queue (max. 5).
+- Per library: use it for the recommendation similarity or not.
+
+**Questions for testing:** Do RIS and CSL-JSON exports of Zotero, Mendeley
+and EndNote import cleanly? Is the split into several libraries useful, or
+would folders within one library be enough? Does an export with reading
+status import well into your reference manager (are the labels kept)?
+
+**Done when:** tested by several testers with their own searches and
+libraries (at least one non-Paperpile export); both databases' outages are
+handled (one failing database never hides the other's results).
 
 ---
 
-## 0.3 · Your reading library
+## 0.3 · Your reading history
 
-Closing the gaps in the daily workflow found so far.
-
-### Recommended papers join your library
-
-- When you put a recommended paper on the queue, it also becomes part of your
-  **litresearch library**, marked **recommended** (with the date and the
-  recommendation set). Papers added by hand are marked **added manually**.
-- The Library page shows Paperpile papers and these papers together, with
-  filters by origin (Paperpile / recommended / manual) and status.
-- Papers you queued count as library papers for the similarity score, so the
-  recommendations learn from your picks, not only from Paperpile.
-- *Open questions:* should a dropped paper stay in the library? Should
-  "recommended" papers be exported to Paperpile automatically (see 0.7) or
-  only on request?
+Closing the gaps in the daily workflow found so far. (Recommended papers
+joining their own library is done since 0.2; open: should a paper you drop
+unread leave *Recommended*? Should papers added by hand get a library of
+their own?)
 
 ### Read papers: your reading history
 
@@ -141,8 +155,8 @@ Closing the gaps in the daily workflow found so far.
 - *Open questions:* show dismissed papers here or separately? A "re-read"
   reminder for highly rated papers?
 
-**Done when:** both features are tested with a real library; the data
-migration from 0.1 keeps all progress.
+**Done when:** tested with a real library; the data migration from 0.2
+keeps all progress.
 
 ---
 
@@ -213,17 +227,20 @@ the UI.
 
 ---
 
-## 0.7 · Reference managers: Paperpile and others
+## 0.7 · Reference managers: write-back and automatic updates
+
+Since 0.2 every reference manager's export can be imported (BibTeX, RIS,
+CSL-JSON) into several libraries, and every library can be exported with
+your reading status as labels. Building on that:
 
 ### Deeper Paperpile integration
 
 Paperpile has no public API; its BibTeX auto-export and its BibTeX import
 are the interface. Within that:
 
-- **Write-back file**: a BibTeX file of papers you added or rated in
-  litresearch, with labels such as `litresearch-recommended`,
-  `litresearch-read`, `litresearch-thorough` and your rating, ready to import
-  into Paperpile (manually, or via a watched Google Drive folder).
+- **Write-back**: a ready-made file of only what changed in litresearch
+  (new papers, new reading status) since the last export, so that importing
+  it into Paperpile does not create duplicates.
 - **Automatic updates**: watch the auto-export file (e.g. synced by rclone)
   and re-import when it changes; show what is new or removed.
 - **Folders and labels as topics**: suggest topics from your Paperpile
@@ -234,13 +251,11 @@ are the interface. Within that:
 
 ### Other reference managers
 
-- A common import layer for **BibTeX, RIS and CSL-JSON**, so any reference
-  manager's export works: **Zotero** (also through its local API or Better
-  BibTeX's auto-export), **Mendeley**, **EndNote**, **JabRef**, **Citavi**.
-- Per profile, one or more libraries; the Library page shows where each
-  paper comes from.
-- Write-back where the manager supports it (Zotero tags and notes through
-  its API), otherwise an import file as for Paperpile.
+- **Zotero** directly: its local API or Better BibTeX's auto-export, and
+  write-back of tags and notes through its API.
+- Tested import and export profiles for **Mendeley**, **EndNote**, **JabRef**
+  and **Citavi** once testers have tried them with real exports.
+- The paper page shows in which libraries a paper is.
 
 **Done when:** each supported manager is tested with a real export; switching
 the reference manager keeps all progress.

@@ -36,6 +36,8 @@ from litresearch.config import Config
 from litresearch.db import (
     Achievement,
     Category,
+    Library,
+    LibraryPaper,
     Paper,
     Profile,
     QueueItem,
@@ -239,9 +241,12 @@ def export_progress(
         select(Recommendation).order_by(Recommendation.batch_id, Recommendation.rank)
     ).all()
     profile = session.exec(select(Profile).order_by(Profile.id)).first()
+    library_rows = session.exec(select(Library).order_by(Library.id)).all()
+    memberships = session.exec(select(LibraryPaper)).all()
 
     ids = (
-        {r.paper_id for r in readings}
+        {m.paper_id for m in memberships}
+        | {r.paper_id for r in readings}
         | {e.paper_id for e in events}
         | {q.paper_id for q in queue}
         | {e.paper_id for e in xp if e.paper_id is not None}
@@ -287,6 +292,28 @@ def export_progress(
         if profile
         else None,
         "papers": papers,
+        # libraries and who is in them; their files are machine-specific and not included
+        "libraries": [
+            {
+                "name": lib.name,
+                "description": lib.description,
+                "kind": lib.kind,
+                "format": lib.format,
+                "use_for_recommendations": lib.use_for_recommendations,
+                "created_at": _iso(lib.created_at),
+                "papers": [
+                    {
+                        "paper": ref(m.paper_id),
+                        "key": m.citation_key,
+                        "folders": m.folders,
+                        "tags": m.tags,
+                    }
+                    for m in memberships
+                    if m.library_id == lib.id and ref(m.paper_id)
+                ],
+            }
+            for lib in library_rows
+        ],
         "readings": [
             {
                 "paper": ref(r.paper_id),
@@ -361,6 +388,7 @@ class ImportReport:
     achievements_added: int = 0
     queue_added: int = 0
     batches_added: int = 0
+    libraries_added: int = 0
     profile_adopted: bool = False
     queue_skipped: list[str] = field(default_factory=list)
 
@@ -374,6 +402,7 @@ class ImportReport:
             f"Badges:                    {self.achievements_added}",
             f"Queue entries:             {self.queue_added}",
             f"Recommendation batches:    {self.batches_added}",
+            f"Libraries created:         {self.libraries_added}",
         ]
         if self.profile_adopted:
             out.append("Profile and its locked rules taken over from the file.")
@@ -601,6 +630,8 @@ def import_progress(
                 )
             report.batches_added += 1
 
+        report.libraries_added = _merge_libraries(session, data.get("libraries", []), ids)
+
         queued = session.exec(select(QueueItem).order_by(QueueItem.position)).all()
         position = len(queued)
         present = {q.paper_id for q in queued}
@@ -636,6 +667,51 @@ def import_progress(
         session.rollback()
         raise
     return report
+
+
+def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]) -> int:
+    """Libraries of a profile file: created when missing (by name), papers added."""
+    from litresearch import libraries
+
+    existing = {lib.name.lower(): lib for lib in session.exec(select(Library)).all()}
+    created, touched = 0, set()
+    for entry in incoming:
+        library = existing.get(entry["name"].lower())
+        if library is None and entry.get("kind") == libraries.RECOMMENDED:
+            library = session.exec(
+                select(Library).where(Library.kind == libraries.RECOMMENDED)
+            ).first()
+        if library is None:
+            library = Library(
+                name=entry["name"],
+                description=entry.get("description") or "",
+                kind=entry.get("kind") or libraries.IMPORTED,
+                format=entry.get("format"),
+                use_for_recommendations=entry.get("use_for_recommendations", True),
+                created_at=_dt(entry.get("created_at")) or now(),
+            )
+            session.add(library)
+            session.flush()
+            existing[library.name.lower()] = library
+            created += 1
+        for member in entry.get("papers", []):
+            paper_id = ids.get(member["paper"])
+            if paper_id is None or session.get(LibraryPaper, (library.id, paper_id)):
+                continue
+            session.add(
+                LibraryPaper(
+                    library_id=library.id,
+                    paper_id=paper_id,
+                    citation_key=member.get("key"),
+                    folders=member.get("folders") or [],
+                    tags=member.get("tags") or [],
+                )
+            )
+            touched.add(paper_id)
+    session.flush()
+    if touched:
+        libraries.refresh_flags(session, touched)
+    return created
 
 
 PERSONAL_TABLES = (

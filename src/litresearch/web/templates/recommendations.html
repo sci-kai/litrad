@@ -12,7 +12,7 @@
 {% if onboarding %}
 <div class="card onboarding" id="topics">
   <h2>🏷️ What are you interested in?</h2>
-  <p>Recommendations combine <b>similarity to your Paperpile library</b> with <b>topics</b> you name here. Each topic has search queries for OpenAlex
+  <p>Recommendations combine <b>similarity to your libraries</b> with <b>topics</b> you name here. Each topic has search queries for OpenAlex
     (e.g. <i>clonal evolution cancer</i>) and a weight: topics with a higher weight count more. The topics belong to your profile
     <b>{{ profile.name if profile }}</b>; change them later on this page or in <a href="/settings#topics-card">Settings</a>.</p>
   <form method="post" action="/recommendations/topics">
@@ -81,7 +81,7 @@
           <span class="chip {{ rec.breakdown.kind }}">{{ "🆕 fresh" if rec.breakdown.kind == "fresh" else "🏛️ landmark" }}</span>
           {% for t in rec.breakdown.topics %}<span class="chip">🏷️ {{ t }}</span>{% endfor %}
           {% if "s2-recs" in rec.breakdown.sources %}<span class="chip">🧲 similar to your library</span>{% endif %}
-          {% if paper.in_library %}<span class="chip">📁 in your Paperpile</span>{% endif %}
+          {% if paper.in_library %}<span class="chip">📁 in your library</span>{% endif %}
           {% if rec_status.get(paper.id) %}<span class="chip queued">{{ "📚 on your queue" if rec_status[paper.id] == "queued" else status_icons.get(rec_status[paper.id], "") ~ " " ~ rec_status[paper.id] }}</span>{% endif %}
         </div>
         {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}

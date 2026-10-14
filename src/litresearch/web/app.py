@@ -15,8 +15,8 @@ How a request flows:
    redirect back (post/redirect/get); rewards travel as a short-lived token
    (``Celebrations``) and are shown as toasts by static/app.js.
 
-Sections in ``create_app``: login · profile selection · pages · Paperpile
-library · profile · documentation · actions.
+Sections in ``create_app``: login · profile selection · pages · libraries ·
+profile · documentation · actions.
 """
 
 import asyncio
@@ -25,12 +25,11 @@ import csv
 import hmac
 import io
 import json
-import os
 import secrets
 import shutil
 import tempfile
 from collections import OrderedDict
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -40,7 +39,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
-from litresearch import __version__, profiles
+from litresearch import __version__, export, libraries, profiles
 from litresearch.backup import (
     BackupError,
     export_progress,
@@ -56,6 +55,7 @@ from litresearch.config import load_config
 from litresearch.db import (
     Category,
     IngestRun,
+    Library,
     Paper,
     QueueItem,
     Reading,
@@ -66,6 +66,7 @@ from litresearch.db import (
     depth,
     init_db,
 )
+from litresearch.export import FORMATS as EXPORT_FORMATS
 from litresearch.game import (
     KIND_LABELS,
     Award,
@@ -84,8 +85,10 @@ from litresearch.game import (
     weekly_summaries,
 )
 from litresearch.ingest.check import FIELDS as BIB_FIELDS
-from litresearch.ingest.check import INSTRUCTIONS as BIB_INSTRUCTIONS
-from litresearch.ingest.check import check_bibtex
+from litresearch.ingest.check import Finding, check_file
+from litresearch.ingest.formats import FORMATS as INPUT_FORMATS
+from litresearch.ingest.pipeline import MODES as IMPORT_MODES
+from litresearch.ingest.pipeline import import_into
 from litresearch.papers import paper_link
 from litresearch.profile import ProfileError, active_rules, get_profile
 from litresearch.profiles import ProfilesError
@@ -684,8 +687,8 @@ def create_app(config_path: Path) -> FastAPI:
     def _year(text: str) -> int | None:
         return int(text) if text.strip().isdigit() else None
 
-    @app.get("/library", response_class=HTMLResponse)
-    def library(
+    @app.get("/search", response_class=HTMLResponse)
+    def search_page(
         request: Request,
         q: str = "",
         title: str = "",
@@ -727,7 +730,7 @@ def create_app(config_path: Path) -> FastAPI:
                 readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
                 return render(
                     request,
-                    "library.html",
+                    "search.html",
                     session,
                     cfg,
                     query=query,
@@ -917,18 +920,21 @@ def create_app(config_path: Path) -> FastAPI:
         finally:
             engine.dispose()
 
-    # --- Paperpile library ------------------------------------------------------------
+    # --- libraries ---------------------------------------------------------------------
 
-    def library_rows(session: Session, q: str, folder: str, status: str):
-        papers = session.exec(select(Paper).where(Paper.in_library).order_by(Paper.title)).all()
+    EXPORT_REQUIREMENTS = "/docs/1-setup#what-an-export-must-contain"
+
+    def library_rows(session: Session, library: Library, q: str, folder: str, status: str):
         readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
         queued = set(session.exec(select(QueueItem.paper_id)).all())
         rows = []
         words = q.lower().split()
-        for paper in papers:
+        for paper, entry in libraries.members(session, library):
             reading = readings.get(paper.id)
             level = depth(reading.status) if reading else 0
-            if folder and not any(f == folder or f.startswith(folder + "/") for f in paper.folders):
+            if folder and not any(
+                f == folder or f.startswith(folder + "/") for f in entry.folders + entry.tags
+            ):
                 continue
             if status == "unread" and level >= 2:
                 continue
@@ -939,79 +945,149 @@ def create_app(config_path: Path) -> FastAPI:
                     [
                         paper.title,
                         " ".join(paper.authors),
-                        paper.bibtex_key or "",
+                        entry.citation_key or "",
                         paper.doi or "",
                         paper.venue or "",
                     ]
                 ).lower()
                 if not all(w in haystack for w in words):
                     continue
-            rows.append({"paper": paper, "reading": reading, "queued": paper.id in queued})
+            rows.append(
+                {"paper": paper, "entry": entry, "reading": reading, "queued": paper.id in queued}
+            )
         return rows
 
-    def paperpile_context(session: Session, cfg, q="", folder="", status="", page=1):
-        papers = session.exec(select(Paper).where(Paper.in_library)).all()
-        folders: dict[str, int] = {}
-        for paper in papers:
-            for name in paper.folders:
-                folders[name] = folders.get(name, 0) + 1
-        rows = library_rows(session, q, folder, status)
-        page = max(page, 1)
-        bib = cfg.paths.bibtex
-        modified = (
-            datetime.fromtimestamp(bib.stat().st_mtime).replace(microsecond=0)
-            if bib.exists()
-            else None
-        )
-        runs = session.exec(select(IngestRun).order_by(IngestRun.id.desc()).limit(10)).all()
-        return {
-            "rows": rows[(page - 1) * LIBRARY_PAGE : page * LIBRARY_PAGE],
-            "n_rows": len(rows),
-            "page": page,
-            "pages": max(1, -(-len(rows) // LIBRARY_PAGE)),
-            "q": q,
-            "folder": folder,
-            "status": status,
-            "folders": sorted(folders.items()),
-            "n_library": len(papers),
-            "n_read": sum(1 for r in library_rows(session, "", "", "read")),
-            "bib_path": bib,
-            "bib_modified": modified,
-            "runs": runs,
-            "last_run": runs[0] if runs else None,
-            "instructions": BIB_INSTRUCTIONS,
-            "field_rules": BIB_FIELDS,
-            "stale_days": STALE_LIBRARY_DAYS,
-        }
+    @app.get("/paperpile")
+    def paperpile_moved():
+        return RedirectResponse("/library", status_code=307)
 
-    @app.get("/paperpile", response_class=HTMLResponse)
-    def paperpile_page(
-        request: Request, q: str = "", folder: str = "", status: str = "", page: int = 1
-    ):
+    @app.get("/library", response_class=HTMLResponse)
+    def libraries_page(request: Request):
+        """All libraries with their size, status and source; the queue as a library."""
+        if request.url.query:  # an old "Find & add" link (/library?q=...)
+            return RedirectResponse(f"/search?{request.url.query}", status_code=307)
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
+                libraries.migrate(session, cfg)
+                queue = queue_items(session)
                 return render(
                     request,
-                    "paperpile.html",
+                    "libraries.html",
                     session,
                     cfg,
-                    **paperpile_context(session, cfg, q, folder, status, page),
+                    summaries=libraries.summaries(session),
+                    queue=queue,
+                    formats=INPUT_FORMATS,
+                    export_formats=EXPORT_FORMATS,
+                    stale_days=STALE_LIBRARY_DAYS,
                 )
         finally:
             engine.dispose()
 
-    def run_ingest(cfg, source: str):
-        from litresearch.ingest.pipeline import ingest_library
-
-        engine = init_db(cfg.paths.database)
-        http = make_http(cfg)
+    @app.get("/library/import", response_class=HTMLResponse)
+    def import_page(request: Request, to: int | None = None):
+        cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                return ingest_library(cfg, session, http, source=source)
+                libraries.migrate(session, cfg)
+                return render_import(
+                    request, session, cfg, {"target": "existing" if to else "new", "library_id": to}
+                )
         finally:
-            http.close()
             engine.dispose()
+
+    def render_import(request, session, cfg, form: dict, check=None, upload_name=None):
+        choices = [
+            lib for lib in libraries.all_libraries(session) if lib.kind == libraries.IMPORTED
+        ]
+        return render(
+            request,
+            "library_import.html",
+            session,
+            cfg,
+            choices=choices,
+            form=form,
+            check=check,
+            upload_name=upload_name,
+            field_rules=BIB_FIELDS,
+            formats=INPUT_FORMATS,
+            modes=IMPORT_MODES,
+            requirements=EXPORT_REQUIREMENTS,
+        )
+
+    @app.post("/library/import", response_class=HTMLResponse)
+    async def import_action(request: Request):
+        """Check an uploaded export; import it into a new or an existing library."""
+        form = await request.form()
+        cfg = current_cfg()
+        fields = {
+            "target": str(form.get("target") or "new"),
+            "name": str(form.get("name") or "").strip(),
+            "description": str(form.get("description") or "").strip(),
+            "library_id": int(form.get("library_id"))
+            if str(form.get("library_id") or "").isdigit()
+            else None,
+            "mode": str(form.get("mode") or "add"),
+        }
+        upload = form.get("file")
+        if not hasattr(upload, "read") or not upload.filename:
+            return error("/library/import", "Choose an export file to upload")
+        try:
+            raw = await upload.read()
+        finally:
+            await upload.close()
+        if len(raw) > MAX_UPLOAD:
+            return error("/library/import", f"The file is larger than {MAX_UPLOAD // 2**20} MB")
+        engine = init_db(cfg.paths.database)
+        tmp_dir = tempfile.mkdtemp(prefix="litresearch-import-")
+        tmp = Path(tmp_dir) / Path(upload.filename).name.replace(" ", "_")
+        try:
+            tmp.write_bytes(raw)
+            check = check_file(tmp, cfg.library.ignore_labels)
+            with Session(engine) as session:
+                libraries.migrate(session, cfg)
+                try:
+                    if fields["target"] == "new":
+                        if not fields["name"]:
+                            raise libraries.LibraryError("Give the new library a name")
+                        libraries.check_name(session, fields["name"])
+                    else:
+                        library = session.get(Library, fields["library_id"] or -1)
+                        if library is None or library.kind != libraries.IMPORTED:
+                            raise libraries.LibraryError("Choose the library to import into")
+                except libraries.LibraryError as exc:
+                    check.findings.insert(0, Finding("error", str(exc)))
+                if form.get("action") != "import" or not check.ok:
+                    return render_import(
+                        request, session, cfg, fields, check=check, upload_name=upload.filename
+                    )
+                if fields["target"] == "new":
+                    library = libraries.create(session, fields["name"], fields["description"])
+                    mode = "new"
+                else:
+                    mode = "replace" if fields["mode"] == "replace" else "add"
+                # the upload is kept as the library's file when it is the complete library
+                path = (
+                    libraries.store_upload(cfg, library, raw, check.format)
+                    if mode in ("new", "replace")
+                    else tmp
+                )
+                http = make_http(cfg)
+                try:
+                    report = import_into(
+                        cfg, session, http, library, path, mode, "upload", fmt=check.format
+                    )
+                except ValueError as exc:
+                    session.rollback()
+                    return error("/library/import", f"Not imported: {exc}")
+                finally:
+                    http.close()
+                library_id = library.id
+        finally:
+            engine.dispose()
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        return back(f"/library/{library_id}", ingest_payload(report))
 
     def ingest_payload(report) -> dict:
         warnings = len(report.errors)
@@ -1020,64 +1096,206 @@ def create_app(config_path: Path) -> FastAPI:
             "events": [],
             "points": 0,
             "sparkle": True,
-            "message": f"Library updated: {report.entries} entries ({report.added} new, "
-            f"{report.removed} removed), {report.openalex_enriched} with metrics, "
-            f"{report.embeddings} with embeddings"
+            "message": f"{report.library}: {report.entries} entries imported ({report.added} new"
+            + (f", {report.removed} removed" if report.removed else "")
+            + f"), {report.openalex_enriched} with metrics, {report.embeddings} with embeddings"
             + (f"; {warnings} warning(s), see the import history" if warnings else ""),
         }
 
-    @app.post("/paperpile/reimport")
-    def paperpile_reimport():
-        cfg = current_cfg()
-        if not cfg.paths.bibtex.exists():
-            return error("/paperpile", f"No BibTeX file at {cfg.paths.bibtex}; upload one.")
-        check = check_bibtex(cfg.paths.bibtex, cfg.library.ignore_labels)
-        if not check.ok:
-            return error("/paperpile", "Not imported: " + check.findings[0].message)
-        return back("/paperpile", ingest_payload(run_ingest(cfg, "file")))
+    def export_response(text: str, name: str, fmt: str):
+        media = {"bibtex": "application/x-bibtex", "ris": "application/x-research-info-systems"}
+        file_name = export.file_name(name, fmt, date.today())
+        return Response(
+            text,
+            media_type=f"{media[fmt]}; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename={file_name}"},
+        )
 
-    @app.post("/paperpile/upload", response_class=HTMLResponse)
-    async def paperpile_upload(request: Request):
-        form = await request.form()
-        cfg = current_cfg()
-        upload = form.get("file")
-        if not hasattr(upload, "read") or not upload.filename:
-            return error("/paperpile", "Choose a .bib file to upload")
+    @app.get("/library/queue/export")
+    def export_queue(format: str = "bibtex", status: bool = False):
+        """The reading queue as a file: always exactly the papers on it now."""
+        if format not in EXPORT_FORMATS:
+            return error("/library", "Unknown export format")
+        cfg, engine = open_session()
         try:
-            raw = await upload.read()
+            with Session(engine) as session:
+                papers = [paper for _, paper in queue_items(session)]
+                text = export.render(export.paper_items(session, papers), format, status)
         finally:
-            await upload.close()
-        if len(raw) > MAX_UPLOAD:
-            return error("/paperpile", f"The file is larger than {MAX_UPLOAD // 2**20} MB")
-        target = cfg.paths.bibtex
-        target.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(dir=target.parent, prefix=".upload.", suffix=".bib")
-        tmp = Path(tmp_name)
+            engine.dispose()
+        return export_response(text, libraries.QUEUE_NAME, format)
+
+    @app.get("/library/{library_id}", response_class=HTMLResponse)
+    def library_page(
+        request: Request,
+        library_id: int,
+        q: str = "",
+        folder: str = "",
+        status: str = "",
+        page: int = 1,
+    ):
+        cfg, engine = open_session()
         try:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(raw)
-            check = check_bibtex(tmp, cfg.library.ignore_labels)
-            if form.get("action") != "import" or not check.ok:
-                engine = init_db(cfg.paths.database)
+            with Session(engine) as session:
+                libraries.migrate(session, cfg)
+                library = session.get(Library, library_id)
+                if library is None:
+                    return error("/library", "That library does not exist")
+                members = libraries.members(session, library)
+                folders: dict[str, int] = {}
+                for _, entry in members:
+                    for name in entry.folders + entry.tags:
+                        folders[name] = folders.get(name, 0) + 1
+                rows = library_rows(session, library, q, folder, status)
+                page = max(page, 1)
+                runs = session.exec(
+                    select(IngestRun)
+                    .where(IngestRun.library_id == library.id)
+                    .order_by(IngestRun.id.desc())
+                    .limit(10)
+                ).all()
+                return render(
+                    request,
+                    "library.html",
+                    session,
+                    cfg,
+                    library=library,
+                    rows=rows[(page - 1) * LIBRARY_PAGE : page * LIBRARY_PAGE],
+                    n_rows=len(rows),
+                    n_library=len(members),
+                    n_read=len(library_rows(session, library, "", "", "read")),
+                    page=page,
+                    pages=max(1, -(-len(rows) // LIBRARY_PAGE)),
+                    q=q,
+                    folder=folder,
+                    status=status,
+                    folders=sorted(folders.items()),
+                    runs=runs,
+                    last_run=runs[0] if runs else None,
+                    file_modified=libraries.source_modified(library),
+                    stale_days=STALE_LIBRARY_DAYS,
+                    formats=INPUT_FORMATS,
+                    export_formats=EXPORT_FORMATS,
+                    requirements=EXPORT_REQUIREMENTS,
+                )
+        finally:
+            engine.dispose()
+
+    @app.post("/library/{library_id}/edit")
+    def library_edit(
+        library_id: int,
+        name: str = Form(""),
+        description: str = Form(""),
+        use_for_recommendations: bool = Form(False),
+    ):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = session.get(Library, library_id)
+                if library is None:
+                    return error("/library", "That library does not exist")
                 try:
-                    with Session(engine) as session:
-                        return render(
-                            request,
-                            "paperpile.html",
-                            session,
-                            cfg,
-                            upload_check=check,
-                            upload_name=upload.filename,
-                            **paperpile_context(session, cfg),
-                        )
-                finally:
-                    engine.dispose()
-            if target.exists():
-                shutil.copy2(target, target.with_name(target.name + ".bak"))
-            os.replace(tmp, target)
+                    libraries.update(session, library, name, description, use_for_recommendations)
+                except libraries.LibraryError as exc:
+                    return error(f"/library/{library_id}", str(exc))
+                session.commit()
+                return back(
+                    f"/library/{library_id}",
+                    {"kind": "success", "message": "Library saved.", "events": [], "points": 0},
+                )
         finally:
-            tmp.unlink(missing_ok=True)
-        return back("/paperpile", ingest_payload(run_ingest(cfg, "upload")))
+            engine.dispose()
+
+    @app.post("/library/{library_id}/reimport")
+    def library_reimport(library_id: int):
+        """Update a library from its file (e.g. Paperpile's auto-export synced by rclone)."""
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = session.get(Library, library_id)
+                if library is None or not library.source_path:
+                    return error(
+                        f"/library/{library_id}", "This library has no file to update from"
+                    )
+                path = Path(library.source_path)
+                check = check_file(path, cfg.library.ignore_labels)
+                if not check.ok:
+                    return error(
+                        f"/library/{library_id}", "Not imported: " + check.findings[0].message
+                    )
+                http = make_http(cfg)
+                try:
+                    report = import_into(cfg, session, http, library, path, "replace", "file")
+                finally:
+                    http.close()
+        finally:
+            engine.dispose()
+        return back(f"/library/{library_id}", ingest_payload(report))
+
+    @app.post("/library/{library_id}/delete")
+    def library_delete(library_id: int, confirm_name: str = Form("")):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = session.get(Library, library_id)
+                if library is None:
+                    return error("/library", "That library does not exist")
+                if confirm_name.strip().lower() != library.name.lower():
+                    return error(
+                        f"/library/{library_id}", "Type the exact library name to delete it"
+                    )
+                name = library.name
+                count = libraries.delete(session, library)
+                session.commit()
+                return back(
+                    "/library",
+                    {
+                        "kind": "info",
+                        "message": f"Deleted the library {name} ({count} papers). Papers in "
+                        "your other libraries, your queue and your reading history are kept.",
+                        "events": [],
+                        "points": 0,
+                    },
+                )
+        finally:
+            engine.dispose()
+
+    @app.post("/library/{library_id}/remove/{paper_id}")
+    def library_remove(library_id: int, paper_id: int):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = session.get(Library, library_id)
+                if library is None or not libraries.unlink(session, library, paper_id):
+                    return error(f"/library/{library_id}", "Not in this library")
+                session.commit()
+                return back(
+                    f"/library/{library_id}",
+                    {
+                        "kind": "info",
+                        "message": "Removed from the library.",
+                        "events": [],
+                        "points": 0,
+                    },
+                )
+        finally:
+            engine.dispose()
+
+    @app.get("/library/{library_id}/export")
+    def library_export(library_id: int, format: str = "bibtex", status: bool = False):
+        if format not in EXPORT_FORMATS:
+            return error(f"/library/{library_id}", "Unknown export format")
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = session.get(Library, library_id)
+                if library is None:
+                    return error("/library", "That library does not exist")
+                text = export.render(export.library_items(session, library), format, status)
+                name = library.name
+        finally:
+            engine.dispose()
+        return export_response(text, name, format)
 
     # --- profile -------------------------------------------------------------------
 

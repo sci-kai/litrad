@@ -25,8 +25,12 @@ Tick what worked; report what did not.
 - [ ] `litresearch serve`: choosing the network, opening the address on
       another device (with `litresearch set-password`)
 - [ ] Creating a profile; changing a game rule before creating it
-- [ ] Exporting the library from Paperpile (or another reference manager as
-      BibTeX) and uploading it: were the checks and instructions clear?
+- [ ] Exporting your library from Paperpile or another reference manager
+      (BibTeX, RIS or CSL-JSON) and importing it as a new library under
+      *Library → Import*: were the checks and instructions clear?
+- [ ] A second library (e.g. a project or another manager), an import into an
+      existing library (add / replace), and an export (BibTeX or RIS, with
+      reading status) imported back into your reference manager
 - [ ] Setting up topics on the first visit to *Recommendations*
 - [ ] Getting the first recommendations (how long did it take? warnings?)
 - [ ] Reading the evidence tree of one recommendation: is it understandable?
@@ -44,7 +48,7 @@ Tick what worked; report what did not.
 - [ ] Mark irrelevant papers as *not relevant*; do later sets get better?
 - [ ] Read from the queue; try to keep a weekly streak and the weekly quest
 - [ ] Remove a paper unread at least once (the penalty)
-- [ ] Update the library after adding papers in Paperpile
+- [ ] Update a library after adding papers in your reference manager (export again, or *Update from file*)
 - [ ] Look at *Progress & XP* and the weekly reports on the dashboard
 - [ ] Use it from the phone browser
 - [ ] Make a backup; save a profile file; (optional) restore or load it as a

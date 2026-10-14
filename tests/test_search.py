@@ -262,9 +262,9 @@ def site(tmp_path, monkeypatch, make_http):
 
 def test_search_page(site):
     client, path, _ = site
-    page = client.get("/library").text
+    page = client.get("/search").text
     assert "Search papers" in page and "Europe PMC + PubMed" in page and "My library" in page
-    page = client.get("/library?author=Swanton+C&journal=Nature&sort=cited").text
+    page = client.get("/search?author=Swanton+C&journal=Nature&sort=cited").text
     assert "4 results" in page and "Somatic evolution following cancer treatment" in page
     assert "Europe PMC: 11 matches · PubMed: 11 matches" in page
     assert "free full text" in page and "PMID 41372419" in page
@@ -274,28 +274,28 @@ def test_search_page(site):
     # add a result: it is fetched by its DOI and queued
     response = client.post(
         "/queue/add",
-        data={"ref": "pmid:41372419", "source": "manual", "next_url": "/library?author=x"},
+        data={"ref": "pmid:41372419", "source": "manual", "next_url": "/search?author=x"},
         follow_redirects=False,
     )
-    assert response.headers["location"].startswith("/library?author=x")
+    assert response.headers["location"].startswith("/search?author=x")
     engine = init_db(profile_cfg(path).paths.database)
     with Session(engine) as session:
         item = session.exec(select(QueueItem)).one()
         paper = session.get(Paper, item.paper_id)
         assert paper.pmcid == "PMC13190248" and item.source == "manual"
     engine.dispose()
-    again = client.get("/library?author=Swanton+C").text
+    again = client.get("/search?author=Swanton+C").text
     assert "on your queue" in again and "🔓 full text" in client.get(f"/papers/{paper.id}").text
 
 
 def test_search_page_library_and_outage(site, monkeypatch, make_http):
     client, _, _ = site
-    page = client.get("/library?q=nothing&where=library").text
+    page = client.get("/search?q=nothing&where=library").text
     assert "0 papers in your library" in page
     monkeypatch.setattr(
         web, "make_http", lambda cfg: make_http(FakeApis(down=("www.ebi.ac.uk",)), max_retries=0)
     )
-    page = client.get("/library?q=evolution&where=europepmc").text
+    page = client.get("/search?q=evolution&where=europepmc").text
     assert "Europe PMC did not answer" in page and "Nothing found" in page
 
 

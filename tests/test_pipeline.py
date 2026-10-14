@@ -92,7 +92,8 @@ def test_recommended_paper_is_adopted_when_added_to_library(cfg, engine, fake_ap
         session.add(Paper(title="Recommended earlier", doi="10.1038/s41588-022-01141-9"))
         session.commit()
     report = run(cfg, engine, make_http(fake_apis))
-    assert report.added == 6 and report.updated == 1
+    # added = new to this library; the stored paper is reused, not duplicated
+    assert report.added == 7 and report.updated == 0
     with Session(engine) as session:
         rows = session.exec(select(Paper).where(Paper.doi == "10.1038/s41588-022-01141-9")).all()
     assert len(rows) == 1 and rows[0].bibtex_key == "Barkley2022-ri" and rows[0].in_library
@@ -124,10 +125,12 @@ def test_duplicate_dois_and_keys_are_reported(cfg, engine, fake_apis, make_http,
         engine,
         make_http(fake_apis),
     )
+    # the second entry of the same paper is skipped, not stored as a second paper
     assert report.duplicates == ["Barkley2022-copy (10.1038/s41588-022-01141-9)"]
-    assert any("duplicate BibTeX key Cheung2016-vl" in e for e in report.errors)
+    assert any("duplicate citation key Cheung2016-vl" in e for e in report.errors)
     assert papers(engine)["Cheung2016-vl"].title.startswith("A collective route")
-    assert papers(engine)["Barkley2022-copy"].doi is None
+    assert "Barkley2022-copy" not in papers(engine)
+    assert papers(engine)["Barkley2022-ri"].title.startswith("Cancer cell states recur across")
 
 
 def test_s2_failure_is_not_fatal(cfg, engine, make_http):
@@ -148,7 +151,8 @@ def test_sources_can_be_disabled(cfg, engine, fake_apis, make_http):
 def test_report_lines_mention_warnings(cfg, engine, make_http):
     report = run(cfg, engine, make_http(FakeApis(s2_status=503), max_retries=0))
     text = "\n".join(report.lines())
-    assert "BibTeX entries:        7" in text and "WARNING: Semantic Scholar" in text
+    assert "Library:               My library (BibTeX)" in text
+    assert "Entries:               7" in text and "WARNING: Semantic Scholar" in text
 
 
 @pytest.mark.parametrize(

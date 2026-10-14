@@ -44,7 +44,7 @@ class Category(StrEnum):
 
 class Paper(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    # Paperpile citation key; None for papers that are not in the library
+    # the citation key of the paper's first library (keys per library: LibraryPaper)
     bibtex_key: str | None = Field(default=None, index=True, unique=True)
     entry_type: str | None = None
     doi: str | None = Field(default=None, index=True, unique=True)
@@ -69,8 +69,9 @@ class Paper(SQLModel, table=True):
     citation_percentile: float | None = None
     venue_mean_citedness: float | None = None
     topics: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # in at least one imported library (kept up to date by libraries.refresh_flags)
     in_library: bool = False
-    # Paperpile folders ("a/b/c") and flat labels / author keywords
+    # folders ("a/b/c") and labels of all its libraries together
     folders: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     # where the record came from: bibtex | crossref | openalex | europepmc | pubmed
@@ -151,12 +152,48 @@ class XpEvent(SQLModel, table=True):
     at: NaiveDatetime = Field(default_factory=now)
 
 
+class Library(SQLModel, table=True):
+    """A collection of papers: an imported reference-manager library or a list
+    litresearch keeps for you (see ``libraries.py``)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    description: str = ""
+    # imported: from a reference manager export · recommended: recommendations you queued
+    kind: str = "imported"
+    # bibtex | ris | csl-json (of the last import)
+    format: str | None = None
+    # the file a "replace" import or `litresearch ingest` reads (e.g. synced by rclone)
+    source_path: str | None = None
+    # papers of this library are "your library" for the recommendation similarity
+    use_for_recommendations: bool = True
+    created_at: NaiveDatetime = Field(default_factory=now)
+    updated_at: NaiveDatetime = Field(default_factory=now)
+
+
+class LibraryPaper(SQLModel, table=True):
+    """A paper in a library, with what the reference manager says about it there."""
+
+    library_id: int = Field(foreign_key="library.id", primary_key=True)
+    paper_id: int = Field(foreign_key="paper.id", primary_key=True)
+    # the citation key in this library's export
+    citation_key: str | None = Field(default=None, index=True)
+    # folders ("a/b/c") and flat labels / keywords in this library
+    folders: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    added_at: NaiveDatetime = Field(default_factory=now)
+
+
 class IngestRun(SQLModel, table=True):
-    """One import of the Paperpile BibTeX export."""
+    """One import of a reference-manager export into a library."""
 
     id: int | None = Field(default=None, primary_key=True)
     at: NaiveDatetime = Field(default_factory=now)
-    # upload | file (re-import of paths.bibtex) | cli
+    library_id: int | None = Field(default=None, index=True)
+    # new (a new library) | add (to an existing one) | replace (sync with the file)
+    mode: str = "replace"
+    format: str | None = None
+    # upload | file (re-import of the library's file) | cli
     source: str = "file"
     file_name: str = ""
     sha256: str = ""
