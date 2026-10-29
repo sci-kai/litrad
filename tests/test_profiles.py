@@ -391,8 +391,9 @@ def test_old_pages_redirect(client):
     def location(url):
         return client.get(url, follow_redirects=False).headers["location"]
 
-    assert location("/weekly") == "/?weeks=8#weekly"
-    assert location("/weekly?weeks=500") == "/?weeks=104#weekly"
+    # the weekly reports are paged on the dashboard now
+    assert location("/weekly") == "/#weekly"
+    assert location("/weekly?weeks=500") == "/#weekly"
     assert location("/ledger") == "/progress#ledger"
     assert location("/ledger?kind=read&page=2") == "/progress?kind=read&page=2#ledger"
     assert location("/how") == "/recommendations#how"
@@ -404,7 +405,7 @@ def test_merged_pages(client):
     client.post("/papers/1/read", data={"level": "read"})
     dashboard = client.get("/").text
     assert "Weekly reports" in dashboard and "Week of" in dashboard
-    assert "/?weeks=12#weekly" in dashboard
+    assert 'id="weekly"' in dashboard
     progress = client.get("/progress").text
     assert "XP ledger" in progress and "Points, penalties and levels" in progress
     assert "Badges" in progress and "/ledger.tsv" in progress
@@ -533,3 +534,16 @@ def test_queue_items_stay_in_their_profile(base):
     with Session(engine) as session:
         assert session.exec(select(QueueItem)).all() == []
     engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "content, message",
+    [("topics: [unclosed\n", "not valid YAML"), ("queue:\n  max_size: 999\n", "max_size")],
+)
+def test_invalid_profile_settings_are_reported(config_path, base, plain_console, content, message):
+    """A hand-edited settings.yaml gives a message, and the profile is still listed."""
+    slug = profiles.create_profile(base, "Ada")
+    (profiles.folder(base, slug) / profiles.PROFILE_SETTINGS).write_text(content)
+    result = runner.invoke(cli.app, ["queue", "-c", str(config_path)])
+    assert isinstance(result.exception, ConfigError) and message in str(result.exception)
+    assert [info.name for info in profiles.list_profiles(base)] == ["Ada"]

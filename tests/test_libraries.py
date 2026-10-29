@@ -590,3 +590,21 @@ def test_cli_check_bib(tmp_path, plain_console):
     empty.write_text("% nothing here\n")
     result = runner.invoke(cli.app, ["check-bib", str(empty), "-c", str(path)])
     assert result.exit_code == 1 and "ERROR" in result.stdout
+
+
+def test_refresh_flags_handles_many_ids(db):
+    cfg, session = db
+    lib = libraries.create(session, "Big", "")
+    papers = [Paper(title=f"Paper {i}") for i in range(1200)]
+    session.add_all(papers)
+    session.flush()
+    for paper in papers:
+        libraries.link(session, lib, paper)
+    libraries.refresh_flags(session, {p.id for p in papers})
+    assert all(p.in_library for p in papers)
+    for paper in papers:
+        paper.in_library = False
+        session.add(paper)
+    session.flush()
+    libraries.refresh_flags(session)  # every paper in a library
+    assert all(p.in_library for p in papers)

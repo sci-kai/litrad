@@ -51,7 +51,7 @@ def load_cfg(config: Path) -> Config:
                     )
                 return base
         return profiles.profile_config(base, slug)
-    except profiles.ProfilesError as error:
+    except ValueError as error:  # ProfilesError, or invalid values in settings.yaml
         raise ConfigError(str(error)) from error
 
 
@@ -368,7 +368,7 @@ def serve(
     import uvicorn
 
     from litresearch.web.app import create_app
-    from litresearch.web.network import NetworkError, interfaces, resolve
+    from litresearch.web.network import NetworkError, interfaces, local_names, resolve
 
     cfg = load_config(config)
     port = port or cfg.web.port
@@ -421,7 +421,12 @@ def serve(
         )
         start_backup_thread(config.resolve(), log=lambda msg: console.print(f"[dim]{msg}[/dim]"))
     console.print("Stop with Ctrl+C.")
-    uvicorn.run(create_app(config.resolve()), host=binding.host, port=port, log_level="warning")
+    uvicorn.run(
+        create_app(config.resolve(), trusted_names=local_names()),
+        host=binding.host,
+        port=port,
+        log_level="warning",
+    )
 
 
 @app.command("set-password")

@@ -58,3 +58,57 @@ def test_missing_columns_are_added(tmp_path):
         assert batch.n_candidates == 3 and batch.funnel is None and batch.params is None
     assert add_missing_columns(engine) == []
     engine.dispose()
+
+
+def test_missing_indexes_are_added_to_old_databases(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.sqlite"
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "CREATE TABLE xpevent (id INTEGER PRIMARY KEY, paper_id INTEGER, points INTEGER, "
+        "kind VARCHAR, reason VARCHAR, at DATETIME)"
+    )
+    connection.commit()
+    connection.close()
+    init_db(path).dispose()
+    connection = sqlite3.connect(path)
+    indexed = {
+        row[0]
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'xpevent'"
+        )
+    }
+    connection.close()
+    assert {"ix_xpevent_at", "ix_xpevent_kind", "ix_xpevent_paper_id"} <= indexed
+    init_db(path).dispose()  # a second start finds them and does nothing
+
+
+def test_json_columns_added_to_old_tables_default_to_empty(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.sqlite"
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "CREATE TABLE recommendationbatch (id INTEGER PRIMARY KEY, created_at DATETIME, "
+        "week_start DATE, n_candidates INTEGER)"
+    )
+    connection.execute("INSERT INTO recommendationbatch VALUES (1, '2026-10-05', '2026-10-05', 3)")
+    connection.commit()
+    connection.close()
+    engine = init_db(path)
+    with Session(engine) as session:
+        batch = session.get(RecommendationBatch, 1)
+        assert batch.warnings == []  # not NULL
+        assert batch.funnel is None  # no default in the model: stays NULL
+    engine.dispose()
+
+
+def test_models_do_not_use_builtin_default_factories():
+    # pydantic inspects builtin factories at every construction (~8 ms per Paper on a Pi)
+    from sqlmodel import SQLModel
+
+    for model in SQLModel.__subclasses__():
+        for name, field in model.model_fields.items():
+            assert field.default_factory not in (list, dict), f"{model.__name__}.{name}"
+    assert Paper().authors == [] and Paper().authors is not Paper().authors

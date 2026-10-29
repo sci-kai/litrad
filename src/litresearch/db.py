@@ -10,6 +10,16 @@ from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint, event, inspe
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 
+# Plain functions instead of ``default_factory=list``/``dict``: pydantic calls
+# ``inspect.signature`` on builtin factories at every model construction (slow).
+def empty_list() -> list:
+    return []
+
+
+def empty_dict() -> dict:
+    return {}
+
+
 def now() -> datetime:
     # ISO 8601, second precision, local system time
     return datetime.now().replace(microsecond=0)
@@ -56,7 +66,7 @@ class Paper(SQLModel, table=True):
     openalex_id: str | None = None
     title: str
     abstract: str | None = None
-    authors: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    authors: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     year: int | None = None
     pub_date: date | None = None
     venue: str | None = None
@@ -68,12 +78,12 @@ class Paper(SQLModel, table=True):
     fwci: float | None = None
     citation_percentile: float | None = None
     venue_mean_citedness: float | None = None
-    topics: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    topics: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     # in at least one imported library (kept up to date by libraries.refresh_flags)
     in_library: bool = False
     # folders ("a/b/c") and labels of all its libraries together
-    folders: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    folders: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
+    tags: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     # where the record came from: bibtex | crossref | openalex | europepmc | pubmed
     resolved_via: str | None = None
     enriched_at: NaiveDatetime | None = None
@@ -97,7 +107,7 @@ class RecommendationBatch(SQLModel, table=True):
     # Monday of the ISO week the batch belongs to
     week_start: date = Field(index=True)
     n_candidates: int = 0
-    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    warnings: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     # how many candidates each step removed (shown as a funnel)
     funnel: dict | None = Field(default=None, sa_column=Column(JSON))
     # snapshot of the selection settings used for this batch
@@ -111,7 +121,7 @@ class Recommendation(SQLModel, table=True):
     rank: int
     category: Category
     score: float
-    breakdown: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    breakdown: dict = Field(default_factory=empty_dict, sa_column=Column(JSON))
     reason: str = ""
 
 
@@ -129,7 +139,7 @@ class StatusEvent(SQLModel, table=True):
     status: ReadStatus
     # True if the paper was at the top of the reading queue at that moment
     was_queue_top: bool = False
-    at: NaiveDatetime = Field(default_factory=now)
+    at: NaiveDatetime = Field(default_factory=now, index=True)
 
 
 class QueueItem(SQLModel, table=True):
@@ -147,9 +157,9 @@ class XpEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     paper_id: int | None = Field(default=None, foreign_key="paper.id", index=True)
     points: int
-    kind: str
+    kind: str = Field(index=True)
     reason: str
-    at: NaiveDatetime = Field(default_factory=now)
+    at: NaiveDatetime = Field(default_factory=now, index=True)
 
 
 class Library(SQLModel, table=True):
@@ -179,8 +189,8 @@ class LibraryPaper(SQLModel, table=True):
     # the citation key in this library's export
     citation_key: str | None = Field(default=None, index=True)
     # folders ("a/b/c") and flat labels / keywords in this library
-    folders: list[str] = Field(default_factory=list, sa_column=Column(JSON))
-    tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    folders: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
+    tags: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     added_at: NaiveDatetime = Field(default_factory=now)
 
 
@@ -203,7 +213,7 @@ class IngestRun(SQLModel, table=True):
     updated: int = 0
     removed: int = 0
     check: dict | None = Field(default=None, sa_column=Column(JSON))
-    warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    warnings: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
 
 
 class Profile(SQLModel, table=True):
@@ -212,7 +222,7 @@ class Profile(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
     created_at: NaiveDatetime = Field(default_factory=now)
-    rules: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    rules: dict = Field(default_factory=empty_dict, sa_column=Column(JSON))
     fingerprint: str = ""
     app_version: str = ""
 
@@ -262,6 +272,7 @@ def add_missing_columns(engine) -> list[str]:
     """
     inspector = inspect(engine)
     added = []
+    models = {m.__tablename__: m for m in SQLModel.__subclasses__() if hasattr(m, "__table__")}
     with engine.begin() as connection:
         for table in SQLModel.metadata.sorted_tables:
             if not inspector.has_table(table.name):
@@ -277,6 +288,13 @@ def add_missing_columns(engine) -> list[str]:
                     default = f" DEFAULT {int(scalar) if isinstance(scalar, bool) else scalar}"
                 elif isinstance(scalar, str):
                     default = " DEFAULT '" + scalar.replace("'", "''") + "'"
+                elif isinstance(column.type, JSON):
+                    # existing rows would stay NULL, which the models do not expect
+                    factory = models.get(table.name).model_fields[column.name].default_factory
+                    if factory is empty_list:
+                        default = " DEFAULT '[]'"
+                    elif factory is empty_dict:
+                        default = " DEFAULT '{}'"
                 connection.execute(
                     text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {kind}{default}')
                 )
@@ -284,8 +302,19 @@ def add_missing_columns(engine) -> list[str]:
     return added
 
 
+def add_missing_indexes(engine) -> None:
+    """Create indexes added to the model after a database was created.
+
+    ``create_all`` only indexes new tables, so older databases get them here.
+    """
+    for table in SQLModel.metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(engine, checkfirst=True)
+
+
 def init_db(path: Path):
     engine = get_engine(path)
     SQLModel.metadata.create_all(engine)
     add_missing_columns(engine)
+    add_missing_indexes(engine)
     return engine

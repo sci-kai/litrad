@@ -29,7 +29,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from sqlmodel import Session, delete, func, select
+import yaml
+from sqlmodel import Session, delete, insert, select
 
 from litresearch import __version__
 from litresearch.config import Config
@@ -85,6 +86,8 @@ def atomic_write_text(path: Path, text: str) -> None:
 
 
 def integrity_ok(path: Path) -> bool:
+    if not Path(path).is_file():
+        return False  # connecting would create an empty database there
     connection = sqlite3.connect(path)
     try:
         return connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -104,6 +107,10 @@ def snapshot(database: Path, destination: Path) -> Path:
     target = sqlite3.connect(tmp)
     try:
         source.backup(target)
+    except BaseException:
+        target.close()
+        tmp.unlink(missing_ok=True)  # a failed backup leaves nothing behind
+        raise
     finally:
         target.close()
         source.close()
@@ -184,6 +191,9 @@ def restore(cfg: Config, source: Path, moment: datetime | None = None) -> Path:
     tmp = cfg.paths.database.with_name(f".{cfg.paths.database.name}.restore.tmp")
     cfg.paths.database.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, tmp)
+    # a stale journal/WAL of the old file must not be replayed into the restored one
+    for suffix in ("-journal", "-wal", "-shm"):
+        cfg.paths.database.with_name(cfg.paths.database.name + suffix).unlink(missing_ok=True)
     os.replace(tmp, cfg.paths.database)
     return safety
 
@@ -252,14 +262,14 @@ def export_progress(
         | {e.paper_id for e in xp if e.paper_id is not None}
         | {r.paper_id for r in recommendations}
     )
+    columns = [getattr(Paper, name) for name in PAPER_FIELDS]
+    rows = session.exec(select(Paper.id, Paper.pub_date, *columns).order_by(Paper.id)).all()
     papers = {}
-    for paper_id in sorted(ids):
-        paper = session.get(Paper, paper_id)
-        if paper is None:
-            continue
-        info = {name: getattr(paper, name) for name in PAPER_FIELDS}
-        info["pub_date"] = _iso(paper.pub_date)
-        papers[f"p{paper_id}"] = info
+    for paper_id, pub_date, *values in rows:  # one query, not one per paper
+        if paper_id in ids:
+            info = dict(zip(PAPER_FIELDS, values, strict=True))
+            info["pub_date"] = _iso(pub_date)
+            papers[f"p{paper_id}"] = info
 
     def ref(paper_id):
         return f"p{paper_id}" if paper_id is not None and f"p{paper_id}" in papers else None
@@ -415,17 +425,55 @@ def _dt(text: str | None) -> datetime | None:
     return datetime.fromisoformat(text) if text else None
 
 
-def _find_paper(session: Session, info: dict) -> Paper | None:
-    for column in ("doi", "pmid", "bibtex_key"):
-        value = info.get(column)
-        if value:
-            paper = session.exec(select(Paper).where(getattr(Paper, column) == value)).first()
-            if paper:
-                return paper
-    title = (info.get("title") or "").strip().lower()
-    if title:
-        return session.exec(select(Paper).where(func.lower(Paper.title) == title)).first()
-    return None
+def _title(text: str | None) -> str:
+    return " ".join((text or "").lower().split())
+
+
+class _PaperIndex:
+    """Finds the local paper of a paper in a progress file: by DOI, PMID, citation
+    key, then title (+ year when both have one), never one with another DOI/PMID.
+    Papers created during the import are kept as objects until they have an id.
+
+    Built once per import, so large files need no query per paper.
+    """
+
+    COLUMNS = ("doi", "pmid", "bibtex_key")
+
+    def __init__(self, session: Session):
+        self.by: dict[str, dict] = {column: {} for column in self.COLUMNS}
+        self.by_title: dict[str, list] = {}
+        rows = session.exec(
+            select(Paper.id, Paper.doi, Paper.pmid, Paper.bibtex_key, Paper.title, Paper.year)
+        ).all()
+        for paper_id, doi, pmid, key, title, year in rows:
+            self.add(
+                paper_id,
+                {"doi": doi, "pmid": pmid, "bibtex_key": key, "title": title, "year": year},
+            )
+
+    def add(self, paper_id: "int | Paper", info: dict) -> None:
+        for column in self.COLUMNS:
+            if info.get(column):
+                self.by[column].setdefault(info[column], (paper_id, info))
+        self.by_title.setdefault(_title(info.get("title")), []).append((paper_id, info))
+
+    @staticmethod
+    def _same(local: dict, info: dict) -> bool:
+        return not any(
+            local.get(column) and info.get(column) and local[column] != info[column]
+            for column in ("doi", "pmid", "year")
+        )
+
+    def find(self, info: dict) -> "int | Paper | None":
+        for column in self.COLUMNS:
+            found = self.by[column].get(info.get(column)) if info.get(column) else None
+            if found and self._same(found[1], {**info, "year": None}):
+                return found[0]
+        if _title(info.get("title")):
+            for paper_id, local in self.by_title.get(_title(info.get("title")), []):
+                if self._same(local, info):
+                    return paper_id
+        return None
 
 
 def _merge_notes(local: str, incoming: str) -> str:
@@ -495,11 +543,14 @@ def import_progress(
             )
             report.profile_adopted = True
 
-        ids: dict[str, int] = {}
+        # rows are looked up in dictionaries built once and written with one flush
+        # or bulk inserts: a query per row made large files slow
+        refs: dict[str, int | Paper] = {}
+        index = _PaperIndex(session)
         for key, info in data.get("papers", {}).items():
-            paper = _find_paper(session, info)
-            if paper is None:
-                paper = Paper(
+            ref = index.find(info)
+            if ref is None:
+                ref = Paper(
                     title=info.get("title") or "(untitled)",
                     doi=info.get("doi"),
                     pmid=info.get("pmid"),
@@ -512,27 +563,29 @@ def import_progress(
                     topics=info.get("topics") or [],
                     folders=info.get("folders") or [],
                 )
-                session.add(paper)
-                session.flush()
+                session.add(ref)
+                index.add(ref, info)
                 report.papers_created += 1
             else:
                 report.papers_matched += 1
-            ids[key] = paper.id
+            refs[key] = ref
+        session.flush()  # ids of the new papers
+        ids = {key: ref if isinstance(ref, int) else ref.id for key, ref in refs.items()}
 
+        readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
         for item in data.get("readings", []):
             paper_id = ids[item["paper"]]
             incoming_time = _dt(item.get("updated_at")) or now()
-            local = session.get(Reading, paper_id)
+            local = readings.get(paper_id)
             if local is None:
-                session.add(
-                    Reading(
-                        paper_id=paper_id,
-                        status=ReadStatus(item["status"]),
-                        rating=item.get("rating"),
-                        notes=item.get("notes") or "",
-                        updated_at=incoming_time,
-                    )
+                readings[paper_id] = Reading(
+                    paper_id=paper_id,
+                    status=ReadStatus(item["status"]),
+                    rating=item.get("rating"),
+                    notes=item.get("notes") or "",
+                    updated_at=incoming_time,
                 )
+                session.add(readings[paper_id])
                 report.readings_added += 1
                 continue
             merged = _merge_notes(local.notes, item.get("notes") or "")
@@ -547,65 +600,65 @@ def import_progress(
                 report.readings_updated += 1
             session.add(local)
 
+        present = {
+            (e.paper_id, e.at, str(e.status)) for e in session.exec(select(StatusEvent)).all()
+        }
+        rows = []
         for item in data.get("status_events", []):
             paper_id, at = ids[item["paper"]], _dt(item["at"])
-            exists = session.exec(
-                select(StatusEvent).where(
-                    StatusEvent.paper_id == paper_id,
-                    StatusEvent.at == at,
-                    StatusEvent.status == item["status"],
+            status = ReadStatus(item["status"])
+            if (paper_id, at, str(status)) not in present:
+                present.add((paper_id, at, str(status)))
+                rows.append(
+                    {
+                        "paper_id": paper_id,
+                        "status": status,
+                        "was_queue_top": item.get("was_queue_top", False),
+                        "at": at,
+                    }
                 )
-            ).first()
-            if not exists:
-                session.add(
-                    StatusEvent(
-                        paper_id=paper_id,
-                        status=ReadStatus(item["status"]),
-                        was_queue_top=item.get("was_queue_top", False),
-                        at=at,
-                    )
-                )
-                report.events_added += 1
+        if rows:
+            session.exec(insert(StatusEvent), params=rows)
+        report.events_added = len(rows)
 
+        present = {
+            (e.at, e.kind, e.points, e.reason, e.paper_id)
+            for e in session.exec(select(XpEvent)).all()
+        }
+        rows = []
         for item in data.get("xp_events", []):
             paper_id = ids.get(item["paper"]) if item.get("paper") else None
-            at = _dt(item["at"])
-            query = select(XpEvent).where(
-                XpEvent.at == at,
-                XpEvent.kind == item["kind"],
-                XpEvent.points == item["points"],
-                XpEvent.reason == item["reason"],
-            )
-            query = query.where(
-                XpEvent.paper_id == paper_id if paper_id is not None else XpEvent.paper_id.is_(None)
-            )
-            if not session.exec(query).first():
-                session.add(
-                    XpEvent(
-                        paper_id=paper_id,
-                        points=item["points"],
-                        kind=item["kind"],
-                        reason=item["reason"],
-                        at=at,
-                    )
-                )
-                report.xp_added += 1
+            row = {
+                "paper_id": paper_id,
+                "points": item["points"],
+                "kind": item["kind"],
+                "reason": item["reason"],
+                "at": _dt(item["at"]),
+            }
+            identity = (row["at"], row["kind"], row["points"], row["reason"], paper_id)
+            if identity not in present:
+                present.add(identity)
+                rows.append(row)
+        if rows:
+            session.exec(insert(XpEvent), params=rows)
+        report.xp_added = len(rows)
 
+        unlocked = set(session.exec(select(Achievement.code)).all())
         for item in data.get("achievements", []):
-            if session.get(Achievement, item["code"]) is None:
+            if item["code"] not in unlocked:
+                unlocked.add(item["code"])
                 session.add(Achievement(code=item["code"], unlocked_at=_dt(item["unlocked_at"])))
                 report.achievements_added += 1
 
+        present = {
+            (b.week_start, b.created_at) for b in session.exec(select(RecommendationBatch)).all()
+        }
+        added = []
         for batch in data.get("recommendations", []):
             week, created = date.fromisoformat(batch["week_start"]), _dt(batch["created_at"])
-            exists = session.exec(
-                select(RecommendationBatch).where(
-                    RecommendationBatch.week_start == week,
-                    RecommendationBatch.created_at == created,
-                )
-            ).first()
-            if exists:
+            if (week, created) in present:
                 continue
+            present.add((week, created))
             stored = RecommendationBatch(
                 week_start=week,
                 created_at=created,
@@ -615,20 +668,24 @@ def import_progress(
                 params=batch.get("params"),
             )
             session.add(stored)
-            session.flush()
-            for item in batch.get("items", []):
-                session.add(
-                    Recommendation(
-                        batch_id=stored.id,
-                        paper_id=ids[item["paper"]],
-                        rank=item["rank"],
-                        category=Category(item.get("category", "open")),
-                        score=item["score"],
-                        breakdown=item.get("breakdown") or {},
-                        reason=item.get("reason", ""),
-                    )
-                )
-            report.batches_added += 1
+            added.append((stored, batch))
+        session.flush()  # ids of the new batches
+        rows = [
+            {
+                "batch_id": stored.id,
+                "paper_id": ids[item["paper"]],
+                "rank": item["rank"],
+                "category": Category(item.get("category", "open")),
+                "score": item["score"],
+                "breakdown": item.get("breakdown") or {},
+                "reason": item.get("reason", ""),
+            }
+            for stored, batch in added
+            for item in batch.get("items", [])
+        ]
+        if rows:
+            session.exec(insert(Recommendation), params=rows)
+        report.batches_added = len(added)
 
         report.libraries_added = _merge_libraries(session, data.get("libraries", []), ids)
 
@@ -639,7 +696,7 @@ def import_progress(
             paper_id = ids[item["paper"]]
             if paper_id in present:
                 continue
-            reading = session.get(Reading, paper_id)
+            reading = readings.get(paper_id)
             if reading and reading.status != ReadStatus.abstract:
                 continue  # read or dismissed in the meantime
             if position >= cfg.queue.max_size:
@@ -669,21 +726,34 @@ def import_progress(
     return report
 
 
+def _numbered(name: str, number: int) -> str:
+    return name if number == 1 else f"{name} {number}"
+
+
 def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]) -> int:
     """Libraries of a profile file: created when missing (by name), papers added."""
     from litresearch import libraries
 
     existing = {lib.name.lower(): lib for lib in session.exec(select(Library)).all()}
+    members = set(session.exec(select(LibraryPaper.library_id, LibraryPaper.paper_id)).all())
     created, touched = 0, set()
     for entry in incoming:
-        library = existing.get(entry["name"].lower())
-        if library is None and entry.get("kind") == libraries.RECOMMENDED:
+        wanted = entry.get("kind") or libraries.IMPORTED
+        library, number = None, 1
+        while (found := existing.get(_numbered(entry["name"], number).lower())) is not None:
+            # same name but another kind (e.g. an import called "Recommended") is a
+            # different library: look for its renamed copy ("Recommended 2") instead
+            if (wanted == libraries.RECOMMENDED) == (found.kind == libraries.RECOMMENDED):
+                library = found
+                break
+            number += 1
+        if library is None and wanted == libraries.RECOMMENDED:
             library = session.exec(
                 select(Library).where(Library.kind == libraries.RECOMMENDED)
             ).first()
         if library is None:
             library = Library(
-                name=entry["name"],
+                name=libraries._free_name(session, entry["name"]),
                 description=entry.get("description") or "",
                 kind=entry.get("kind") or libraries.IMPORTED,
                 format=entry.get("format"),
@@ -696,8 +766,9 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
             created += 1
         for member in entry.get("papers", []):
             paper_id = ids.get(member["paper"])
-            if paper_id is None or session.get(LibraryPaper, (library.id, paper_id)):
+            if paper_id is None or (library.id, paper_id) in members:
                 continue
+            members.add((library.id, paper_id))
             session.add(
                 LibraryPaper(
                     library_id=library.id,
@@ -796,44 +867,56 @@ def memory_engine():
 
 def summarize(data: dict, cfg: Config, label: str = "") -> dict:
     """Key figures of a saved profile, computed in a throw-away database."""
-    from litresearch.game import level_for, reading_impact_factor, stats
-
     check_file(data, allow_modified=True)
     engine = memory_engine()
     try:
         with Session(engine) as session:
             import_progress(session, cfg, data, allow_modified=True)
-            profile = session.exec(select(Profile)).first()
-            rules = GameRules.model_validate(profile.rules) if profile else cfg.game
             moment = _dt(data.get("exported_at")) or now()
-            figures = stats(session, moment.date(), rules)
-            level = level_for(figures["xp"], rules)
-            badges = len(session.exec(select(Achievement)).all())
-            read = figures["papers_read"]
-            return {
-                "label": label,
-                "name": profile.name if profile else "(no profile)",
-                "started": profile.created_at if profile else None,
-                "exported_at": moment,
-                "fingerprint": profile.fingerprint if profile else None,
-                "checksum_ok": verify_checksum(data),
-                "xp": figures["xp"],
-                "level": level,
-                "papers_read": read,
-                "thorough": figures["thorough"],
-                "best_streak": figures["best_streak"],
-                "quests": figures["quests"],
-                "badges": badges,
-                "discipline": figures["frogs"] / read if read else 0.0,
-                "depth": figures["deep_reads"] / read if read else 0.0,
-                "notes_chars": figures["notes_chars"],
-                "rif": reading_impact_factor(session, moment.date()),
-                "weeks": len(
-                    {e.at.date().isocalendar()[:2] for e in session.exec(select(StatusEvent)).all()}
-                ),
-            }
+            return summarize_session(session, cfg, moment, label, verify_checksum(data))
     finally:
         engine.dispose()
+
+
+def summarize_session(
+    session: Session,
+    cfg: Config,
+    moment: datetime | None = None,
+    label: str = "",
+    checksum_ok: bool | None = None,
+) -> dict:
+    """Key figures of the profile in ``session`` at ``moment`` (default: now)."""
+    from litresearch.game import level_for, reading_impact_factor, stats
+
+    moment = moment or now()
+    profile = session.exec(select(Profile)).first()
+    rules = GameRules.model_validate(profile.rules) if profile else cfg.game
+    figures = stats(session, moment.date(), rules)
+    level = level_for(figures["xp"], rules)
+    badges = len(session.exec(select(Achievement)).all())
+    read = figures["papers_read"]
+    return {
+        "label": label,
+        "name": profile.name if profile else "(no profile)",
+        "started": profile.created_at if profile else None,
+        "exported_at": moment,
+        "fingerprint": profile.fingerprint if profile else None,
+        "checksum_ok": checksum_ok,
+        "xp": figures["xp"],
+        "level": level,
+        "papers_read": read,
+        "thorough": figures["thorough"],
+        "best_streak": figures["best_streak"],
+        "quests": figures["quests"],
+        "badges": badges,
+        "discipline": figures["frogs"] / read if read else 0.0,
+        "depth": figures["deep_reads"] / read if read else 0.0,
+        "notes_chars": figures["notes_chars"],
+        "rif": reading_impact_factor(session, moment.date()),
+        "weeks": len(
+            {e.at.date().isocalendar()[:2] for e in session.exec(select(StatusEvent)).all()}
+        ),
+    }
 
 
 # --- automatic backups while the web UI runs ---------------------------------------------
@@ -843,10 +926,16 @@ def backup_targets(base: Config) -> list[tuple[str, Config]]:
     """Every profile, plus the data from before profiles existed (until adopted)."""
     from litresearch import profiles
 
-    targets = [
-        (info.slug, profiles.profile_config(base, info.slug))
-        for info in profiles.list_profiles(base)
-    ]
+    def target(slug: str) -> Config:
+        try:
+            return profiles.profile_config(base, slug)
+        except ValueError:  # an invalid settings.yaml: still back up the database
+            data = base.model_dump(mode="json")
+            data["paths"]["database"] = str(profiles.folder(base, slug) / profiles.PROFILE_DB)
+            data["backup"]["dir"] = str(Path(base.backup.dir) / slug)
+            return Config.model_validate(data)
+
+    targets = [(info.slug, target(info.slug)) for info in profiles.list_profiles(base)]
     if (
         base.paths.database.exists()
         and not (base.paths.profiles_dir / profiles.LEGACY_MARKER).exists()
@@ -864,7 +953,13 @@ def backup_all(base: Config, log=print) -> int:
         engine = init_db(cfg.paths.database)
         try:
             with Session(engine) as session:
-                settings = None if label == "(no profile)" else profile_settings(cfg)
+                settings = None
+                if label != "(no profile)":
+                    try:
+                        settings = profile_settings(cfg)
+                    except yaml.YAMLError as error:
+                        log(f"WARNING: {label}: settings.yaml is not valid YAML, not included")
+                        log(f"  {error}")
                 result = run_backup(cfg, session, settings=settings)
             log(f"backup written: {label}: {result.snapshot.name}")
         except Exception as error:  # a failed backup must never stop the server
@@ -877,8 +972,6 @@ def backup_all(base: Config, log=print) -> int:
 
 def profile_settings(cfg: Config) -> dict:
     """The settings.yaml of the profile that ``cfg`` belongs to (empty if none)."""
-    import yaml
-
     path = cfg.paths.database.parent / "settings.yaml"
     if not path.exists():
         return {}
@@ -887,10 +980,15 @@ def profile_settings(cfg: Config) -> dict:
 
 def backup_loop(config_path: Path, stop, log) -> None:
     """Back up all profiles now and then every ``backup.interval_hours``."""
-    from litresearch.config import load_config
+    from litresearch.config import ConfigError, load_config
 
     while not stop.is_set():
-        base = load_config(config_path)
+        try:
+            base = load_config(config_path)
+        except ConfigError as error:  # e.g. while config.yaml is being edited
+            log(f"WARNING: no backup, the configuration cannot be read: {error}")
+            stop.wait(3600)
+            continue
         if base.backup.interval_hours <= 0:
             return
         backup_all(base, log)

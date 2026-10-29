@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 from sqlmodel import Session, select
 
 from litresearch.config import Config
@@ -16,6 +17,7 @@ from litresearch.db import (
     init_db,
 )
 from litresearch.game import (
+    badge_progress,
     grade,
     ledger,
     level_for,
@@ -29,6 +31,7 @@ from litresearch.game import (
     total_xp,
     week_progress,
     weekly_summaries,
+    weeks_of_history,
 )
 from litresearch.reading import queue_add, record_reading
 from litresearch.rules import GameRules
@@ -301,6 +304,44 @@ def test_stats_and_impact_factor(db):
     assert reading_impact_factor(session, MONDAY.date() + timedelta(weeks=4)) == 0
 
 
+def test_precomputed_stats_give_the_same_results(db):
+    """Pages compute stats() once and pass it on; the results must not change."""
+    cfg, session = db
+    for n in range(3):
+        paper = add_paper(session, f"P{n}")
+        record_reading(session, cfg, paper, ReadStatus.read, at=MONDAY + timedelta(days=n))
+    today = MONDAY.date() + timedelta(days=3)
+    current = stats(session, today, cfg)
+    assert badge_progress(session, today, cfg, current) == badge_progress(session, today, cfg)
+    assert personal_bests(session, cfg, today, current) == personal_bests(session, cfg, today)
+    assert next_goals(session, cfg, today, current) == next_goals(session, cfg, today)
+
+
+def test_weekly_summaries_page_back_to_the_first_week(db):
+    cfg, session = db
+    today = MONDAY.date() + timedelta(weeks=5)
+    assert weeks_of_history(session, today) == 1
+    record_reading(session, cfg, add_paper(session), ReadStatus.read, at=MONDAY)
+    assert weeks_of_history(session, today) == 6
+    page = weekly_summaries(session, cfg, today, weeks=4, offset=4)
+    assert [w["week_start"] for w in page] == [
+        MONDAY.date() + timedelta(weeks=1) - timedelta(weeks=i) for i in range(4)
+    ]
+
+
+def test_ledger_filters_and_pages(db):
+    cfg, session = db
+    for n in range(3):
+        record_reading(session, cfg, add_paper(session, f"L{n}"), ReadStatus.read, at=MONDAY)
+    rows, total = ledger(session)
+    assert total == len(rows) and rows[0]["balance"] == total_xp(session)
+    reads, n_reads = ledger(session, "read", limit=2)
+    assert n_reads == 3 and len(reads) == 2
+    assert all(r["event"].kind == "read" and r["paper"] is not None for r in reads)
+    # balances are those of the whole ledger, not of the filtered rows
+    assert {r["balance"] for r in reads} <= {r["balance"] for r in rows}
+
+
 def test_queue_is_untouched_by_abstract_reads(db):
     cfg, session = db
     paper = add_paper(session)
@@ -371,3 +412,9 @@ def test_personal_bests_and_hints(db):
     # a week later the streak needs attention
     hints = next_goals(session, cfg, MONDAY.date() + timedelta(weeks=1))
     assert any("keep your 1-week streak alive" in h for h in hints)
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("nan")])
+def test_rules_reject_inf_and_nan(value):
+    with pytest.raises(ValidationError):
+        GameRules.model_validate({"frog_bonus": value})

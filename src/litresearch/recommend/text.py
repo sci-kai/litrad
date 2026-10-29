@@ -21,18 +21,30 @@ def tokens(text: str) -> list[str]:
     return [w for w in words if w not in STOPWORDS]
 
 
-def tfidf_matrix(texts: list[str]) -> np.ndarray:
-    """Return L2-normalised TF-IDF rows (one per text) over a shared vocabulary."""
+def tfidf_matrix(texts: list[str], columns_from: int | None = None) -> np.ndarray:
+    """Return L2-normalised TF-IDF rows (one per text) over a shared vocabulary.
+
+    With ``columns_from``, only words of the first ``columns_from`` texts get a
+    column. Rows are still normalised over all their words, so similarities
+    that involve one of these first texts stay exact, while the matrix of a
+    large library no longer needs a column for every word it contains.
+    """
     docs = [Counter(tokens(text or "")) for text in texts]
     df = Counter(word for doc in docs for word in doc)
-    vocab = {word: i for i, word in enumerate(sorted(df))}
-    matrix = np.zeros((len(docs), len(vocab)), dtype=np.float32)
     n = len(docs)
+    idf = {word: math.log((1 + n) / (1 + count)) + 1 for word, count in df.items()}
+    kept = df if columns_from is None else {w for doc in docs[:columns_from] for w in doc}
+    vocab = {word: i for i, word in enumerate(sorted(kept))}
+    matrix = np.zeros((n, len(vocab)), dtype=np.float32)
+    norms = np.ones((n, 1), dtype=np.float32)
     for row, doc in enumerate(docs):
+        squares = 0.0
         for word, count in doc.items():
-            matrix[row, vocab[word]] = (1 + math.log(count)) * (
-                math.log((1 + n) / (1 + df[word])) + 1
-            )
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms[norms == 0] = 1
-    return matrix / norms
+            value = (1 + math.log(count)) * idf[word]
+            squares += value * value
+            if (column := vocab.get(word)) is not None:
+                matrix[row, column] = value
+        if squares:
+            norms[row] = math.sqrt(squares)
+    matrix /= norms
+    return matrix

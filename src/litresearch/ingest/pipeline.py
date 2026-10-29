@@ -87,6 +87,14 @@ def _title_key(title: str, year: int | None) -> str:
     return " ".join(title.lower().split()) + f"|{year or ''}"
 
 
+def _contradicts(paper: Paper, entry: BibEntry) -> bool:
+    """The entry names another paper than ``paper`` (different DOI or PMID)."""
+    return bool(
+        (entry.doi and paper.doi and entry.doi != paper.doi)
+        or (entry.pmid and paper.pmid and entry.pmid != paper.pmid)
+    )
+
+
 def sync_library(
     session: Session,
     library: Library,
@@ -110,8 +118,10 @@ def sync_library(
     imported = []
     for entry in entries:
         paper = None
-        if entry.key in by_link_key:
+        if entry.key in by_link_key and not entry.generated_key:
             paper = session.get(Paper, by_link_key[entry.key])
+            if paper is not None and _contradicts(paper, entry):
+                paper = None  # the key now names another paper (keys can be reused)
         if paper is None and entry.doi:
             paper = by_doi.get(entry.doi)
         if paper is None and entry.pmid:
@@ -138,6 +148,10 @@ def sync_library(
         session.add(paper)
         session.flush()  # assigns the id of new papers
         seen.add(paper.id)
+        # later entries of this file find it too (the same paper twice)
+        if paper.pmid:
+            by_pmid.setdefault(paper.pmid, paper)
+        by_title.setdefault(_title_key(paper.title, paper.year), paper)
         if paper.id in before:
             report.updated += 1
         else:

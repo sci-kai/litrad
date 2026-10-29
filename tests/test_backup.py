@@ -11,10 +11,12 @@ from typer.testing import CliRunner
 
 import litresearch.cli as cli
 from conftest import enter_profile
+from litresearch import libraries
 from litresearch.backup import (
     BackupError,
     atomic_write_text,
     backup_loop,
+    checksum,
     export_progress,
     import_progress,
     integrity_ok,
@@ -28,6 +30,7 @@ from litresearch.backup import (
 from litresearch.config import Config
 from litresearch.db import (
     Achievement,
+    Library,
     Paper,
     QueueItem,
     Reading,
@@ -492,3 +495,45 @@ def test_web_backup_and_download(tmp_path):
     # backups of a profile go to its own subfolder
     assert list((tmp_path / "backups" / "ada").glob("litresearch_*.sqlite"))
     client.close()
+
+
+def test_restore_removes_stale_journal_files(source):
+    cfg, engine = source
+    with Session(engine) as session:
+        snap = run_backup(cfg, session, AT).snapshot
+    engine.dispose()
+    db = cfg.paths.database
+    stale = [db.with_name(db.name + suffix) for suffix in ("-journal", "-wal", "-shm")]
+    for path in stale:
+        path.write_bytes(b"stale")
+    restore(cfg, snap, AT + timedelta(hours=1))
+    assert not any(path.exists() for path in stale)
+    assert integrity_ok(db)
+
+
+def test_import_named_recommended_does_not_merge_into_recommended(source, target):
+    cfg, engine = source
+    tcfg, tengine = target
+    with Session(engine) as session:
+        paper = session.exec(select(Paper)).first()
+        lib = Library(name="Recommended", description="my own list")  # as from another tool
+        session.add(lib)
+        session.flush()
+        libraries.link(session, lib, paper)
+        session.commit()
+        data = export_progress(session)
+    assert sorted(e["kind"] for e in data["libraries"]) == ["imported", "recommended"]
+    data["libraries"] = [e for e in data["libraries"] if e["kind"] == "imported"]
+    data["checksum"] = checksum(data)
+    with Session(tengine) as session:
+        local = libraries.recommended_library(session)
+        session.commit()
+        assert local.name == "Recommended"
+        report = import_progress(session, tcfg, data)
+        assert report.libraries_added == 1
+        by_name = {lib.name: lib for lib in session.exec(select(Library)).all()}
+        assert by_name["Recommended"].kind == "recommended"
+        assert by_name["Recommended 2"].kind == "imported"
+        assert libraries.size(session, by_name["Recommended"]) == 0
+        assert libraries.size(session, by_name["Recommended 2"]) == 1
+        assert import_progress(session, tcfg, data).libraries_added == 0  # idempotent

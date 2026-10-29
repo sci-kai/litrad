@@ -13,7 +13,8 @@ NA = "n/a"
 
 
 class _Base(BaseModel):
-    model_config = {"extra": "forbid"}
+    # inf and nan are valid YAML floats but no valid setting
+    model_config = {"extra": "forbid", "allow_inf_nan": False}
 
     @field_validator("*", mode="before")
     @classmethod

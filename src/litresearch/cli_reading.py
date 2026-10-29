@@ -22,6 +22,7 @@ from litresearch.game import (
     badge_progress,
     grade,
     level_for,
+    next_read_streak,
     queue_top_waiting_days,
     reading_impact_factor,
     stats,
@@ -426,7 +427,7 @@ def score(config: Path = ConfigOpt):
         flame = " 🔥" if s["streak"] >= 2 else ""
         console.print(
             f"Streak: {s['streak']} week(s){flame} (best {s['best_streak']}) · "
-            f"next reads earn x{streak_multiplier(max(s['streak'], 1), rules):.2f}"
+            f"next reads earn x{streak_multiplier(next_read_streak(session, today), rules):.2f}"
         )
 
         week = week_progress(session, rules, today)
@@ -502,6 +503,8 @@ def history(
                 ).all()
             )
             when = datetime.isoformat(event.at)
+            colour = "green" if points >= 0 else "red"
             console.print(
-                f"{when}  {event.status.value:<9} [green]+{points:>3}[/green]  {paper.title[:70]}"
+                f"{when}  {event.status.value:<9} [{colour}]{points:>+4}[/{colour}]  "
+                f"{paper.title[:70]}"
             )

@@ -22,6 +22,7 @@ which the UI shows as an evidence tree. The criteria are documented in
 import math
 from dataclasses import dataclass, field
 from datetime import date
+from functools import cached_property
 
 import numpy as np
 
@@ -30,6 +31,8 @@ from litresearch.db import Category, Paper
 from litresearch.recommend.text import tfidf_matrix
 
 NEIGHBOURS_SHOWN = 5
+# library rows compared at once (bounds the memory of the similarity computation)
+KNN_CHUNK = 2048
 
 
 @dataclass
@@ -53,8 +56,12 @@ class LibraryProfile:
     vector_ids: list[int] = field(default_factory=list)
     vectors: np.ndarray = field(default_factory=lambda: np.zeros((0, 0)))
 
+    @cached_property
+    def _titles_by_id(self) -> dict[int, str]:
+        return dict(zip(self.ids, self.titles, strict=True))
+
     def title_of(self, paper_id: int) -> str:
-        return self.titles[self.ids.index(paper_id)]
+        return self._titles_by_id[paper_id]
 
 
 @dataclass
@@ -189,18 +196,24 @@ def normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / norms
 
 
-def knn(candidates: np.ndarray, library: np.ndarray, k: int, self_columns=None):
+def knn(candidates: np.ndarray, library: np.ndarray, k: int, self_columns=None, normalized=False):
     """Mean cosine similarity to the k most similar library rows.
 
     ``self_columns[i]`` is the library row of candidate ``i`` itself (or -1);
-    a library paper must not count as its own neighbour.
+    a library paper must not count as its own neighbour. ``normalized``: the
+    rows are already L2-normalised (TF-IDF rows restricted to the candidates'
+    words must not be normalised again).
     Returns ``(mean, top_indices, top_similarities)``, the latter two sorted
     from most to least similar.
     """
     n = len(candidates)
     if n == 0 or len(library) == 0:
         return np.zeros(n), np.zeros((n, 0), dtype=int), np.zeros((n, 0))
-    sims = normalize_rows(candidates) @ normalize_rows(library).T
+    scale = (lambda rows: rows) if normalized else normalize_rows
+    query = scale(candidates)
+    sims = np.empty((n, len(library)), dtype=np.result_type(query, library))
+    for start in range(0, len(library), KNN_CHUNK):
+        sims[:, start : start + KNN_CHUNK] = query @ scale(library[start : start + KNN_CHUNK]).T
     excluded = 0
     if self_columns is not None:
         for row, column in enumerate(self_columns):
@@ -278,7 +291,11 @@ def relevance_scores(
     text_only = [i for i in range(n) if not use_vectors or candidates[i].vector is None]
     if text_only:
         mean, top, top_sims = knn(
-            candidate_tfidf[text_only], library_tfidf, sel.knn, own_rows(text_only, library.ids)
+            candidate_tfidf[text_only],
+            library_tfidf,
+            sel.knn,
+            own_rows(text_only, library.ids),
+            normalized=True,
         )
         fill(text_only, mean, top, top_sims, "TF-IDF", library.ids)
 
@@ -359,7 +376,8 @@ def rank_candidates(
         return RankResult([], {**funnel, "eligible": 0, "above_floor": 0, "picked": 0})
 
     texts = [f"{c.paper.title} {c.paper.abstract or ''}" for c in eligible]
-    tfidf = tfidf_matrix(texts + library.texts)
+    # columns only for the candidates' words: all that candidate similarities need
+    tfidf = tfidf_matrix(texts + library.texts, columns_from=len(texts))
     candidate_tfidf, library_tfidf = tfidf[: len(texts)], tfidf[len(texts) :]
     relevance, relevance_evidence = relevance_scores(
         eligible, library, candidate_tfidf, library_tfidf, topic_weights, sel

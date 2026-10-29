@@ -138,7 +138,8 @@ def parse_ris(text: str, ignore: set[str] = frozenset(), duplicate_keys=None) ->
 
     entries, seen = [], set()
     for number, record in enumerate(records, start=1):
-        key = _unique_key(_first(record, "ID") or f"ris-{number}", seen, duplicate_keys)
+        given = _first(record, "ID")
+        key = _unique_key(given or f"ris-{number}", seen, duplicate_keys)
         if key is None:
             continue
         date_text = _first(record, "PY", "Y1", "DA") or ""
@@ -167,6 +168,7 @@ def parse_ris(text: str, ignore: set[str] = frozenset(), duplicate_keys=None) ->
                 url=url,
                 folders=folders,
                 tags=tags,
+                generated_key=not given,
             )
         )
     return entries
@@ -192,7 +194,8 @@ def parse_csl_json(
         raise ValueError("Expected a CSL-JSON list of items")
     entries, seen = [], set()
     for number, item in enumerate(items, start=1):
-        key = _unique_key(str(item.get("id") or f"csl-{number}"), seen, duplicate_keys)
+        given = str(item.get("id") or "").strip()
+        key = _unique_key(given or f"csl-{number}", seen, duplicate_keys)
         if key is None:
             continue
         parts = ((item.get("issued") or {}).get("date-parts") or [[]])[0] or []
@@ -218,6 +221,7 @@ def parse_csl_json(
                 url=clean_text(item.get("URL")),
                 folders=folders,
                 tags=tags,
+                generated_key=not given,
             )
         )
     return entries

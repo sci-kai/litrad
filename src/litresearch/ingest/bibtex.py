@@ -17,7 +17,28 @@ MONTHS = {
     )
 }
 
-DOI_PREFIX = re.compile(r"^(https?://(dx\.)?doi\.org/|doi:\s*)", re.IGNORECASE)
+DOI_PREFIX = re.compile(r"^(https?://(www\.|dx\.)?doi\.org/|doi:\s*)", re.IGNORECASE)
+# what pylatexenc changes in a value (besides % and &, see BARE_SPECIAL); anything else
+# is plain text and kept as it is
+LATEX = re.compile(r"[\\{}$~]|--|``|''|[!?]`")
+# a % or & not escaped by a backslash: text, not a LaTeX comment or table column
+BARE_SPECIAL = re.compile(r"(?<!\\)([%&])")
+
+
+class LatexDecoding(mw.LatexDecodingMiddleware):
+    """bibtexparser's LaTeX decoding, but only for values that contain LaTeX.
+
+    - Plain text (most abstracts) is kept as it is: decoding costs ~40 ms per
+      entry on a Raspberry Pi, i.e. minutes for a library of thousands.
+    - A bare ``%`` or ``&`` (exports that do not escape them, e.g. "50% of
+      patients" or a URL with ``%20``) stays text; pylatexenc would read ``%``
+      as the start of a comment and drop the rest of the value.
+    """
+
+    def _transform_python_value_string(self, python_string: str) -> tuple[str, str]:
+        if not LATEX.search(python_string):
+            return python_string, ""
+        return super()._transform_python_value_string(BARE_SPECIAL.sub(r"\\\1", python_string))
 
 
 @dataclass
@@ -36,6 +57,9 @@ class BibEntry:
     # Paperpile folders (hierarchical, "/"-separated) and flat labels/keywords
     folders: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
+    # True for keys made up from the position in the file (RIS without ID, CSL
+    # without id): they change when entries are added, so they identify nothing
+    generated_key: bool = False
 
 
 def clean_text(value: str | None) -> str | None:
@@ -137,7 +161,7 @@ def parse_bibtex(
     library = bibtexparser.parse_file(
         str(path),
         append_middleware=[
-            mw.LatexDecodingMiddleware(),
+            LatexDecoding(),
             mw.SeparateCoAuthors(),
             mw.SplitNameParts(),
         ],

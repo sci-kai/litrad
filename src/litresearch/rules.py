@@ -262,7 +262,7 @@ BADGE_CATALOG = [
     BadgeDef(
         "night_owl",
         "Night Owl",
-        "Log {target} reads between 22:00 and 04:00",
+        "Read {target} different papers between 22:00 and 04:00",
         "night_reads",
         5,
         "🦉",
@@ -271,7 +271,7 @@ BADGE_CATALOG = [
     BadgeDef(
         "early_riser",
         "Early Riser",
-        "Log {target} reads between 05:00 and 08:00",
+        "Read {target} different papers between 05:00 and 08:00",
         "early_reads",
         5,
         "🌅",
@@ -280,7 +280,7 @@ BADGE_CATALOG = [
     BadgeDef(
         "weekend_warrior",
         "Weekend Warrior",
-        "Log {target} reads on weekends",
+        "Read {target} different papers on weekends",
         "weekend_reads",
         5,
         "🏖️",
@@ -398,7 +398,7 @@ class Badge:
 class GameRules(BaseModel):
     """Every reward and penalty. Locked into a profile when the game starts."""
 
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "forbid", "allow_inf_nan": False}
 
     # base points per reading level (paid up to the deepest level ever reached)
     xp_abstract: int = Field(5, ge=0, le=10000)

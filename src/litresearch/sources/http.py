@@ -16,6 +16,9 @@ from litresearch import __version__
 log = logging.getLogger(__name__)
 
 RETRY_STATUS = {429, 500, 502, 503, 504}
+# cached answers older than the longest max_age any source asks for (Crossref:
+# 365 days) are never used again and are deleted, so the cache does not grow forever
+CACHE_KEEP = timedelta(days=366)
 
 
 class HttpError(RuntimeError):
@@ -29,10 +32,15 @@ class ResponseCache:
         path.parent.mkdir(parents=True, exist_ok=True)
         # the web UI may create and close the cache in different worker threads;
         # each cache object is still only used by one request at a time
-        self._db = sqlite3.connect(path, check_same_thread=False)
+        self._db = sqlite3.connect(path, check_same_thread=False, timeout=30)
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, stored REAL, body TEXT)"
         )
+        self._db.execute("CREATE INDEX IF NOT EXISTS cache_stored ON cache (stored)")
+        self._db.execute(
+            "DELETE FROM cache WHERE stored < ?", (time.time() - CACHE_KEEP.total_seconds(),)
+        )
+        self._db.commit()
 
     def get(self, key: str, max_age: timedelta | None):
         row = self._db.execute("SELECT stored, body FROM cache WHERE key = ?", (key,)).fetchone()
@@ -43,10 +51,14 @@ class ResponseCache:
         return json.loads(row[1])
 
     def put(self, key: str, body) -> None:
-        self._db.execute(
-            "INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (key, time.time(), json.dumps(body))
-        )
-        self._db.commit()
+        try:
+            self._db.execute(
+                "INSERT OR REPLACE INTO cache VALUES (?, ?, ?)",
+                (key, time.time(), json.dumps(body)),
+            )
+            self._db.commit()
+        except sqlite3.Error as error:  # e.g. locked by another process: skip caching
+            log.warning("response not cached: %s", error)
 
     def close(self) -> None:
         if self._db is not None:

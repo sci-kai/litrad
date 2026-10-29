@@ -80,7 +80,13 @@ def _settings_file(base: Config, slug: str) -> dict:
     path = folder(base, slug) / PROFILE_SETTINGS
     if not path.exists():
         return {}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as error:
+        raise ProfilesError(f"{path} is not valid YAML: {error}") from error
+    if not isinstance(data, dict):
+        raise ProfilesError(f"{path} must contain settings (key: value)")
+    return data
 
 
 def overlay(base: Config, slug: str) -> dict:
@@ -138,8 +144,8 @@ class ProfileInfo:
 
 def describe(base: Config, slug: str) -> ProfileInfo:
     """Name, level, XP, papers read and activity of a profile (for the welcome screen)."""
-    cfg = profile_config(base, slug)
-    engine = init_db(cfg.paths.database)
+    # only the database: a profile with an invalid settings.yaml is still listed
+    engine = init_db(folder(base, slug) / PROFILE_DB)
     try:
         with Session(engine) as session:
             profile = session.exec(select(Profile)).first()

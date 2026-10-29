@@ -23,13 +23,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import or_
 from sqlmodel import Session, func, select
 
 from litresearch.config import Config
 from litresearch.db import IngestRun, Library, LibraryPaper, Paper, Reading, ReadStatus, now
 
 IMPORTED = "imported"
+ID_CHUNK = 500  # SQLite limits the number of variables in one statement
 RECOMMENDED = "recommended"
 QUEUE_NAME = "Reading queue"
 RECOMMENDED_NAME = "Recommended"
@@ -173,8 +173,9 @@ def link(
     if entry is None:
         entry = LibraryPaper(library_id=library.id, paper_id=paper.id)
     entry.citation_key = citation_key or entry.citation_key
-    entry.folders = list(folders)
-    entry.tags = list(tags)
+    # None: JSON columns that a migration added to an old database are empty
+    entry.folders = list(folders or ())
+    entry.tags = list(tags or ())
     session.add(entry)
     return entry
 
@@ -232,11 +233,16 @@ def refresh_flags(session: Session, paper_ids: set[int] | None = None) -> None:
     for entry in session.exec(select(LibraryPaper)).all():
         links.setdefault(entry.paper_id, []).append(entry)
     if paper_ids is None:
-        query = select(Paper).where(or_(Paper.in_library, Paper.id.in_(list(links))))
+        flagged = session.exec(select(Paper.id).where(Paper.in_library)).all()
+        wanted = sorted(set(links) | set(flagged))
     else:
-        query = select(Paper).where(Paper.id.in_(list(paper_ids)))
+        wanted = sorted(paper_ids)
     taken = set(session.exec(select(Paper.bibtex_key).where(Paper.bibtex_key.is_not(None))).all())
-    for paper in session.exec(query).all():
+    papers = []
+    for start in range(0, len(wanted), ID_CHUNK):
+        chunk = wanted[start : start + ID_CHUNK]
+        papers.extend(session.exec(select(Paper).where(Paper.id.in_(chunk))).all())
+    for paper in papers:
         mine = sorted(links.get(paper.id, []), key=lambda e: e.added_at)
         in_imported = [e for e in mine if e.library_id in imported]
         paper.in_library = bool(in_imported)

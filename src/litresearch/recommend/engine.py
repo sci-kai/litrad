@@ -17,6 +17,7 @@ from litresearch.db import (
     ReadStatus,
     Recommendation,
     RecommendationBatch,
+    StatusEvent,
     load_embedding,
     now,
     store_embedding,
@@ -149,10 +150,20 @@ def exclusion_sets(session: Session, cfg: Config, today: date) -> dict[str, set[
     """
     since = today - timedelta(weeks=cfg.selection.cooldown_weeks)
     return {
-        # an abstract glance does not count as read; library papers are fine
+        # an abstract glance does not count as read; library papers are fine. A paper
+        # once skimmed or read stays excluded, also after a later "abstract" marking.
         "read_or_dismissed": set(
             session.exec(
                 select(Reading.paper_id).where(Reading.status != ReadStatus.abstract)
+            ).all()
+        )
+        | set(
+            session.exec(
+                select(StatusEvent.paper_id).where(
+                    StatusEvent.status.in_(
+                        [ReadStatus.skimmed, ReadStatus.read, ReadStatus.thorough]
+                    )
+                )
             ).all()
         ),
         "queued": set(session.exec(select(QueueItem.paper_id)).all()),
@@ -194,13 +205,21 @@ def fetch_embeddings(
             store_embedding(session, paper.id, EMBEDDING_MODEL, info.embedding)
 
 
+# paper ids per query (SQLite limits the number of query parameters)
+ID_CHUNK = 500
+
+
 def vectors_for(session: Session, paper_ids: list[int]) -> dict[int, np.ndarray]:
-    rows = session.exec(
-        select(Embedding).where(
-            Embedding.model == EMBEDDING_MODEL, Embedding.paper_id.in_(paper_ids)
-        )
-    ).all()
-    return {row.paper_id: load_embedding(row) for row in rows}
+    vectors = {}
+    for start in range(0, len(paper_ids), ID_CHUNK):
+        rows = session.exec(
+            select(Embedding.paper_id, Embedding.vector).where(
+                Embedding.model == EMBEDDING_MODEL,
+                Embedding.paper_id.in_(paper_ids[start : start + ID_CHUNK]),
+            )
+        ).all()
+        vectors.update({row.paper_id: load_embedding(row) for row in rows})
+    return vectors
 
 
 def build_recommendations(

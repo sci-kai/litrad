@@ -97,10 +97,14 @@ def total_xp(session: Session) -> int:
     return session.exec(select(func.coalesce(func.sum(XpEvent.points), 0))).one()
 
 
+# statuses that count as reading (skimmed or deeper)
+READ_STATUSES = READ_LEVELS[1:]
+
+
 def reading_weeks(session: Session) -> list[date]:
     """Weeks (Mondays) with at least one paper skimmed or read deeper."""
-    events = session.exec(select(StatusEvent)).all()
-    return sorted({week_start(e.at.date()) for e in events if depth(e.status) >= 2})
+    moments = session.exec(select(StatusEvent.at).where(StatusEvent.status.in_(READ_STATUSES)))
+    return sorted({week_start(at.date()) for at in moments})
 
 
 def streaks(weeks: list[date], today: date) -> tuple[int, int]:
@@ -120,6 +124,13 @@ def streaks(weeks: list[date], today: date) -> tuple[int, int]:
     return (run if alive else 0), best
 
 
+def next_read_streak(session: Session, today: date) -> int:
+    """The streak a read logged today counts with (this week included)."""
+    weeks = reading_weeks(session)
+    current, _ = streaks(weeks, today)
+    return current if week_start(today) in weeks else current + 1
+
+
 def streak_multiplier(streak: int, rules=None) -> float:
     rules = as_rules(rules)
     return 1 + rules.streak_step * min(max(streak - 1, 0), rules.streak_max_steps)
@@ -137,21 +148,26 @@ def week_progress(session: Session, rules, day: date) -> dict:
     deepest: dict[int, int] = {}
     for event in events:
         deepest[event.paper_id] = max(deepest.get(event.paper_id, 0), depth(event.status))
-    detail = sum(d >= 3 for d in deepest.values())
-    total = sum(d >= 2 for d in deepest.values())
-    thorough = sum(d >= 4 for d in deepest.values())
-    goal_detail, goal_skim = rules.weekly_detail_goal, rules.weekly_skim_goal
-    counted_detail = min(detail, goal_detail)
-    counted_skim = min(total - counted_detail, goal_skim)
-    goal = goal_detail + goal_skim
-    fraction = (counted_detail + counted_skim) / goal if goal else 1.0
     xp = session.exec(
         select(func.coalesce(func.sum(XpEvent.points), 0)).where(
             XpEvent.at >= start, XpEvent.at < start + timedelta(weeks=1)
         )
     ).one()
+    return {"week_start": week_start(day), **quest_progress(deepest.values(), rules), "xp": xp}
+
+
+def quest_progress(depths, rules: GameRules) -> dict:
+    """Quest figures from the deepest level each paper reached within one week."""
+    depths = list(depths)
+    detail = sum(d >= 3 for d in depths)
+    total = sum(d >= 2 for d in depths)
+    thorough = sum(d >= 4 for d in depths)
+    goal_detail, goal_skim = rules.weekly_detail_goal, rules.weekly_skim_goal
+    counted_detail = min(detail, goal_detail)
+    counted_skim = min(total - counted_detail, goal_skim)
+    goal = goal_detail + goal_skim
+    fraction = (counted_detail + counted_skim) / goal if goal else 1.0
     return {
-        "week_start": week_start(day),
         "detail": detail,
         "total": total,
         "thorough": thorough,
@@ -159,7 +175,6 @@ def week_progress(session: Session, rules, day: date) -> dict:
         "goal_skim": goal_skim,
         "fraction": fraction,
         "done": fraction >= 1,
-        "xp": xp,
     }
 
 
@@ -183,27 +198,51 @@ def _count_kind(session: Session, kind: str) -> int:
 def stats(session: Session, today: date, rules=None) -> dict:
     """All statistics behind the dashboard and the badges."""
     rules = as_rules(rules)
-    papers = {p.id: p for p in session.exec(select(Paper)).all()}
-    readings = session.exec(select(Reading)).all()
-    events = session.exec(select(StatusEvent).order_by(StatusEvent.at)).all()
-    recommended = set(session.exec(select(Recommendation.paper_id)).all())
+    # only the papers you read: a library can hold tens of thousands of papers
+    read_papers = select(StatusEvent.paper_id).where(StatusEvent.status.in_(READ_STATUSES))
+    # plain columns instead of ORM objects: several times faster with thousands of rows
+    papers = {
+        p.id: p
+        for p in session.exec(
+            select(
+                Paper.id, Paper.topics, Paper.folders, Paper.pub_date, Paper.year, Paper.in_library
+            ).where(Paper.id.in_(read_papers))
+        ).all()
+    }
+    readings = session.exec(select(Reading.notes, Reading.rating, Reading.status)).all()
+    events = session.exec(
+        select(StatusEvent.paper_id, StatusEvent.status, StatusEvent.at).order_by(
+            StatusEvent.at, StatusEvent.id
+        )
+    ).all()
+    recommended = set(session.exec(select(Recommendation.paper_id).distinct()).all())
 
     deepest: dict[int, int] = {}
     first_read: dict[int, StatusEvent] = {}
     per_day: dict[date, set[int]] = {}
     per_week: dict[date, set[int]] = {}
-    night = early = weekend = 0
+    # deepest level per paper within each week (for the report-card grades)
+    week_depths: dict[date, dict[int, int]] = {}
+    # papers, not log entries: re-logging one paper at night must not earn a badge
+    night: set[int] = set()
+    early: set[int] = set()
+    weekend: set[int] = set()
     for event in events:
         level = depth(event.status)
         deepest[event.paper_id] = max(deepest.get(event.paper_id, 0), level)
+        in_week = week_depths.setdefault(week_start(event.at.date()), {})
+        in_week[event.paper_id] = max(in_week.get(event.paper_id, 0), level)
         if level < 2:
             continue
         first_read.setdefault(event.paper_id, event)
         per_day.setdefault(event.at.date(), set()).add(event.paper_id)
         per_week.setdefault(week_start(event.at.date()), set()).add(event.paper_id)
-        night += event.at.hour in NIGHT_HOURS
-        early += event.at.hour in EARLY_HOURS
-        weekend += event.at.weekday() >= 5
+        if event.at.hour in NIGHT_HOURS:
+            night.add(event.paper_id)
+        if event.at.hour in EARLY_HOURS:
+            early.add(event.paper_id)
+        if event.at.weekday() >= 5:
+            weekend.add(event.paper_id)
     read_ids = {pid for pid, d in deepest.items() if d >= 2}
 
     topics = set()
@@ -235,11 +274,15 @@ def stats(session: Session, today: date, rules=None) -> dict:
         for a, b in zip(weeks, weeks[1:], strict=False)
         if b - a >= timedelta(weeks=COMEBACK_WEEKS + 1)
     )
-    grades = Counter(grade(week_progress(session, rules, monday), True)[0] for monday in weeks)
+    grades = Counter(
+        grade(quest_progress(week_depths[monday].values(), rules), True)[0] for monday in weeks
+    )
     frogs = len(
         {
             e.paper_id
-            for e in session.exec(select(StatusEvent).where(StatusEvent.was_queue_top)).all()
+            for e in session.exec(
+                select(StatusEvent.paper_id, StatusEvent.status).where(StatusEvent.was_queue_top)
+            ).all()
             if depth(e.status) >= 2
         }
     )
@@ -268,9 +311,9 @@ def stats(session: Session, today: date, rules=None) -> dict:
         "inbox_zero": _count_kind(session, "inbox_zero"),
         "max_day": max((len(v) for v in per_day.values()), default=0),
         "max_week": max((len(v) for v in per_week.values()), default=0),
-        "night_reads": night,
-        "early_reads": early,
-        "weekend_reads": weekend,
+        "night_reads": len(night),
+        "early_reads": len(early),
+        "weekend_reads": len(weekend),
         "from_library": from_library,
         "from_recommendations": from_recs,
         "manual_read": manual,
@@ -432,10 +475,17 @@ def unlock_badges(
     return unlocked
 
 
-def badge_progress(session: Session, today: date, rules=None) -> list[tuple[Badge, int, bool]]:
-    """(badge, current value, unlocked) for every badge."""
+def badge_progress(
+    session: Session, today: date, rules=None, current: dict | None = None
+) -> list[tuple[Badge, int, bool]]:
+    """(badge, current value, unlocked) for every badge.
+
+    ``current`` is the result of ``stats`` when the caller already has it (one
+    ``stats`` call per page: it reads every reading event).
+    """
     rules = as_rules(rules)
-    current = stats(session, today, rules)
+    if current is None:
+        current = stats(session, today, rules)
     owned = set(session.exec(select(Achievement.code)).all())
     return [(b, min(current[b.stat], b.target), b.code in owned) for b in rules.badges()]
 
@@ -506,28 +556,61 @@ def weekly_summary(session: Session, rules, monday: date, today: date) -> dict:
     }
 
 
-def weekly_summaries(session: Session, rules, today: date, weeks: int = 12) -> list[dict]:
-    """Most recent week first."""
+def weekly_summaries(
+    session: Session, rules, today: date, weeks: int = 12, offset: int = 0
+) -> list[dict]:
+    """Most recent week first; ``offset`` skips that many recent weeks (paging)."""
     this_week = week_start(today)
     return [
-        weekly_summary(session, rules, this_week - timedelta(weeks=i), today) for i in range(weeks)
+        weekly_summary(session, rules, this_week - timedelta(weeks=i), today)
+        for i in range(offset, offset + weeks)
     ]
+
+
+def weeks_of_history(session: Session, today: date) -> int:
+    """Weeks from the first reading or XP event to this week (at least 1)."""
+    first = [
+        session.exec(select(func.min(StatusEvent.at))).one(),
+        session.exec(select(func.min(XpEvent.at))).one(),
+    ]
+    first = [at for at in first if at is not None]
+    if not first:
+        return 1
+    return max((week_start(today) - week_start(min(first).date())).days // 7 + 1, 1)
 
 
 def ledger(
     session: Session, kind: str | None = None, limit: int = 50, offset: int = 0
 ) -> tuple[list[dict], int]:
     """XP transactions, newest first, with the running balance after each one."""
-    events = session.exec(select(XpEvent).order_by(XpEvent.at, XpEvent.id)).all()
-    papers = {p.id: p for p in session.exec(select(Paper)).all()}
+    # running balances from plain columns; full events and papers only for the page shown
     balance, rows = 0, []
-    for event in events:
-        balance += event.points
-        rows.append({"event": event, "balance": balance, "paper": papers.get(event.paper_id)})
+    for event_id, points, event_kind in session.exec(
+        select(XpEvent.id, XpEvent.points, XpEvent.kind).order_by(XpEvent.at, XpEvent.id)
+    ):
+        balance += points
+        if not kind or event_kind == kind:
+            rows.append((event_id, balance))
     rows.reverse()
-    if kind:
-        rows = [r for r in rows if r["event"].kind == kind]
-    return rows[offset : offset + limit], len(rows)
+    shown = rows[offset : offset + limit]
+    events = {}
+    for chunk in _chunks([event_id for event_id, _ in shown]):
+        events.update({e.id: e for e in session.exec(select(XpEvent).where(XpEvent.id.in_(chunk)))})
+    paper_ids = {e.paper_id for e in events.values() if e.paper_id is not None}
+    papers = {}
+    for chunk in _chunks(sorted(paper_ids)):
+        papers.update({p.id: p for p in session.exec(select(Paper).where(Paper.id.in_(chunk)))})
+    page = [
+        {"event": events[event_id], "balance": bal, "paper": papers.get(events[event_id].paper_id)}
+        for event_id, bal in shown
+    ]
+    return page, len(rows)
+
+
+def _chunks(values: list, size: int = 500):
+    """Slices of ``values``: SQLite limits the number of parameters per query."""
+    for start in range(0, len(values), size):
+        yield values[start : start + size]
 
 
 def reading_calendar(session: Session, today: date, weeks: int = 26) -> list[list[dict]]:
@@ -562,21 +645,21 @@ def reading_calendar(session: Session, today: date, weeks: int = 26) -> list[lis
     return columns
 
 
-def personal_bests(session: Session, rules, today: date) -> dict:
-    """Best week, busiest week, longest streak and totals."""
+def personal_bests(session: Session, rules, today: date, current: dict | None = None) -> dict:
+    """Best week, busiest week, longest streak and totals (``current``: see badge_progress)."""
     rules = as_rules(rules)
-    events = session.exec(select(XpEvent)).all()
+    events = session.exec(select(XpEvent.at, XpEvent.points)).all()
     per_week: dict[date, int] = {}
     for event in events:
         monday = week_start(event.at.date())
         per_week[monday] = per_week.get(monday, 0) + event.points
     best_week = max(per_week.items(), key=lambda kv: kv[1], default=(None, 0))
     papers_per_week: dict[date, set[int]] = {}
-    for event in session.exec(select(StatusEvent)).all():
+    for event in session.exec(select(StatusEvent.paper_id, StatusEvent.status, StatusEvent.at)):
         if depth(event.status) >= 2:
             papers_per_week.setdefault(week_start(event.at.date()), set()).add(event.paper_id)
     busiest = max(papers_per_week.items(), key=lambda kv: len(kv[1]), default=(None, set()))
-    s = stats(session, today, rules)
+    s = current if current is not None else stats(session, today, rules)
     return {
         "best_week": best_week[0],
         "best_week_xp": best_week[1],
@@ -590,8 +673,8 @@ def personal_bests(session: Session, rules, today: date) -> dict:
     }
 
 
-def next_goals(session: Session, rules, today: date) -> list[str]:
-    """Short, concrete hints on what to do next."""
+def next_goals(session: Session, rules, today: date, current: dict | None = None) -> list[str]:
+    """Short, concrete hints on what to do next (``current``: see badge_progress)."""
     rules = as_rules(rules)
     hints = []
     progress = week_progress(session, rules, today)
@@ -611,13 +694,13 @@ def next_goals(session: Session, rules, today: date) -> list[str]:
     if level.next_floor:
         hints.append(f"{level.next_floor - xp} XP until {level.next_title}")
     weeks = reading_weeks(session)
-    current, _ = streaks(weeks, today)
-    if current and week_start(today) not in weeks:
-        hints.append(f"Read something this week to keep your {current}-week streak alive")
+    streak, _ = streaks(weeks, today)
+    if streak and week_start(today) not in weeks:
+        hints.append(f"Read something this week to keep your {streak}-week streak alive")
     closest = sorted(
         (
             (b, v)
-            for b, v, unlocked in badge_progress(session, today, rules)
+            for b, v, unlocked in badge_progress(session, today, rules, current)
             if not unlocked and v > 0
         ),
         key=lambda bv: (bv[0].target - bv[1]) / bv[0].target,

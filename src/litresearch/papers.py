@@ -8,14 +8,19 @@ from litresearch.sources.openalex import Work
 
 
 def upsert_work(session: Session, work: Work) -> Paper:
-    """Store an OpenAlex work, keyed by DOI.
+    """Store an OpenAlex work, matched by DOI, then by PMID (a paper without DOI).
 
     Library papers keep their Paperpile metadata; only the metrics are
     refreshed for them.
     """
     paper = session.exec(select(Paper).where(Paper.doi == work.doi)).first() if work.doi else None
+    if paper is None and work.pmid:
+        paper = session.exec(
+            select(Paper).where(Paper.pmid == work.pmid, Paper.doi.is_(None))
+        ).first()
     if paper is None:
         paper = Paper(title=work.title or "(untitled)", doi=work.doi, resolved_via="openalex")
+    paper.doi = paper.doi or work.doi
     if not paper.in_library:
         paper.title = work.title or paper.title
         paper.authors = list(work.authors)

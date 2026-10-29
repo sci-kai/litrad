@@ -90,14 +90,17 @@ def find_paper(session: Session, ref: str) -> Paper | None:
     if paper:
         return paper
     words = ref.lower().split()
+    # match on titles only: loading whole papers is slow for large libraries
     matches = [
-        p for p in session.exec(select(Paper)).all() if all(w in p.title.lower() for w in words)
+        (paper_id, title)
+        for paper_id, title in session.exec(select(Paper.id, Paper.title)).all()
+        if all(w in title.lower() for w in words)
     ]
     if len(matches) == 1:
-        return matches[0]
+        return session.get(Paper, matches[0][0])
     if not matches:
         raise ReadingError(f"Nothing matches '{ref}'. Use {REF_HELP}.")
-    listing = "; ".join(f"#{p.id} {p.title[:50]}" for p in matches[:5])
+    listing = "; ".join(f"#{paper_id} {title[:50]}" for paper_id, title in matches[:5])
     raise ReadingError(f"'{ref}' matches {len(matches)} papers, be more specific: {listing}")
 
 

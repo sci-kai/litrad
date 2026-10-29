@@ -205,29 +205,56 @@ def search_library(session: Session, query: SearchQuery) -> list[Paper]:
     def has_any(text: str, names: str) -> bool:
         return any(has_all(text, name) for name in _split(names)) if _split(names) else True
 
-    matches = []
-    for paper in session.exec(select(Paper)).all():
+    # only the searched columns are read for every paper (full papers with their
+    # abstracts were slow for large libraries); the matches are loaded afterwards
+    columns = (
+        Paper.id,
+        Paper.title,
+        Paper.authors,
+        Paper.bibtex_key,
+        Paper.doi,
+        Paper.pmid,
+        Paper.venue,
+        Paper.folders,
+        Paper.tags,
+        Paper.year,
+        Paper.pub_date,
+        Paper.pmcid,
+    )
+    if query.open_access:
+        rows = session.exec(select(*columns).where(Paper.pmcid.is_not(None)))
+    else:
+        rows = session.exec(select(*columns))
+    found = []
+    for row in rows.all():
+        authors = " ".join(row.authors or [])
         everything = " ".join(
             [
-                paper.title,
-                " ".join(paper.authors),
-                paper.bibtex_key or "",
-                paper.doi or "",
-                paper.pmid or "",
-                paper.venue or "",
-                " ".join(paper.folders),
-                " ".join(paper.tags),
+                row.title,
+                authors,
+                row.bibtex_key or "",
+                row.doi or "",
+                row.pmid or "",
+                row.venue or "",
+                " ".join(row.folders or []),
+                " ".join(row.tags or []),
             ]
         ).lower()
-        year = paper.year or (paper.pub_date.year if paper.pub_date else None)
+        year = row.year or (row.pub_date.year if row.pub_date else None)
         if (
             has_all(everything, query.keywords)
-            and has_all(paper.title.lower(), query.title)
-            and has_any(" ".join(paper.authors).lower(), query.author)
-            and has_any((paper.venue or "").lower(), query.journal)
+            and has_all(row.title.lower(), query.title)
+            and has_any(authors.lower(), query.author)
+            and has_any((row.venue or "").lower(), query.journal)
             and (not query.year_from or (year and year >= query.year_from))
             and (not query.year_to or (year and year <= query.year_to))
-            and (not query.open_access or paper.pmcid)
+            and (not query.open_access or row.pmcid)
         ):
-            matches.append(paper)
-    return matches
+            found.append(row.id)
+    papers = {}
+    for start in range(0, len(found), 500):
+        chunk = found[start : start + 500]
+        papers.update(
+            (p.id, p) for p in session.exec(select(Paper).where(Paper.id.in_(chunk))).all()
+        )
+    return [papers[paper_id] for paper_id in found]

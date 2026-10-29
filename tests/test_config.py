@@ -34,3 +34,16 @@ def test_old_detail_skim_keys_are_migrated():
         {"paths": {"bibtex": "x.bib"}, "selection": {"n_detail": 4, "n_skim": 4}}
     )
     assert capped.selection.n_recommendations == 5
+
+
+@pytest.mark.parametrize("value", [".inf", "-.inf", ".nan"])
+def test_infinite_numbers_rejected(tmp_path, value):
+    from litresearch.config import ConfigError
+
+    path = tmp_path / "config.yaml"
+    path.write_text(f"paths:\n  bibtex: x.bib\nbackup:\n  interval_hours: {value}\n")
+    with pytest.raises(ConfigError, match="finite"):
+        load_config(path)
+    path.write_text(f"paths:\n  bibtex: x.bib\nselection:\n  mmr_lambda: {value}\n")
+    with pytest.raises(ConfigError):
+        load_config(path)
