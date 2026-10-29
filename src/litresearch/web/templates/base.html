@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <linearGradient id="ringGradient" x1="0" y1="0" x2="1" y2="1">
@@ -22,26 +23,28 @@
 <div class="app">
   <aside class="sidebar">
     <div class="brand"><span class="logo">📡</span> litresearch</div>
-    <nav class="nav">
-      <a href="/" class="{{ 'active' if active == 'dashboard' }}"><span class="icon">🏠</span>Dashboard</a>
+    <nav class="nav" aria-label="Main">
+      <a href="/" class="{{ 'active' if active == 'dashboard' }}"{% if active == 'dashboard' %} aria-current="page"{% endif %}><span class="icon">🏠</span>Dashboard</a>
       <div class="group">Reading</div>
-      <a href="/queue" class="sub {{ 'active' if active == 'queue' }}"><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
-      <a href="/recommendations" class="sub {{ 'active' if active == 'recommendations' }}"><span class="icon">✨</span>Recommendations{% if header.reminder %}<span class="count" title="time for new recommendations">⏰</span>{% endif %}</a>
+      <a href="/queue" class="sub {{ 'active' if active == 'queue' }}"{% if active == 'queue' %} aria-current="page"{% endif %}><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
+      <a href="/recommendations" class="sub {{ 'active' if active == 'recommendations' }}"{% if active == 'recommendations' %} aria-current="page"{% endif %}><span class="icon">✨</span>Recommendations{% if header.reminder %}<span class="dot" title="time for new recommendations"><span class="sr-only">(time for new ones)</span></span>{% endif %}</a>
       <div class="group">Progress</div>
-      <a href="/progress" class="sub {{ 'active' if active == 'progress' }}"><span class="icon">🏆</span>Progress &amp; XP</a>
+      <a href="/progress" class="sub {{ 'active' if active == 'progress' }}"{% if active == 'progress' %} aria-current="page"{% endif %}><span class="icon">🏆</span>Progress &amp; XP</a>
       <div class="group">Library</div>
-      <a href="/library" class="sub {{ 'active' if active in ('libraries', 'library', 'import') }}"><span class="icon">🗂️</span>Libraries</a>
-      <a href="/search" class="sub {{ 'active' if active == 'search' }}"><span class="icon">🔍</span>Find &amp; add</a>
+      <a href="/library" class="sub {{ 'active' if active in ('libraries', 'library', 'import') }}"{% if active in ('libraries', 'library', 'import') %} aria-current="page"{% endif %}><span class="icon">🗂️</span>Libraries</a>
+      <a href="/search" class="sub {{ 'active' if active == 'search' }}"{% if active == 'search' %} aria-current="page"{% endif %}><span class="icon">🔍</span>Find &amp; add</a>
       <div class="group"></div>
-      <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="icon">⚙️</span>Settings</a>
-      <a href="/docs" class="{{ 'active' if active == 'docs' }}"><span class="icon">📖</span>Documentation</a>
+      <a href="/settings" class="{{ 'active' if active == 'settings' }}"{% if active == 'settings' %} aria-current="page"{% endif %}><span class="icon">⚙️</span>Settings</a>
+      <a href="/docs" class="{{ 'active' if active == 'docs' }}"{% if active == 'docs' %} aria-current="page"{% endif %}><span class="icon">📖</span>Documentation</a>
     </nav>
-    <div class="footer">v{{ version }} · keys: <code>n</code> next, <code>r</code> recs, <code>p</code> progress
-      <form method="post" action="/welcome/leave" style="margin-top:.5rem"><button class="small ghost">🔁 Switch profile</button></form>
+    <div class="footer">
+      <button type="button" class="small ghost" data-shortcuts title="Keyboard shortcuts (press ?)">⌨️ Shortcuts <kbd>?</kbd></button>
+      <form method="post" action="/welcome/leave"><button class="small ghost">🔁 Switch profile</button></form>
       {% if cfg.web.password_hash %}<form method="post" action="/logout"><button class="small ghost">🔒 Log out</button></form>{% endif %}
+      <div class="version">litresearch v{{ version }}</div>
     </div>
   </aside>
-  <main class="main">
+  <main class="main" id="main">
     <div class="topbar">
       <h1>{% block heading %}{% endblock %}</h1>
       <a class="player" href="/profile" title="Profile {{ profile.name if profile else '' }}: rules, save, compare, switch">
@@ -59,7 +62,16 @@
   </main>
 </div>
 <div class="toasts" aria-live="polite"></div>
-<div class="overlay" id="loading"><div class="modal"><div class="spinner"></div><h2>Working…</h2><p></p></div></div>
+<div class="overlay" id="loading"><div class="modal" role="alertdialog" aria-live="assertive" aria-label="Working"><div class="spinner"></div><h2>Working…</h2><p></p></div></div>
+<template id="shortcuts-help">
+  <dl class="shortcuts">
+    <dt><kbd>n</kbd></dt><dd>next paper (top of your queue)</dd>
+    <dt><kbd>r</kbd></dt><dd>recommendations</dd>
+    <dt><kbd>p</kbd></dt><dd>progress &amp; XP</dd>
+    <dt><kbd>?</kbd></dt><dd>this help</dd>
+    <dt><kbd>Esc</kbd></dt><dd>close a dialog</dd>
+  </dl>
+</template>
 {% if celebration %}<script id="celebration" type="application/json">{{ celebration | tojson }}</script>{% endif %}
 <script src="/static/app.js"></script>
 </body>

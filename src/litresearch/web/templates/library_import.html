@@ -21,8 +21,8 @@
 {% endif %}
 
 <form method="post" action="/library/import" enctype="multipart/form-data" class="card import-form" data-loading="Checking and importing (about a minute)…">
-  <h2>1 · The file</h2>
-  <input type="file" name="file" accept=".bib,.bibtex,.ris,.json,.txt" required>
+  <h2><label for="import-file">1 · The file</label></h2>
+  <input type="file" id="import-file" name="file" accept=".bib,.bibtex,.ris,.json,.txt" required>
   <p class="muted" style="margin:.4rem 0 0">BibTeX (<code>.bib</code>), RIS (<code>.ris</code>) or CSL-JSON (<code>.json</code>), exported from Paperpile, Zotero, Mendeley, EndNote, JabRef or Citavi.
     Tested with Paperpile's BibTeX export. <a href="{{ requirements }}">What the export must contain →</a></p>
 

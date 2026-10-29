@@ -6,26 +6,27 @@
   <div class="card stat"><div class="value">{{ total }}</div><div class="label">transactions{{ " (filtered)" if kind }}</div></div>
 </div>
 
-<div class="grid" style="grid-template-columns: 260px 1fr; align-items: start; margin-top:1rem">
-  <div class="card">
+<div class="grid ledger-layout">
+  <nav class="card kind-list" aria-label="Filter the ledger by kind">
     <h3>By kind</h3>
-    <a class="row {{ 'active' if not kind }}" href="/progress#ledger" style="flex-wrap: nowrap"><span style="flex:1 1 auto">All</span></a>
+    <a class="{{ 'active' if not kind }}" href="/progress#ledger"{% if not kind %} aria-current="true"{% endif %}><span class="grow">All</span></a>
     {% for k, (count, points) in totals.items() %}
-    <a class="row" href="/progress?kind={{ k }}#ledger" style="flex-wrap: nowrap; margin:.2rem 0; {{ 'font-weight:700' if k == kind }}">
-      <span>{{ kind_icons.get(k, "✨") }}</span><span style="flex:1 1 auto">{{ kind_labels.get(k, k) }} <small class="muted">×{{ count }}</small></span>
+    <a class="{{ 'active' if k == kind }}" href="/progress?{{ {'kind': k} | urlencode }}#ledger"{% if k == kind %} aria-current="true"{% endif %}>
+      <span>{{ kind_icons.get(k, "✨") }}</span><span class="grow">{{ kind_labels.get(k, k) }} <small class="muted">×{{ count }}</small></span>
       <span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span>
     </a>
     {% endfor %}
     <p style="margin-top:1rem"><a class="button small" href="/ledger.tsv">⬇ Export as TSV</a></p>
-  </div>
+  </nav>
   <div class="card">
+    <div class="table-wrap">
     <table>
-      <thead><tr><th>When</th><th></th><th>Reason</th><th class="num">Points</th><th class="num">Balance</th></tr></thead>
+      <thead><tr><th>When</th><th><span class="sr-only">Kind</span></th><th>Reason</th><th class="num">Points</th><th class="num">Balance</th></tr></thead>
       <tbody>
       {% for row in rows %}
       <tr>
         <td style="white-space: nowrap">{{ row.event.at.isoformat() }}</td>
-        <td>{{ kind_icons.get(row.event.kind, "✨") }}</td>
+        <td title="{{ kind_labels.get(row.event.kind, row.event.kind) }}">{{ kind_icons.get(row.event.kind, "✨") }}</td>
         <td>{{ row.event.reason }}{% if row.paper %}<br><a href="/papers/{{ row.paper.id }}"><small>{{ row.paper.title | truncate(70) }}</small></a>{% endif %}</td>
         <td class="num {{ 'pos' if row.event.points >= 0 else 'neg' }}">{{ "%+d" | format(row.event.points) }}</td>
         <td class="num">{{ row.balance }}</td>
@@ -35,12 +36,14 @@
       {% endfor %}
       </tbody>
     </table>
-    {% if pages > 1 %}
-    <div class="row" style="margin-top:.8rem; justify-content: center">
-      {% if page > 1 %}<a class="button small" href="/progress?kind={{ kind }}&page={{ page - 1 }}#ledger">← newer</a>{% endif %}
-      <span class="muted">page {{ page }}/{{ pages }}</span>
-      {% if page < pages %}<a class="button small" href="/progress?kind={{ kind }}&page={{ page + 1 }}#ledger">older →</a>{% endif %}
     </div>
+    {% if pages > 1 %}
+    {% set base = "/progress?" ~ ({'kind': kind} | urlencode) ~ "&" if kind else "/progress?" %}
+    <nav class="pager" aria-label="Ledger pages">
+      {% if page > 1 %}<a class="button small" href="{{ base }}page={{ page - 1 }}#ledger">← newer</a>{% endif %}
+      <span class="muted">page {{ page }}/{{ pages }}</span>
+      {% if page < pages %}<a class="button small" href="{{ base }}page={{ page + 1 }}#ledger">older →</a>{% endif %}
+    </nav>
     {% endif %}
   </div>
 </div>

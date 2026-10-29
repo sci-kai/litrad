@@ -41,8 +41,8 @@
     <h2>📦 Use your existing library for a profile</h2>
     <p>Found {{ legacy.library }} library papers and {{ legacy.readings }} reading entries from before profiles existed (<code>{{ legacy.path }}</code>). Turn them into a profile; nothing needs to be imported again, and the original file stays as it is.</p>
     <form method="post" action="/welcome/adopt" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
-      <div class="field" style="margin:0"><label>Profile name</label><input type="text" name="name" value="{{ legacy.name or '' }}" placeholder="e.g. Kai" maxlength="80" required></div>
-      {{ rules_fields(rule_groups, form_rules, levels_text) }}
+      <div class="field" style="margin:0"><label for="adopt-name">Profile name</label><input type="text" id="adopt-name" name="name" value="{{ legacy.name or '' }}" placeholder="e.g. Kai" maxlength="80" required></div>
+      {{ rules_fields(rule_groups, form_rules, levels_text, "adopt") }}
       <div><button class="primary">📦 Create profile from existing data</button></div>
     </form>
   </section>
@@ -53,8 +53,8 @@
       <h2>✨ Create a new profile</h2>
       <p class="muted">A fresh start: own library, topics, recommendations and progress. The game rules are fixed when the profile is created and cannot be changed later, which keeps the score honest.</p>
       <form method="post" action="/welcome/create" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
-        <div class="field" style="margin:0"><label>Profile name</label><input type="text" name="name" placeholder="e.g. Kai" maxlength="80" required></div>
-        {{ rules_fields(rule_groups, form_rules, levels_text) }}
+        <div class="field" style="margin:0"><label for="create-name">Profile name</label><input type="text" id="create-name" name="name" placeholder="e.g. Kai" maxlength="80" required></div>
+        {{ rules_fields(rule_groups, form_rules, levels_text, "create") }}
         <div><button class="primary">🔒 Create profile</button></div>
       </form>
     </section>
@@ -63,13 +63,15 @@
       <p class="muted">From a backup or a file someone gave you. It becomes a new profile with its own locked rules; files edited outside litresearch are refused.</p>
       <form method="post" action="/welcome/load" enctype="multipart/form-data" class="grid" style="gap:.6rem">
         {% if saves %}
-        <select name="saved"><option value="">Choose a saved file…</option>
+        <div class="field" style="margin:0"><label for="load-saved">Saved file</label>
+        <select id="load-saved" name="saved"><option value="">Choose a saved file…</option>
           {% for path, shown in saves %}<option value="{{ path.name }}">{{ shown }}</option>{% endfor %}
-        </select>
-        <small class="muted">…or upload one:</small>
+        </select></div>
         {% endif %}
-        <input type="file" name="file" accept=".json,application/json">
-        <input type="text" name="name" placeholder="Name (optional; default: the saved name)" maxlength="80">
+        <div class="field" style="margin:0"><label for="load-file">{{ "…or upload a file" if saves else "Profile file (.json)" }}</label>
+        <input type="file" id="load-file" name="file" accept=".json,application/json"></div>
+        <div class="field" style="margin:0"><label for="load-name">Name <small class="muted">(optional; default: the saved name)</small></label>
+        <input type="text" id="load-name" name="name" maxlength="80"></div>
         <div><button>📂 Load profile</button></div>
       </form>
     </section>

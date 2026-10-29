@@ -123,6 +123,31 @@ def resolve(spec: str | None, port: int, available: list[Interface] | None = Non
     )
 
 
+def local_names() -> frozenset[str]:
+    """Names under which this computer is reached without a DNS server of its own."""
+    name = socket.gethostname().lower()
+    return frozenset({"localhost", name, f"{name}.local"})
+
+
+def is_trusted_host(host: str, names: frozenset[str]) -> bool:
+    """True if a request's ``Host`` header is an IP address or one of ``names``.
+
+    Guards a server without password against DNS rebinding: a malicious website
+    can point its own domain at 127.0.0.1, but the browser then still sends
+    that domain as ``Host``.
+    """
+    host = host.strip().lower()
+    if host.startswith("["):  # [IPv6]:port
+        name = host[1 : host.find("]")]
+    else:
+        name = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+    try:
+        ipaddress.ip_address(name)
+        return True
+    except ValueError:
+        return name.rstrip(".") in names
+
+
 def describe_available(available: list[Interface] | None = None) -> str:
     available = interfaces() if available is None else available
     listing = ", ".join(f"{i.name} ({i.address})" for i in available) or "none found"

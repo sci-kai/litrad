@@ -38,16 +38,18 @@
     </div>
     <div class="mover">
       {% if item.position > 1 %}
-      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="1"><button class="small ghost" title="Make it the next paper">⤒</button></form>
-      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="{{ item.position - 1 }}"><button class="small ghost" title="Move up">▲</button></form>
+      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="1"><button class="small ghost" title="Make it the next paper" aria-label="Make it the next paper">⤒</button></form>
+      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="{{ item.position - 1 }}"><button class="small ghost" title="Move up" aria-label="Move up">▲</button></form>
       {% endif %}
       {% if not loop.last %}
-      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="{{ item.position + 1 }}"><button class="small ghost" title="Move down">▼</button></form>
+      <form method="post" action="/queue/{{ paper.id }}/move"><input type="hidden" name="position" value="{{ item.position + 1 }}"><button class="small ghost" title="Move down" aria-label="Move down">▼</button></form>
       {% endif %}
     </div>
   </div>
   {% else %}
-  <div class="card"><h2>📭 Inbox zero!</h2><p>Your queue is empty. Pick from <a href="/recommendations">your recommendations</a> or add a paper below.</p></div>
+  <div class="card empty"><span class="big" aria-hidden="true">📭</span><h2 style="justify-content:center">Inbox zero!</h2>
+    <p>Your queue is empty. Pick from your recommendations or add a paper below.</p>
+    <div class="row"><a class="button primary" href="/recommendations">✨ See recommendations</a><a class="button" href="/search">🔍 Find papers</a></div></div>
   {% endfor %}
 
   <div class="card">
@@ -64,8 +66,10 @@
       <details>
         <summary>…or add by title only (no DOI, e.g. a preprint from a colleague)</summary>
         <div class="grid two" style="margin-top:.5rem">
-          <input type="text" name="title" placeholder="Title">
-          <input type="text" name="url" placeholder="Link (optional)">
+          <div class="field" style="margin:0"><label for="add-title">Title</label>
+            <input type="text" id="add-title" name="title" placeholder="e.g. A preprint on clonal haematopoiesis"></div>
+          <div class="field" style="margin:0"><label for="add-url">Link <small class="muted">(optional)</small></label>
+            <input type="url" id="add-url" name="url" placeholder="https://…"></div>
         </div>
       </details>
       <label class="row"><input type="checkbox" name="top" value="true" style="width:auto"> Read it next (put it at q1)</label>

@@ -1,0 +1,17 @@
+{% extends "base.html" if header is defined else "_bare.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card error-card">
+  <span class="big" aria-hidden="true">{{ icon }}</span>
+  <h2 style="justify-content:center">{{ title }}</h2>
+  <p>{{ message }}</p>
+  {% for problem in problems %}<p class="muted" style="margin:.2rem 0">{{ problem }}</p>{% endfor %}
+  <div class="row" style="margin-top:1rem">
+    <a class="button primary" href="/">🏠 Dashboard</a>
+    <a class="button" href="javascript:history.back()">← Back</a>
+    <a class="button ghost" href="/docs">📖 Documentation</a>
+  </div>
+  <p class="muted" style="margin-top:1rem"><small>Error {{ status }} · <code>{{ path }}</code></small></p>
+</div>
+{% endblock %}

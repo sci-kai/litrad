@@ -120,6 +120,13 @@ def serve(*args):
     return runner.invoke(cli.app, ["serve", *args])
 
 
+def test_serve_guards_against_dns_rebinding(tmp_path, server, monkeypatch):
+    created = {}
+    monkeypatch.setattr("litresearch.web.app.create_app", lambda path, **kw: created.update(kw))
+    assert serve("-c", write_config(tmp_path)).exit_code == 0
+    assert "localhost" in created["trusted_names"]
+
+
 def test_default_is_local_and_never_opens_a_browser(tmp_path, server, plain_console):
     result = serve("-c", write_config(tmp_path))
     assert result.exit_code == 0, result.stdout

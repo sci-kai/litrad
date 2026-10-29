@@ -7,9 +7,15 @@
   <form method="post" action="/profile/compare" enctype="multipart/form-data" class="grid" style="gap:.6rem">
     <p class="muted" style="margin:0">Compare your current profile with saved ones: your own archives or files from colleagues. Nothing is loaded or changed.</p>
     {% if saves %}
-    <div class="row">{% for name in saves %}<label class="chip"><input type="checkbox" name="saved" value="{{ name }}" style="width:auto"> {{ name }}</label>{% endfor %}</div>
+    <fieldset class="field" style="margin:0; border:0; padding:0">
+      <legend style="font-weight:600; font-size:.9rem; margin-bottom:.25rem">Saved profiles <small class="muted">{{ saves | length }}, newest first</small></legend>
+      <div class="save-list">
+        {% for name, saved_at in saves %}<label><input type="checkbox" name="saved" value="{{ name }}"> <span>{{ name }}</span> <small class="muted">{{ saved_at.isoformat(sep=" ", timespec="minutes") }}</small></label>{% endfor %}
+      </div>
+    </fieldset>
     {% endif %}
-    <input type="file" name="file" accept=".json,application/json" multiple>
+    <div class="field" style="margin:0"><label for="compare-file">{{ "…or upload files" if saves else "Profile files (.json)" }}</label>
+    <input type="file" id="compare-file" name="file" accept=".json,application/json" multiple></div>
     <div><button class="primary">⚖️ Compare</button></div>
   </form>
 </div>

@@ -23,21 +23,22 @@
 {% macro read_form(paper, next_url, id) -%}
 <form class="read-form" method="post" action="/papers/{{ paper.id }}/read" id="{{ id }}" hidden>
   <input type="hidden" name="next_url" value="{{ next_url }}">
-  <div class="levels">
+  <div class="levels" role="radiogroup" aria-label="How deeply did you read it?">
     {% for level in ["abstract", "skimmed", "read", "thorough"] %}
     <label><input type="radio" name="level" value="{{ level }}" {{ "checked" if level == "read" }}>
       <span>{{ status_icons[level] }} {{ level }} <span class="xp">+{{ base_xp[level] }}</span></span></label>
     {% endfor %}
   </div>
   <div class="row">
-    <span class="stars" title="Rating">
+    <span class="stars" role="radiogroup" aria-label="Rating (optional)">
       {% for star in [5, 4, 3, 2, 1] %}
-      <input type="radio" name="rating" id="{{ id }}-s{{ star }}" value="{{ star }}"><label for="{{ id }}-s{{ star }}">★</label>
+      <input type="radio" name="rating" id="{{ id }}-s{{ star }}" value="{{ star }}" aria-label="{{ star }} star{{ 's' if star > 1 }}"><label for="{{ id }}-s{{ star }}" title="{{ star }} star{{ 's' if star > 1 }}" aria-hidden="true">★</label>
       {% endfor %}
     </span>
     <small>optional rating</small>
   </div>
-  <textarea name="note" placeholder="Notes: key findings, methods to reuse, open questions… (140+ characters earn ✍️ +10 XP)"></textarea>
+  <label class="sr-only" for="{{ id }}-note">Notes</label>
+  <textarea id="{{ id }}-note" name="note" placeholder="Notes: key findings, methods to reuse, open questions… (140+ characters earn ✍️ +10 XP)"></textarea>
   <div><button class="primary" type="submit">✔ Log reading</button></div>
 </form>
 {%- endmacro %}
@@ -150,7 +151,7 @@
 </details>
 {%- endmacro %}
 
-{% macro rules_fields(rule_groups, form_rules, levels_text) -%}
+{% macro rules_fields(rule_groups, form_rules, levels_text, prefix="rules") -%}
 <details class="rules-box">
   <summary><b>⚙️ Game rules</b> <small class="muted">rewards, penalty, levels, badges · locked once the profile exists · defaults are fine to start</small></summary>
   {% for title, intro, fields in rule_groups %}
@@ -159,22 +160,22 @@
   <div class="grid two">
     {% for name, label, kind, minimum, maximum, step in fields %}
     <div class="field">
-      <label>{{ label }}</label>
-      <input type="number" name="{{ name }}" value="{{ form_rules[name] }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}" required>
+      <label for="{{ prefix }}-{{ name }}">{{ label }}</label>
+      <input type="number" id="{{ prefix }}-{{ name }}" name="{{ name }}" value="{{ form_rules[name] }}" min="{{ minimum }}" max="{{ maximum }}" step="{{ step }}" required>
     </div>
     {% endfor %}
   </div>
   {% endfor %}
   <h3 style="margin-top:1rem">🪜 Level ladder ({{ form_rules.levels | length }} levels)</h3>
-  <p class="muted" style="margin:0 0 .4rem">One level per line: <code>XP | title | icon</code>.</p>
-  <textarea name="levels" style="min-height:14rem; font-family: ui-monospace, monospace">{{ levels_text }}</textarea>
+  <p class="muted" style="margin:0 0 .4rem" id="{{ prefix }}-levels-help">One level per line: <code>XP | title | icon</code>.</p>
+  <textarea name="levels" class="mono" style="min-height:14rem" aria-label="Level ladder" aria-describedby="{{ prefix }}-levels-help">{{ levels_text }}</textarea>
   <h3 style="margin-top:1rem">🏅 Badge targets ({{ form_rules.badges() | length }} badges)</h3>
   {% for group, members in form_rules.badges() | groupby("group") %}
   <h4 style="margin:.6rem 0 .3rem">{{ group }}</h4>
   <div class="grid three">
     {% for badge in members %}
-    <div class="field"><label>{{ badge.icon }} {{ badge.name }}</label>
-      <input type="number" name="badge_{{ badge.code }}" value="{{ badge.target }}" min="1" step="1">
+    <div class="field"><label for="{{ prefix }}-badge-{{ badge.code }}">{{ badge.icon }} {{ badge.name }}</label>
+      <input type="number" id="{{ prefix }}-badge-{{ badge.code }}" name="badge_{{ badge.code }}" value="{{ badge.target }}" min="1" step="1">
       <span class="help">{{ badge.description }}</span></div>
     {% endfor %}
   </div>
@@ -182,35 +183,31 @@
 </details>
 {%- endmacro %}
 
+{# one topic of the topic editor: three fields with visible labels #}
+{% macro topic_row(name, weight, queries, example="") -%}
+      <div class="topic-row">
+        <label class="topic-field"><span>Topic name</span>
+          <input type="text" name="topic_name" value="{{ name }}" placeholder="{{ example or 'e.g. clonal evolution' }}"></label>
+        <label class="topic-field"><span>Weight</span>
+          <input type="number" name="topic_weight" value="{{ weight }}" step="0.05" min="0"></label>
+        <label class="topic-field topic-queries"><span>Search queries <small>one per line</small></span>
+          <textarea name="topic_queries" placeholder="e.g. clonal evolution cancer">{{ queries }}</textarea></label>
+        <button type="button" class="small ghost danger" data-remove-topic aria-label="Remove this topic" title="Remove this topic">✖</button>
+      </div>
+{%- endmacro %}
+
 {# topics and excluded terms; the form fields are read by settings.parse_topics #}
 {% macro topics_editor(cfg) %}
   <div class="topics-editor">
     <p class="muted">Each query runs two OpenAlex searches per batch (fresh and landmark papers). Papers found by a topic get a relevance bonus of weight ÷ highest weight.</p>
-    <div class="topic-list grid" style="gap:.6rem">
+    <div class="topic-list">
       {% for topic in cfg.topics %}
-      <div class="topic-row">
-        <input type="text" name="topic_name" value="{{ topic.name }}" placeholder="name">
-        <input type="number" name="topic_weight" value="{{ topic.weight }}" step="0.05" min="0" title="weight">
-        <textarea name="topic_queries" placeholder="one search query per line">{{ topic.queries | join("\n") }}</textarea>
-        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
-      </div>
+      {{ topic_row(topic.name, topic.weight, topic.queries | join("\n")) }}
       {% else %}
-      <div class="topic-row">
-        <input type="text" name="topic_name" placeholder="name, e.g. tumour evolution">
-        <input type="number" name="topic_weight" value="1.0" step="0.05" min="0" title="weight">
-        <textarea name="topic_queries" placeholder="one search query per line"></textarea>
-        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
-      </div>
+      {{ topic_row("", 1.0, "", "e.g. tumour evolution") }}
       {% endfor %}
     </div>
-    <template>
-      <div class="topic-row">
-        <input type="text" name="topic_name" placeholder="name">
-        <input type="number" name="topic_weight" value="1.0" step="0.05" min="0" title="weight">
-        <textarea name="topic_queries" placeholder="one search query per line"></textarea>
-        <button type="button" class="small ghost danger" data-remove-topic>✖</button>
-      </div>
-    </template>
+    <template>{{ topic_row("", 1.0, "") }}</template>
     <p><button type="button" class="small" data-add-topic>➕ Add topic</button></p>
     <div class="field">
       <label>Excluded terms

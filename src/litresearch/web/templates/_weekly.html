@@ -1,35 +1,38 @@
 {# weekly report cards; needs `summaries` #}
 <div class="grid">
   {% for w in summaries %}
-  <div class="card">
-    <div class="row" style="justify-content: space-between; align-items: center">
-      <div class="row">
-        <span class="grade {{ w.grade }}">{{ w.grade }}</span>
+  {% set empty = not w.papers and not w.xp_by_kind %}
+  <div class="card week-card {{ 'rest' if empty and not w.current }}">
+    <div class="week-head">
+      <div class="week-title">
+        <span class="grade {{ w.grade }}" aria-label="grade {{ w.grade }}">{{ w.grade }}</span>
         <div>
           <b>Week of {{ w.week_start.isoformat() }}</b> {% if w.current %}<span class="chip queued">this week</span>{% endif %}<br>
           <small class="muted">{{ w.comment }}</small>
         </div>
       </div>
-      <div class="row">
-        <div class="stat" style="padding:0 .6rem"><div class="value" style="font-size:1.3rem">{{ "%+d" | format(w.xp) if w.xp else 0 }}</div><div class="label">XP</div></div>
-        <div class="stat" style="padding:0 .6rem"><div class="value" style="font-size:1.3rem">{{ w.progress.total }}</div><div class="label">papers ≥ skimmed</div></div>
-        <div class="stat" style="padding:0 .6rem"><div class="value" style="font-size:1.3rem">{{ w.progress.detail }}</div><div class="label">deep reads</div></div>
+      {% if not empty or w.current %}
+      <div class="week-figures">
+        <div class="stat"><div class="value {{ 'neg' if w.xp < 0 }}">{{ "%+d" | format(w.xp) if w.xp else 0 }}</div><div class="label">XP</div></div>
+        <div class="stat"><div class="value">{{ w.progress.total }}</div><div class="label">papers ≥ skimmed</div></div>
+        <div class="stat"><div class="value">{{ w.progress.detail }}</div><div class="label">deep reads</div></div>
       </div>
+      {% endif %}
     </div>
-    {% if w.papers or w.xp_by_kind %}
-    <div class="grid two" style="margin-top:.7rem">
+    {% if not empty %}
+    <div class="grid two week-body">
       <div>
         <h3>Papers</h3>
         {% for e in w.papers %}
-        <div class="row" style="flex-wrap: nowrap; font-size:.88rem"><span>{{ status_icons[e.status.value] }}</span><a style="flex:1 1 auto" href="/papers/{{ e.paper.id }}">{{ e.paper.title | truncate(70) }}</a><small class="muted">{{ e.status.value }}</small></div>
+        <div class="list-row compact"><span>{{ status_icons[e.status.value] }}</span><a href="/papers/{{ e.paper.id }}">{{ e.paper.title | truncate(70) }}</a><small class="muted">{{ e.status.value }}</small></div>
         {% else %}<p class="muted">none</p>{% endfor %}
       </div>
       <div>
         <h3>Points</h3>
         {% for kind, points in w.xp_by_kind.items() %}
-        <div class="row" style="flex-wrap: nowrap; font-size:.88rem"><span>{{ kind_icons.get(kind, "✨") }}</span><span style="flex:1 1 auto">{{ kind_labels.get(kind, kind) }}</span><span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span></div>
+        <div class="list-row compact"><span>{{ kind_icons.get(kind, "✨") }}</span><span class="grow">{{ kind_labels.get(kind, kind) }}</span><span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span></div>
         {% endfor %}
-        {% for b in w.badges %}<div class="row" style="font-size:.88rem">🏅 Badge unlocked: <b>{{ b.name }}</b></div>{% endfor %}
+        {% for b in w.badges %}<div class="list-row compact">🏅 Badge unlocked: <b>{{ b.name }}</b></div>{% endfor %}
       </div>
     </div>
     {% endif %}

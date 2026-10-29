@@ -36,9 +36,15 @@
     <div class="row">
       {% if batches | length > 1 %}
       <form method="get" class="row">
-        <select name="batch" onchange="this.form.submit()" aria-label="earlier recommendations">
-          {% for b in batches %}<option value="{{ b.id }}" {{ "selected" if batch and b.id == batch.id }}>{{ b.created_at.date().isoformat() }} (#{{ b.id }})</option>{% endfor %}
+        <label class="sr-only" for="batch-pick">Earlier recommendation sets</label>
+        <select id="batch-pick" name="batch" onchange="this.form.submit()">
+          {% for month, members in batch_groups %}
+          <optgroup label="{{ month }}">
+            {% for b in members %}<option value="{{ b.id }}" {{ "selected" if batch and b.id == batch.id }}>{{ b.created_at.date().isoformat() }} {{ b.created_at.strftime("%H:%M") }} (#{{ b.id }})</option>{% endfor %}
+          </optgroup>
+          {% endfor %}
         </select>
+        <noscript><button class="small">Show</button></noscript>
       </form>
       {% endif %}
       <form method="post" action="/recommendations/build" data-loading="{{ loading }}">
@@ -54,7 +60,7 @@
 
 {% if queue_full %}<div class="notice warn">📚 Your queue is full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}). Read or drop a paper before picking new ones.</div>{% endif %}
 
-<div class="grid" style="grid-template-columns: 1fr 300px; align-items: start">
+<div class="side-layout">
   <div class="grid">
     {% if finished %}
     <div class="card finished-set">
@@ -65,7 +71,7 @@
         <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get new recommendations</button></form>
         <a class="button ghost" href="/recommendations?batch={{ batch.id }}">Show this set again</a>
       </div>
-      <p class="muted" style="margin:.6rem 0 0">Earlier sets stay available in the drop-down menu above.</p>
+      <p class="muted" style="margin:.6rem 0 0">Earlier sets stay available in the menu above, grouped by month.</p>
     </div>
     {% else %}
     {% if recs %}<p class="muted" style="margin:0">Ranked by score. How deeply you read is your choice: abstract +{{ base_xp["abstract"] }}, skimmed +{{ base_xp["skimmed"] }}, read +{{ base_xp["read"] }}, thorough +{{ base_xp["thorough"] }} XP.</p>{% endif %}
@@ -81,7 +87,6 @@
           <span class="chip {{ rec.breakdown.kind }}">{{ "🆕 fresh" if rec.breakdown.kind == "fresh" else "🏛️ landmark" }}</span>
           {% for t in rec.breakdown.topics %}<span class="chip">🏷️ {{ t }}</span>{% endfor %}
           {% if "s2-recs" in rec.breakdown.sources %}<span class="chip">🧲 similar to your library</span>{% endif %}
-          {% if paper.in_library %}<span class="chip">📁 in your library</span>{% endif %}
           {% if rec_status.get(paper.id) %}<span class="chip queued">{{ "📚 on your queue" if rec_status[paper.id] == "queued" else status_icons.get(rec_status[paper.id], "") ~ " " ~ rec_status[paper.id] }}</span>{% endif %}
         </div>
         {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
@@ -108,11 +113,11 @@
     {% endfor %}
     {% endif %}
     {% if batch and not recs %}<div class="card">No eligible papers this time. Check <a href="?topics=1#topics">your topics</a>.</div>{% endif %}
-    {% if not batch %}<div class="card"><h2>✨ Ready when you are</h2><p>Get your first list: up to {{ cfg.selection.n_recommendations }} papers, ranked by score. Then pick the ones you want to read for your queue.</p>
+    {% if not batch %}<div class="card empty"><span class="big" aria-hidden="true">✨</span><h2 style="justify-content:center">Ready when you are</h2><p>Get your first list: up to {{ cfg.selection.n_recommendations }} papers, ranked by score. Then pick the ones you want to read for your queue.</p>
       <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get recommendations</button></form></div>{% endif %}
   </div>
 
-  <div class="grid" style="position: sticky; top: 1rem">
+  <div class="grid side">
     <div class="card">
       <h2>🔬 How this list was made</h2>
       {% if batch and batch.funnel %}{{ funnel_view(batch.funnel) }}

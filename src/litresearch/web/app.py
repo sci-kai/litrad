@@ -9,7 +9,9 @@ How a request flows:
    Every route then works on that profile: ``current_cfg()`` merges
    ``config.yaml`` with the profile's settings.yaml, ``open_session()`` opens
    the profile's database.
-3. ``same_origin_only`` rejects POST requests from other websites.
+3. ``same_origin_only`` rejects POST requests from other websites;
+   ``trusted_host_only`` (without password) rejects requests for other host
+   names (DNS rebinding).
 4. Pages are rendered with ``render()``, which adds the header (level, XP,
    streak, queue size, recommendation reminder). Actions post a form and
    redirect back (post/redirect/get); rewards travel as a short-lived token
@@ -29,15 +31,23 @@ import secrets
 import shutil
 import tempfile
 from collections import OrderedDict
-from datetime import date
+from datetime import date, datetime
+from itertools import groupby
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import case, func
 from sqlmodel import Session, select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from litresearch import __version__, export, libraries, profiles
 from litresearch.backup import (
@@ -50,12 +60,14 @@ from litresearch.backup import (
     saved_files,
     slug,
     summarize,
+    summarize_session,
 )
 from litresearch.config import load_config
 from litresearch.db import (
     Category,
     IngestRun,
     Library,
+    LibraryPaper,
     Paper,
     QueueItem,
     Reading,
@@ -75,6 +87,7 @@ from litresearch.game import (
     ledger,
     level_for,
     next_goals,
+    next_read_streak,
     personal_bests,
     queue_top_waiting_days,
     reading_calendar,
@@ -83,6 +96,7 @@ from litresearch.game import (
     streak_multiplier,
     week_progress,
     weekly_summaries,
+    weeks_of_history,
 )
 from litresearch.ingest.check import FIELDS as BIB_FIELDS
 from litresearch.ingest.check import Finding, check_file
@@ -123,10 +137,13 @@ from litresearch.web.auth import (
     verify_password,
 )
 from litresearch.web.docs import DocsCache
+from litresearch.web.network import is_trusted_host
 from litresearch.web.settings import (
     GROUPS,
     RULE_GROUPS,
     SettingsError,
+    describe_problem,
+    friendly_error,
     levels_text,
     parse_form,
     parse_rules_form,
@@ -143,6 +160,8 @@ QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
 MAX_UPLOAD = 50 * 2**20  # bytes
 LIBRARY_PAGE = 50
+MAX_WEEKS = 104  # weekly reports on the dashboard: how far back they go
+WEEKS_PER_PAGE = 4
 STALE_LIBRARY_DAYS = 30
 
 KIND_ICONS = {
@@ -219,8 +238,13 @@ def award_payload(award: Award | None, message: str, session: Session, kind="suc
     return payload
 
 
-def create_app(config_path: Path) -> FastAPI:
-    """Build the FastAPI app for the config file at ``config_path``."""
+def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -> FastAPI:
+    """Build the FastAPI app for the config file at ``config_path``.
+
+    With ``trusted_names`` (``litresearch serve`` passes them), a server without
+    password only answers requests addressed to an IP address or one of these
+    names.
+    """
     config_path = Path(config_path)
     app = FastAPI(title="litresearch", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -304,11 +328,32 @@ def create_app(config_path: Path) -> FastAPI:
             CURRENT_PROFILE.reset(token)
 
     @app.middleware("http")
+    async def limit_body_size(request: Request, call_next):
+        """Refuse huge uploads before they are spooled to the (small) temp folder."""
+        length = request.headers.get("content-length") or "0"
+        if not length.isdigit() or int(length) > MAX_UPLOAD + 2**20:
+            return PlainTextResponse(
+                f"Request too large (at most {MAX_UPLOAD // 2**20} MB)", status_code=413
+            )
+        return await call_next(request)
+
+    @app.middleware("http")
     async def same_origin_only(request: Request, call_next):
         if request.method == "POST":
             origin = request.headers.get("origin") or request.headers.get("referer")
             if origin and urlsplit(origin).netloc != request.url.netloc:
                 return PlainTextResponse("Cross-origin request rejected", status_code=403)
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def trusted_host_only(request: Request, call_next):
+        """Without password, refuse host names a malicious website could rebind."""
+        if trusted_names is not None and not base_config().web.password_hash:
+            if not is_trusted_host(request.headers.get("host", ""), trusted_names):
+                return PlainTextResponse(
+                    "Unknown host name: open litresearch by its IP address or localhost",
+                    status_code=421,
+                )
         return await call_next(request)
 
     def render(request: Request, name: str, session: Session, cfg, **context):
@@ -353,6 +398,70 @@ def create_app(config_path: Path) -> FastAPI:
 
     def error(url: str, message: str) -> RedirectResponse:
         return back(url, {"kind": "error", "message": message, "events": [], "points": 0})
+
+    # --- error pages -------------------------------------------------------------
+    # unknown addresses and invalid values get a page in the app's style, not JSON
+
+    def wants_html(request: Request) -> bool:
+        accept = request.headers.get("accept", "")
+        return "application/json" not in accept or "text/html" in accept
+
+    def error_page(request: Request, status: int, title: str, message: str, problems=()):
+        context = {
+            "status": status,
+            "title": title,
+            "message": message,
+            "problems": list(problems),
+            "path": request.url.path,
+            "icon": "🧭" if status == 404 else "🤔",
+        }
+        if CURRENT_PROFILE.get() is not None:
+            cfg, engine = open_session()
+            try:
+                with Session(engine) as session:
+                    response = render(request, "error.html", session, cfg, **context)
+                    response.status_code = status
+                    return response
+            finally:
+                engine.dispose()
+        return templates.TemplateResponse(request, "error.html", context, status_code=status)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException):
+        if not wants_html(request) or exc.status_code < 400:
+            return await http_exception_handler(request, exc)
+        if exc.status_code == 404:
+            detail = exc.detail if exc.detail != "Not Found" else None
+            return error_page(
+                request,
+                404,
+                "Page not found",
+                detail or "There is nothing at this address. It may be an old bookmark.",
+            )
+        return error_page(request, exc.status_code, "Something is not right", str(exc.detail))
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError):
+        if not wants_html(request):
+            return await request_validation_exception_handler(request, exc)
+        problems = []
+        for item in exc.errors():
+            loc = [str(p) for p in item.get("loc", ()) if p not in ("query", "path", "body")]
+            value = item.get("input")
+            shown = f" (got '{value}')" if isinstance(value, str) else ""
+            problems.append(f"'{' '.join(loc)}' {describe_problem(item)}{shown}")
+        if any((item.get("loc") or ("",))[0] == "path" for item in exc.errors()):
+            # /papers/abc: such a page cannot exist
+            return error_page(
+                request, 404, "Page not found", "This address does not exist.", problems
+            )
+        return error_page(
+            request,
+            422,
+            "Invalid address or form",
+            "A value in the request is not valid.",
+            problems,
+        )
 
     # --- login -------------------------------------------------------------------
 
@@ -443,7 +552,7 @@ def create_app(config_path: Path) -> FastAPI:
             else:
                 slug = profiles.create_profile(base, name, rules)
         except (SettingsError, ProfilesError, ProfileError, BackupError) as exc:
-            return error("/welcome", f"Not created: {exc}")
+            return error("/welcome", f"Not created: {friendly_error(exc)}")
         info = profiles.describe(base, slug)
         return enter(
             slug,
@@ -483,7 +592,7 @@ def create_app(config_path: Path) -> FastAPI:
             name = str(form.get("name", "")).strip() or None
             slug = profiles.import_profile_file(base, uploads[0]["data"], name)
         except (BackupError, ProfilesError, json.JSONDecodeError) as exc:
-            return error("/welcome", f"Not loaded: {exc}")
+            return error("/welcome", f"Not loaded: {friendly_error(exc)}")
         info = profiles.describe(base, slug)
         return enter(
             slug,
@@ -505,8 +614,13 @@ def create_app(config_path: Path) -> FastAPI:
     # --- pages -------------------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    def dashboard(request: Request, weeks: int = 4):
-        """Up next, weekly quest, latest recommendations, queue and weekly reports."""
+    def dashboard(request: Request, weeks: int = WEEKS_PER_PAGE, wpage: int = 1):
+        """Up next, weekly quest, latest recommendations, queue and weekly reports.
+
+        The weekly reports are paged: ``weeks`` per page (at most 12), ``wpage``
+        counts back from this week.
+        """
+        weeks = min(max(weeks, 1), 12)
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
@@ -518,6 +632,24 @@ def create_app(config_path: Path) -> FastAPI:
                 progress = week_progress(session, rules, today)
                 recent, _ = ledger(session, limit=6)
                 figures = stats(session, today, rules)
+                history = min(weeks_of_history(session, today), MAX_WEEKS)
+                # a new profile gets a checklist of first steps instead of empty cards
+                steps = None
+                if not figures["papers_read"]:
+                    has_library = session.exec(select(LibraryPaper.paper_id).limit(1)).first()
+                    steps = [
+                        ("Import your library", "/library/import", has_library is not None),
+                        (
+                            "Name your topics of interest",
+                            "/recommendations?topics=1#topics",
+                            bool(cfg.topics) or topics_onboarded(),
+                        ),
+                        ("Get recommendations", "/recommendations", batch is not None),
+                        ("Put a paper on your reading queue", "/queue", bool(items)),
+                        ("Read it and log it: your first XP", "/queue#top", False),
+                    ]
+                pages = max(1, -(-history // weeks))
+                wpage = min(max(wpage, 1), pages)
                 return render(
                     request,
                     "dashboard.html",
@@ -529,16 +661,24 @@ def create_app(config_path: Path) -> FastAPI:
                     recs=recs,
                     rec_status=recommendation_status(session, recs),
                     week=progress,
-                    hints=next_goals(session, rules, today),
+                    hints=next_goals(session, rules, today, figures),
                     recent=recent,
                     waiting=queue_top_waiting_days(session, today),
                     nudge_days=QUEUE_NUDGE_DAYS,
                     stats=figures,
-                    multiplier=streak_multiplier(max(figures["streak"], 1), rules),
+                    multiplier=streak_multiplier(next_read_streak(session, today), rules),
+                    # never older than the first week with any activity
                     summaries=weekly_summaries(
-                        session, rules, today, weeks=min(max(weeks, 1), 104)
+                        session,
+                        rules,
+                        today,
+                        weeks=min(weeks, history - (wpage - 1) * weeks),
+                        offset=(wpage - 1) * weeks,
                     ),
                     weeks=weeks,
+                    wpage=wpage,
+                    wpages=pages,
+                    steps=steps,
                 )
         finally:
             engine.dispose()
@@ -577,6 +717,13 @@ def create_app(config_path: Path) -> FastAPI:
                     cfg,
                     batch=current,
                     batches=batches,
+                    # the menu of earlier sets, newest first, one group per month
+                    batch_groups=[
+                        (month, list(members))
+                        for month, members in groupby(
+                            batches, key=lambda b: b.created_at.strftime("%Y-%m")
+                        )
+                    ],
                     recs=recs,
                     rec_status=status,
                     # every paper of the set is handled (queued, read or not relevant):
@@ -609,7 +756,7 @@ def create_app(config_path: Path) -> FastAPI:
                 {**updates, "onboarding": {"topics_done": True}},
             )
         except (SettingsError, ProfilesError, ValueError) as exc:
-            return error("/recommendations?topics=1#topics", f"Not saved: {exc}")
+            return error("/recommendations?topics=1#topics", f"Not saved: {friendly_error(exc)}")
         n = len(updates["topics"])
         return back(
             "/recommendations",
@@ -699,6 +846,7 @@ def create_app(config_path: Path) -> FastAPI:
         oa: bool = False,
         where: str = "",
         sort: str = "relevance",
+        page: int = 1,
     ):
         """Find papers in your library, Europe PMC or PubMed and put them on the queue."""
         cfg, engine = open_session()
@@ -728,6 +876,11 @@ def create_app(config_path: Path) -> FastAPI:
                         http.close()
                 queued = set(session.exec(select(QueueItem.paper_id)).all())
                 readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
+                pages = max(1, -(-len(local) // LIBRARY_PAGE))
+                page = min(max(page, 1), pages)
+                # this search without its page number, for the pager
+                params = [(k, v) for k, v in request.query_params.multi_items() if k != "page"]
+                page_url = "/search?" + urlencode(params)
                 return render(
                     request,
                     "search.html",
@@ -742,8 +895,13 @@ def create_app(config_path: Path) -> FastAPI:
                     places=[("databases", "🌍 " + " + ".join(SOURCES[s] for s in enabled))]
                     + ([(s, SOURCES[s]) for s in enabled] if len(enabled) > 1 else [])
                     + [("library", "📁 My library")],
-                    results=local[:100],
+                    results=local[(page - 1) * LIBRARY_PAGE : page * LIBRARY_PAGE],
                     n_results=len(local),
+                    page=page,
+                    pages=pages,
+                    page_url=page_url,
+                    first_shown=(page - 1) * LIBRARY_PAGE + 1,
+                    last_shown=min(page * LIBRARY_PAGE, len(local)),
                     found=found,
                     queued=queued,
                     readings=readings,
@@ -761,7 +919,7 @@ def create_app(config_path: Path) -> FastAPI:
             with Session(engine) as session:
                 paper = session.get(Paper, paper_id)
                 if paper is None:
-                    return HTMLResponse("Paper not found", status_code=404)
+                    raise HTTPException(404, f"There is no paper with the number {paper_id}.")
                 recs = session.exec(
                     select(Recommendation, RecommendationBatch)
                     .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
@@ -791,21 +949,28 @@ def create_app(config_path: Path) -> FastAPI:
     def ledger_context(session: Session, kind: str, page: int) -> dict:
         page = max(page, 1)
         rows, total = ledger(session, kind or None, LEDGER_PAGE, (page - 1) * LEDGER_PAGE)
-        all_rows, _ = ledger(session, limit=10**9)
-        totals: dict[str, list[int]] = {}
-        for row in all_rows:
-            entry = totals.setdefault(row["event"].kind, [0, 0])
-            entry[0] += 1
-            entry[1] += row["event"].points
+        pages = max(1, -(-total // LEDGER_PAGE))
+        if page > pages:  # an old link past the end: show the last page
+            page = pages
+            rows, total = ledger(session, kind or None, LEDGER_PAGE, (page - 1) * LEDGER_PAGE)
+        totals = session.exec(
+            select(XpEvent.kind, func.count(), func.sum(XpEvent.points)).group_by(XpEvent.kind)
+        ).all()
+        earned, lost = session.exec(
+            select(
+                func.sum(case((XpEvent.points > 0, XpEvent.points), else_=0)),
+                func.sum(case((XpEvent.points < 0, XpEvent.points), else_=0)),
+            )
+        ).one()
         return {
             "rows": rows,
             "total": total,
             "kind": kind,
             "page": page,
-            "pages": max(1, -(-total // LEDGER_PAGE)),
-            "totals": dict(sorted(totals.items(), key=lambda kv: -kv[1][1])),
-            "earned": sum(r["event"].points for r in all_rows if r["event"].points > 0),
-            "lost": sum(r["event"].points for r in all_rows if r["event"].points < 0),
+            "pages": pages,
+            "totals": {k: [n, points] for k, n, points in sorted(totals, key=lambda t: -t[2])},
+            "earned": earned or 0,
+            "lost": lost or 0,
         }
 
     @app.get("/progress", response_class=HTMLResponse)
@@ -817,7 +982,8 @@ def create_app(config_path: Path) -> FastAPI:
                 rules = active_rules(session, cfg)
                 s = stats(session, today, rules)
                 summaries = weekly_summaries(session, rules, today, weeks=12)
-                badges = badge_progress(session, today, rules)
+                # stats() reads every reading event: compute it once per page
+                badges = badge_progress(session, today, rules, s)
                 return render(
                     request,
                     "progress.html",
@@ -830,12 +996,12 @@ def create_app(config_path: Path) -> FastAPI:
                     closest=sorted(
                         (b for b in badges if not b[2]), key=lambda b: -b[1] / b[0].target
                     )[:6],
-                    bests=personal_bests(session, rules, today),
+                    bests=personal_bests(session, rules, today, s),
                     calendar=reading_calendar(session, today, weeks=26),
                     rif=reading_impact_factor(session, today),
                     weeks=list(reversed(summaries)),
-                    multiplier=streak_multiplier(max(s["streak"], 1), rules),
-                    hints=next_goals(session, rules, today),
+                    multiplier=streak_multiplier(next_read_streak(session, today), rules),
+                    hints=next_goals(session, rules, today, s),
                     **ledger_context(session, kind, page),
                 )
         finally:
@@ -877,8 +1043,8 @@ def create_app(config_path: Path) -> FastAPI:
 
     # pages that were merged into others; old links and bookmarks keep working
     @app.get("/weekly")
-    def weekly_page(weeks: int = 8):
-        return RedirectResponse(f"/?weeks={min(max(weeks, 1), 104)}#weekly", status_code=307)
+    def weekly_page():
+        return RedirectResponse("/#weekly", status_code=307)
 
     @app.get("/ledger")
     def ledger_page(kind: str = "", page: int = 1):
@@ -924,17 +1090,41 @@ def create_app(config_path: Path) -> FastAPI:
 
     EXPORT_REQUIREMENTS = "/docs/1-setup#what-an-export-must-contain"
 
-    def library_rows(session: Session, library: Library, q: str, folder: str, status: str):
-        readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
-        queued = set(session.exec(select(QueueItem.paper_id)).all())
-        rows = []
+    def library_index(session: Session, library: Library, q: str, folder: str, status: str):
+        """Members of a library matching the filter, as light rows sorted by title.
+
+        Only the columns the filter needs are loaded: full papers are read for
+        the shown page only (``library_page_rows``), which matters for libraries
+        with thousands of papers.
+        """
+        levels = {
+            pid: depth(s) for pid, s in session.exec(select(Reading.paper_id, Reading.status))
+        }
+        members = session.exec(
+            select(
+                LibraryPaper.paper_id,
+                LibraryPaper.folders,
+                LibraryPaper.tags,
+                LibraryPaper.citation_key,
+                Paper.title,
+                Paper.authors,
+                Paper.doi,
+                Paper.venue,
+            )
+            .join(Paper, Paper.id == LibraryPaper.paper_id)
+            .where(LibraryPaper.library_id == library.id)
+            .order_by(Paper.title)
+        ).all()
         words = q.lower().split()
-        for paper, entry in libraries.members(session, library):
-            reading = readings.get(paper.id)
-            level = depth(reading.status) if reading else 0
-            if folder and not any(
-                f == folder or f.startswith(folder + "/") for f in entry.folders + entry.tags
-            ):
+        folders: dict[str, int] = {}
+        ids, n_read = [], 0
+        for pid, entry_folders, tags, key, title, authors, doi, venue in members:
+            labels = (entry_folders or []) + (tags or [])
+            for name in labels:
+                folders[name] = folders.get(name, 0) + 1
+            level = levels.get(pid, 0)
+            n_read += level >= 2
+            if folder and not any(f == folder or f.startswith(folder + "/") for f in labels):
                 continue
             if status == "unread" and level >= 2:
                 continue
@@ -942,20 +1132,36 @@ def create_app(config_path: Path) -> FastAPI:
                 continue
             if words:
                 haystack = " ".join(
-                    [
-                        paper.title,
-                        " ".join(paper.authors),
-                        entry.citation_key or "",
-                        paper.doi or "",
-                        paper.venue or "",
-                    ]
+                    [title, " ".join(authors or []), key or "", doi or "", venue or ""]
                 ).lower()
                 if not all(w in haystack for w in words):
                     continue
-            rows.append(
-                {"paper": paper, "entry": entry, "reading": reading, "queued": paper.id in queued}
+            ids.append(pid)
+        return {"ids": ids, "n_library": len(members), "n_read": n_read, "folders": folders}
+
+    def library_page_rows(session: Session, library: Library, ids: list[int]) -> list[dict]:
+        found = {
+            paper.id: (paper, entry)
+            for paper, entry in session.exec(
+                select(Paper, LibraryPaper)
+                .join(LibraryPaper, LibraryPaper.paper_id == Paper.id)
+                .where(LibraryPaper.library_id == library.id, Paper.id.in_(ids))
             )
-        return rows
+        }
+        readings = {
+            r.paper_id: r for r in session.exec(select(Reading).where(Reading.paper_id.in_(ids)))
+        }
+        queued = set(session.exec(select(QueueItem.paper_id)).all())
+        return [
+            {
+                "paper": found[pid][0],
+                "entry": found[pid][1],
+                "reading": readings.get(pid),
+                "queued": pid in queued,
+            }
+            for pid in ids
+            if pid in found
+        ]
 
     @app.get("/paperpile")
     def paperpile_moved():
@@ -1034,14 +1240,16 @@ def create_app(config_path: Path) -> FastAPI:
         if not hasattr(upload, "read") or not upload.filename:
             return error("/library/import", "Choose an export file to upload")
         try:
-            raw = await upload.read()
+            raw = await upload.read(MAX_UPLOAD + 1)
         finally:
             await upload.close()
         if len(raw) > MAX_UPLOAD:
             return error("/library/import", f"The file is larger than {MAX_UPLOAD // 2**20} MB")
         engine = init_db(cfg.paths.database)
         tmp_dir = tempfile.mkdtemp(prefix="litresearch-import-")
-        tmp = Path(tmp_dir) / Path(upload.filename).name.replace(" ", "_")
+        # a name such as ".." would point at the folder itself
+        name = Path(upload.filename).name.replace(" ", "_").strip(".") or "upload"
+        tmp = Path(tmp_dir) / name
         try:
             tmp.write_bytes(raw)
             check = check_file(tmp, cfg.library.ignore_labels)
@@ -1141,13 +1349,11 @@ def create_app(config_path: Path) -> FastAPI:
                 library = session.get(Library, library_id)
                 if library is None:
                     return error("/library", "That library does not exist")
-                members = libraries.members(session, library)
-                folders: dict[str, int] = {}
-                for _, entry in members:
-                    for name in entry.folders + entry.tags:
-                        folders[name] = folders.get(name, 0) + 1
-                rows = library_rows(session, library, q, folder, status)
-                page = max(page, 1)
+                index = library_index(session, library, q, folder, status)
+                ids = index["ids"]
+                pages = max(1, -(-len(ids) // LIBRARY_PAGE))
+                page = min(max(page, 1), pages)
+                shown = ids[(page - 1) * LIBRARY_PAGE : page * LIBRARY_PAGE]
                 runs = session.exec(
                     select(IngestRun)
                     .where(IngestRun.library_id == library.id)
@@ -1160,16 +1366,16 @@ def create_app(config_path: Path) -> FastAPI:
                     session,
                     cfg,
                     library=library,
-                    rows=rows[(page - 1) * LIBRARY_PAGE : page * LIBRARY_PAGE],
-                    n_rows=len(rows),
-                    n_library=len(members),
-                    n_read=len(library_rows(session, library, "", "", "read")),
+                    rows=library_page_rows(session, library, shown),
+                    n_rows=len(ids),
+                    n_library=index["n_library"],
+                    n_read=index["n_read"],
                     page=page,
-                    pages=max(1, -(-len(rows) // LIBRARY_PAGE)),
+                    pages=pages,
                     q=q,
                     folder=folder,
                     status=status,
-                    folders=sorted(folders.items()),
+                    folders=sorted(index["folders"].items()),
                     runs=runs,
                     last_run=runs[0] if runs else None,
                     file_modified=libraries.source_modified(library),
@@ -1358,15 +1564,18 @@ def create_app(config_path: Path) -> FastAPI:
         result = []
         for upload in files:
             try:
-                raw = await upload.read()
+                raw = await upload.read(MAX_UPLOAD + 1)
             finally:
                 await upload.close()  # release the temporary file right away
             if len(raw) > MAX_UPLOAD:
                 raise BackupError(f"{upload.filename} is larger than {MAX_UPLOAD // 2**20} MB")
             try:
-                result.append({"name": upload.filename, "data": json.loads(raw)})
+                data = json.loads(raw)
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise BackupError(f"{upload.filename} is not a JSON file") from exc
+            if not isinstance(data, dict):
+                raise BackupError(f"{upload.filename} is not a litresearch profile file")
+            result.append({"name": upload.filename, "data": data})
         return result
 
     @app.get("/profile/compare", response_class=HTMLResponse)
@@ -1392,19 +1601,38 @@ def create_app(config_path: Path) -> FastAPI:
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                rows = [summarize(export_progress(session), cfg, "current")]
+                rows = [current_summary(session, cfg)]
                 problems = []
                 for entry in entries:
                     try:
                         rows.append(summarize(entry["data"], cfg, entry["name"]))
                     except BackupError as exc:
                         problems.append(f"{entry['name']}: {exc}")
-                saves = [path.name for path in saved_files(cfg.backup.dir)][:30]
+                saves = [
+                    (path.name, datetime.fromtimestamp(path.stat().st_mtime).replace(microsecond=0))
+                    for path in sorted(
+                        saved_files(cfg.backup.dir), key=lambda p: p.stat().st_mtime, reverse=True
+                    )[:100]
+                ]
                 return render(
                     request, "compare.html", session, cfg, rows=rows, problems=problems, saves=saves
                 )
         finally:
             engine.dispose()
+
+    def current_summary(session: Session, cfg) -> dict:
+        """The figures of ``summarize()`` for the open profile, read from its database.
+
+        ``summarize()`` first loads an export into a throw-away database, which
+        takes minutes for a profile with years of data.
+        """
+        return summarize_session(
+            session,
+            cfg,
+            datetime.now().replace(microsecond=0),
+            label="current",
+            checksum_ok=True,
+        )
 
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request):
@@ -1470,7 +1698,7 @@ def create_app(config_path: Path) -> FastAPI:
         try:
             save_profile_settings(parse_form(data))
         except (SettingsError, ProfilesError, ValueError) as exc:
-            return error("/settings", f"Not saved: {exc}")
+            return error("/settings", f"Not saved: {friendly_error(exc)}")
         return back(
             "/settings",
             {
@@ -1585,6 +1813,8 @@ def create_app(config_path: Path) -> FastAPI:
                     status = ReadStatus(level)
                     if status == ReadStatus.dismissed:
                         raise ReadingError("Use 'not relevant' to dismiss")
+                    if rating.strip() and not rating.strip().isdigit():
+                        raise ReadingError("Rating must be between 1 and 5")
                     outcome = record_reading(
                         session,
                         cfg,
@@ -1628,6 +1858,7 @@ def create_app(config_path: Path) -> FastAPI:
                 paper = session.get(Paper, paper_id)
                 try:
                     if paper is None:
+                        url = "/"  # the paper page would be a 404
                         raise ReadingError("Unknown paper")
                     if not text.strip():
                         raise ReadingError("The note is empty")

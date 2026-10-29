@@ -6,8 +6,11 @@ created. The parse functions turn submitted forms into nested dicts, which
 ``profiles.write_overlay`` validates and saves in the profile's settings.yaml.
 """
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from litresearch.config import Config
 from litresearch.rules import BADGE_CODES, GameRules, LevelDef
@@ -318,6 +321,14 @@ class SettingsError(ValueError):
     pass
 
 
+def to_number(raw, kind: str = "float") -> int | float:
+    """A form value as int or finite float; ValueError otherwise ("nan", "inf", "abc")."""
+    value = int(raw) if kind == "int" else float(raw)
+    if not math.isfinite(value):
+        raise ValueError(f"not a finite number: {raw}")
+    return value
+
+
 def parse_form(form: dict) -> dict:
     """Turn submitted form fields into a nested update dict."""
     updates: dict = {}
@@ -336,7 +347,7 @@ def parse_form(form: dict) -> dict:
         if raw is None or str(raw).strip() == "":
             raise SettingsError(f"'{setting.label}' is empty")
         try:
-            put(setting.path, int(raw) if setting.kind == "int" else float(raw))
+            put(setting.path, to_number(raw, setting.kind))
         except ValueError as error:
             raise SettingsError(f"'{setting.label}': '{raw}' is not a number") from error
 
@@ -350,14 +361,21 @@ def parse_topics(form: dict) -> dict:
     names = form.get("topic_name", [])
     weights = form.get("topic_weight", [])
     queries = form.get("topic_queries", [])
+    if not len(names) == len(weights) == len(queries):
+        raise SettingsError(
+            "The topic form is incomplete (each topic needs a name, a weight and queries). "
+            "Reload the page and enter the topics again."
+        )
     for name, weight, query_text in zip(names, weights, queries, strict=True):
         name = name.strip()
         if not name:
             continue
         try:
-            weight = float(weight)
+            weight = to_number(weight)
         except ValueError as error:
             raise SettingsError(f"Topic '{name}': weight must be a number") from error
+        if weight < 0:
+            raise SettingsError(f"Topic '{name}': weight must be at least 0")
         topics.append(
             {
                 "name": name,
@@ -440,7 +458,7 @@ def parse_rules_form(form: dict, base: GameRules) -> GameRules:
             if raw == "":
                 raise SettingsError(f"'{label}' is empty")
             try:
-                values[name] = int(raw) if kind == "int" else float(raw)
+                values[name] = to_number(raw, kind)
             except ValueError as error:
                 raise SettingsError(f"'{label}': '{raw}' is not a number") from error
     levels = []
@@ -473,4 +491,76 @@ def parse_rules_form(form: dict, base: GameRules) -> GameRules:
     try:
         return GameRules.model_validate(values)
     except ValueError as error:
-        raise SettingsError(str(error)) from error
+        raise SettingsError(friendly_error(error)) from error
+
+
+# --- readable validation errors --------------------------------------------------------------
+
+# field paths (as pydantic reports them) and the labels the forms show
+FIELD_LABELS: dict[tuple, str] = {
+    **{s.path: s.label for s in ALL_SETTINGS},
+    **{(name,): label for _, _, fields in RULE_GROUPS for name, label, *_ in fields},
+    **{("game", name): label for _, _, fields in RULE_GROUPS for name, label, *_ in fields},
+}
+_PART_NAMES = {"topics": "Topic", "levels": "Level"}
+
+
+def _field_name(loc: tuple) -> str:
+    """'Score weight: relevance', 'Topic 2: weight', 'Level 3: title' or 'hot_days'."""
+    loc = tuple(part for part in loc if part not in ("body", "query", "path"))
+    if loc in FIELD_LABELS:
+        return FIELD_LABELS[loc]
+    for start in range(len(loc)):
+        part = loc[start]
+        if part in _PART_NAMES and start + 1 < len(loc) and isinstance(loc[start + 1], int):
+            rest = " ".join(str(p) for p in loc[start + 2 :])
+            name = f"{_PART_NAMES[part]} {loc[start + 1] + 1}"
+            return f"{name}: {rest}" if rest else name
+        if part == "badge_targets":
+            return "Badge target " + " ".join(str(p) for p in loc[start + 1 :])
+    return " ".join(str(p) for p in loc) or "A value"
+
+
+def describe_problem(error: dict) -> str:
+    kind, ctx = error.get("type", ""), error.get("ctx") or {}
+    if kind in ("less_than_equal", "less_than"):
+        return f"must be at most {ctx.get('le', ctx.get('lt'))}"
+    if kind in ("greater_than_equal", "greater_than"):
+        return f"must be at least {ctx.get('ge', ctx.get('gt'))}"
+    if kind == "string_too_short":
+        return (
+            "must not be empty"
+            if ctx.get("min_length") == 1
+            else (f"needs at least {ctx.get('min_length')} characters")
+        )
+    if kind == "string_too_long":
+        return f"may have at most {ctx.get('max_length')} characters"
+    if kind in ("int_parsing", "int_from_float", "int_type"):
+        return "must be a whole number"
+    if kind in ("float_parsing", "float_type", "finite_number"):
+        return "must be a number"
+    if kind == "missing":
+        return "is missing"
+    message = str(error.get("msg", "is not valid"))
+    return message.removeprefix("Value error, ").removeprefix("Assertion failed, ")
+
+
+def friendly_error(error: Exception) -> str:
+    """A short sentence for a toast; pydantic's reports name the form's labels instead.
+
+    ``'🐸 top paper first: share of base points' must be at most 10`` instead of
+    "1 validation error for GameRules … errors.pydantic.dev …".
+    """
+    cause: BaseException | None = error
+    while cause is not None and not isinstance(cause, ValidationError):
+        cause = cause.__cause__
+    if cause is None:
+        return str(error)
+    problems = []
+    for item in cause.errors():
+        loc = tuple(item.get("loc") or ())
+        problem = describe_problem(item)
+        problems.append(
+            f"'{_field_name(loc)}' {problem}" if loc else problem[:1].upper() + problem[1:]
+        )
+    return "; ".join(dict.fromkeys(problems))

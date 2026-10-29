@@ -14,7 +14,8 @@
     <p class="muted" style="margin:0">Your literature radar. Please log in.</p>
     {% if failed %}<div class="notice error" style="margin:0">Wrong password.</div>{% endif %}
     <input type="hidden" name="next" value="{{ next }}">
-    <input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus required>
+    <label class="sr-only" for="password">Password</label>
+    <input type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" autofocus required>
     <button class="primary" style="justify-content:center">🔓 Log in</button>
   </form>
 </div>

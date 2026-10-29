@@ -85,15 +85,49 @@
     })(start);
   }
 
-  function modal(icon, title, text) {
+  // a dialog: focus moves into it, Tab stays inside, Esc or a click outside closes it,
+  // and focus returns to where it was
+  function modal(icon, title, text, options) {
+    const opts = options || {};
+    const previous = document.activeElement;
     const overlay = document.createElement("div");
     overlay.className = "overlay show";
-    overlay.innerHTML = `<div class="modal"><span class="big">${icon}</span><h2>${escapeHtml(title)}</h2>` +
-      `<p>${escapeHtml(text)}</p><button class="primary" type="button">Awesome!</button></div>`;
+    const id = "dialog-" + Math.random().toString(36).slice(2, 8);
+    overlay.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="${id}">` +
+      (icon ? `<span class="big" aria-hidden="true">${icon}</span>` : "") +
+      `<h2 id="${id}">${escapeHtml(title)}</h2>` +
+      (text ? `<p>${escapeHtml(text)}</p>` : "") +
+      `<div class="modal-body"></div>` +
+      `<button class="primary" type="button" data-close>${escapeHtml(opts.button || "Awesome!")}</button></div>`;
+    if (opts.body) overlay.querySelector(".modal-body").appendChild(opts.body);
     document.body.appendChild(overlay);
-    const close = () => overlay.remove();
-    overlay.querySelector("button").addEventListener("click", close);
+    const dialog = overlay.querySelector(".modal");
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      if (previous && previous.focus) previous.focus();
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key !== "Tab") return;
+      const focusable = dialog.querySelectorAll("button, a[href], input, select, textarea");
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    overlay.querySelector("[data-close]").addEventListener("click", close);
     overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector("[data-close]").focus();
+    return overlay;
+  }
+
+  function showShortcuts() {
+    if (document.querySelector(".overlay.show .shortcuts")) return;
+    const template = document.getElementById("shortcuts-help");
+    if (!template) return;
+    modal("⌨️", "Keyboard shortcuts", "", { body: template.content.cloneNode(true), button: "Got it" });
   }
 
   function escapeHtml(text) {
@@ -201,6 +235,13 @@
       });
     });
 
+    // phones: the menu scrolls sideways; show the current page's entry
+    const current = document.querySelector(".nav a.active");
+    const nav = document.querySelector(".nav");
+    if (current && nav && nav.scrollWidth > nav.clientWidth) {
+      nav.scrollLeft = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+    }
+
     // links to a collapsed section (#how) open it
     const openTarget = () => {
       const target = location.hash && document.getElementById(location.hash.slice(1));
@@ -221,9 +262,13 @@
     weights.forEach((w) => w.addEventListener("input", share));
     if (weights.length) share();
 
-    // keyboard: "n" jumps to the queue's top paper, "r" to recommendations
+    // keyboard: "n" jumps to the queue's top paper, "r" to recommendations, "?" shows them all
+    document.querySelectorAll("[data-shortcuts]").forEach((b) => b.addEventListener("click", showShortcuts));
     document.addEventListener("keydown", (e) => {
       if (e.target.matches("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (document.querySelector(".overlay.show")) return;  // a dialog is open
+      if (!document.getElementById("shortcuts-help")) return;  // welcome and login pages
+      if (e.key === "?") { e.preventDefault(); showShortcuts(); }
       if (e.key === "n") location.href = "/queue#top";
       if (e.key === "r") location.href = "/recommendations";
       if (e.key === "p") location.href = "/progress";

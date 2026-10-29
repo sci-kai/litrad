@@ -48,7 +48,8 @@
       <h3>➕ Add by identifier</h3>
       <form method="post" action="/queue/add" class="grid" style="gap:.5rem">
         <input type="hidden" name="next_url" value="{{ here }}">
-        <input type="text" name="ref" placeholder="DOI, pmid:12345678 or PMC1234567" required>
+        <label class="sr-only" for="add-ref">DOI, PubMed ID or PMC ID</label>
+        <input type="text" id="add-ref" name="ref" placeholder="DOI, pmid:12345678 or PMC1234567" required>
         <button class="primary" {{ "disabled" if queue_full }}>➕ Queue it</button>
       </form>
       <p class="muted" style="margin:.4rem 0 0">Queue: {{ header.queue }}/{{ cfg.queue.max_size }}. Titles without any identifier: <a href="/queue">queue page</a>.</p>
@@ -104,6 +105,7 @@
 </div>
 {% elif where == "library" and not query.is_empty() %}
 <h2 style="margin-top:1.2rem">{{ n_results }} paper{{ "s" if n_results != 1 }} in your library <small class="muted">{{ query.describe() }}</small></h2>
+{% if pages > 1 %}<p class="muted" style="margin-top:-.3rem">Showing {{ first_shown }}–{{ last_shown }} · page {{ page }} of {{ pages }}</p>{% endif %}
 <div class="grid">
   {% for paper in results %}
   <div class="card paper-card">
@@ -127,5 +129,12 @@
   <div class="card">Nothing in your library matches. Search Europe PMC or PubMed instead.</div>
   {% endfor %}
 </div>
+{% if pages > 1 %}
+<nav class="pager" aria-label="Result pages">
+  {% if page > 1 %}<a class="button small" href="{{ page_url }}&page={{ page - 1 }}">← previous</a>{% endif %}
+  <span class="muted">page {{ page }}/{{ pages }}</span>
+  {% if page < pages %}<a class="button small" href="{{ page_url }}&page={{ page + 1 }}">next →</a>{% endif %}
+</nav>
+{% endif %}
 {% endif %}
 {% endblock %}

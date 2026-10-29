@@ -6,7 +6,7 @@
 {% block content %}
 {% include "_library_tabs.html" %}
 {% set age = (today - last_run.at.date()).days if last_run else none %}
-{% set here = "/library/" ~ library.id ~ "?q=" ~ (q | urlencode) ~ "&folder=" ~ (folder | urlencode) ~ "&status=" ~ status %}
+{% set here = "/library/" ~ library.id ~ "?q=" ~ (q | urlencode) ~ "&folder=" ~ (folder | urlencode) ~ "&status=" ~ (status | urlencode) %}
 
 <div class="card library-head">
   <div class="row" style="justify-content: space-between; align-items: start">
@@ -42,13 +42,14 @@
     <details class="sub-card">
       <summary><h3 style="display:inline">✏️ Edit</h3></summary>
       <form method="post" action="/library/{{ library.id }}/edit" class="grid" style="gap:.5rem; margin-top:.5rem">
-        <input type="text" name="name" value="{{ library.name }}" maxlength="80" required aria-label="name">
-        <textarea name="description" placeholder="What is in this library?" aria-label="description">{{ library.description }}</textarea>
+        <input type="text" name="name" value="{{ library.name }}" maxlength="80" required aria-label="Library name">
+        <textarea name="description" placeholder="What is in this library?" aria-label="Library description">{{ library.description }}</textarea>
         <label class="row" style="font-weight:400"><input type="checkbox" name="use_for_recommendations" value="true" {{ "checked" if library.use_for_recommendations }} style="width:auto"> 🎯 use for recommendations (similarity to your library)</label>
         <div><button class="primary small">💾 Save</button></div>
       </form>
-      <form method="post" action="/library/{{ library.id }}/delete" class="row" style="margin-top:.8rem" data-confirm="Delete this library? Its papers stay in your other libraries and in your reading history.">
-        <input type="text" name="confirm_name" placeholder="type “{{ library.name }}” to delete" style="max-width:260px" aria-label="confirm name">
+      <form method="post" action="/library/{{ library.id }}/delete" class="row" style="margin-top:.8rem">
+        <p class="muted" style="margin:0; flex-basis:100%">Deleting keeps its papers in your other libraries and in your reading history. Type the name to confirm.</p>
+        <input type="text" name="confirm_name" placeholder="type “{{ library.name }}” to delete" style="max-width:260px" aria-label="Type the library name to confirm deletion" required autocomplete="off">
         <button class="small danger">🗑️ Delete library</button>
       </form>
     </details>
@@ -58,7 +59,7 @@
 <div class="card" style="margin-top:1rem">
   <h2>Papers <small class="muted">{{ n_rows }} of {{ n_library }} · without PDFs</small></h2>
   <form method="get" class="row" style="margin-bottom:.8rem">
-    <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title, author, journal, DOI, citation key" style="flex:1 1 240px">
+    <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title, author, journal, DOI, citation key" style="flex:1 1 240px" aria-label="Search this library">
     {% if folders %}
     <select name="folder" style="max-width:340px" aria-label="folder or label">
       <option value="">All folders and labels</option>
@@ -72,7 +73,7 @@
     </select>
     <button class="primary">Filter</button>
   </form>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Paper</th><th>Folders &amp; labels</th><th>Status</th><th></th></tr></thead>
     {% for row in rows %}{% set paper = row.paper %}{% set tags = row.entry.folders + row.entry.tags %}
     <tr>
@@ -84,14 +85,14 @@
         <form class="inline" method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="library"><input type="hidden" name="next_url" value="{{ here }}&page={{ page }}"><button class="small">➕ Queue</button></form>
         {% endif %}
         {% if library.kind == "recommended" %}
-        <form class="inline" method="post" action="/library/{{ library.id }}/remove/{{ paper.id }}"><button class="small ghost" title="remove from this library">✖</button></form>
+        <form class="inline" method="post" action="/library/{{ library.id }}/remove/{{ paper.id }}"><button class="small ghost" title="remove from this library" aria-label="Remove from this library">✖</button></form>
         {% endif %}
       </td>
     </tr>
     {% else %}
     <tr><td colspan="4" class="muted">{{ "No papers match the filter." if n_library else "This library is empty." }}</td></tr>
     {% endfor %}
-  </table>
+  </table></div>
   {% if pages > 1 %}
   <div class="row" style="margin-top:.8rem; justify-content:center">
     {% if page > 1 %}<a class="button small" href="{{ here }}&page={{ page - 1 }}">← previous</a>{% endif %}
