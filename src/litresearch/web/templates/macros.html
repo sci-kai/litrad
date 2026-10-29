@@ -86,7 +86,9 @@
           <ul>
             {% for f in ev.found_by %}
             <li>
-              {% if f.source == "s2-recs" %}Semantic Scholar recommendations for your library{% if f.position %} (#{{ f.position }}){% endif %}
+              {% if f.source == "s2-recs" %}{% if f.positives is defined %}Semantic Scholar recommendation{% if f.position %} #{{ f.position }}{% endif %}
+                (from {{ f.positives }} <a href="/library/examples/positive">positive</a> / {{ f.negatives }} <a href="/library/examples/negative">negative</a> examples)
+              {% else %}Semantic Scholar recommendations for your library{% if f.position %} (#{{ f.position }}){% endif %}{% endif %}
               {% else %}OpenAlex {{ "fresh" if f.source.endswith("fresh") else "landmark" }} search
                 “{{ f.query }}” (topic <b>{{ f.topic }}</b>){% if f.position %}, result #{{ f.position }}{% endif %}
               {% endif %}

@@ -49,7 +49,7 @@ from sqlalchemy import case, func
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from litresearch import __version__, export, libraries, profiles
+from litresearch import __version__, examples, export, libraries, profiles
 from litresearch.backup import (
     BackupError,
     export_progress,
@@ -124,6 +124,7 @@ from litresearch.recommend.engine import (
     build_recommendations,
     days_since_last_batch,
     latest_batch,
+    no_library_used,
 )
 from litresearch.search import SORTS, SOURCES, SearchQuery, enabled_sources, search_library
 from litresearch.search import search as literature_search
@@ -636,7 +637,12 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                 # a new profile gets a checklist of first steps instead of empty cards
                 steps = None
                 if not figures["papers_read"]:
-                    has_library = session.exec(select(LibraryPaper.paper_id).limit(1)).first()
+                    has_library = session.exec(
+                        select(LibraryPaper.paper_id)
+                        .join(Library, Library.id == LibraryPaper.library_id)
+                        .where(Library.kind.not_in(libraries.EXAMPLE_KINDS))
+                        .limit(1)
+                    ).first()
                     steps = [
                         ("Import your library", "/library/import", has_library is not None),
                         (
@@ -930,6 +936,8 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                     select(XpEvent).where(XpEvent.paper_id == paper_id).order_by(XpEvent.at)
                 ).all()
                 item = session.get(QueueItem, paper_id)
+                lists = examples.refresh(session, cfg)
+                session.commit()
                 return render(
                     request,
                     "paper.html",
@@ -942,6 +950,12 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                     queue_item=item,
                     drop_cost=drop_would_cost(session, cfg, paper) if item else 0,
                     papers_by_id=lambda pid: session.get(Paper, pid),
+                    example_role=examples.role(lists, paper_id),
+                    example_choices={
+                        c.kind: c.action
+                        for c in examples.choices(session)
+                        if c.paper_id == paper_id
+                    },
                 )
         finally:
             engine.dispose()
@@ -1176,12 +1190,17 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
         try:
             with Session(engine) as session:
                 libraries.migrate(session, cfg)
+                lists = examples.refresh(session, cfg)
+                session.commit()
                 queue = queue_items(session)
                 return render(
                     request,
                     "libraries.html",
                     session,
                     cfg,
+                    example_lists=lists,
+                    example_rules=examples.RULES,
+                    no_library_used=no_library_used(session),
                     summaries=libraries.summaries(session),
                     queue=queue,
                     formats=INPUT_FORMATS,
@@ -1349,6 +1368,8 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                 library = session.get(Library, library_id)
                 if library is None:
                     return error("/library", "That library does not exist")
+                if library.kind in libraries.EXAMPLE_KINDS:
+                    return examples_page(request, session, cfg, library)
                 index = library_index(session, library, q, folder, status)
                 ids = index["ids"]
                 pages = max(1, -(-len(ids) // LIBRARY_PAGE))
@@ -1400,8 +1421,11 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                 library = session.get(Library, library_id)
                 if library is None:
                     return error("/library", "That library does not exist")
+                if library.kind in libraries.EXAMPLE_KINDS:
+                    use_for_recommendations = False
                 try:
                     libraries.update(session, library, name, description, use_for_recommendations)
+                    examples.refresh(session, cfg)
                 except libraries.LibraryError as exc:
                     return error(f"/library/{library_id}", str(exc))
                 session.commit()
@@ -1451,7 +1475,11 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                         f"/library/{library_id}", "Type the exact library name to delete it"
                     )
                 name = library.name
-                count = libraries.delete(session, library)
+                try:
+                    count = libraries.delete(session, library)
+                    examples.refresh(session, cfg)
+                except libraries.LibraryError as exc:
+                    return error(f"/library/{library_id}", str(exc))
                 session.commit()
                 return back(
                     "/library",
@@ -1472,6 +1500,8 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
         try:
             with Session(engine) as session:
                 library = session.get(Library, library_id)
+                if library is not None and library.kind in libraries.EXAMPLE_KINDS:
+                    return example_remove(session, cfg, library, paper_id)
                 if library is None or not libraries.unlink(session, library, paper_id):
                     return error(f"/library/{library_id}", "Not in this library")
                 session.commit()
@@ -1497,11 +1527,225 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                 library = session.get(Library, library_id)
                 if library is None:
                     return error("/library", "That library does not exist")
+                if library.kind in libraries.EXAMPLE_KINDS:
+                    examples.refresh(session, cfg)
+                    session.commit()
                 text = export.render(export.library_items(session, library), format, status)
                 name = library.name
         finally:
             engine.dispose()
         return export_response(text, name, format)
+
+    @app.post("/library/use")
+    async def library_use(request: Request):
+        """Choose the libraries used for recommendations (all at once)."""
+        form = await request.form()
+        chosen = {int(v) for v in form.getlist("library") if str(v).isdigit()}
+        next_url = safe(str(form.get("next_url") or "/library"))
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                used = libraries.set_used(session, chosen)
+                examples.refresh(session, cfg)
+                session.commit()
+                if used:
+                    payload = toast(
+                        "Used for recommendations: " + ", ".join(lib.name for lib in used) + "."
+                    )
+                else:
+                    payload = toast(
+                        "No library is used for recommendations now: the similarity to your "
+                        "library is 0 for every candidate and the library rules of the "
+                        "positive examples find nothing.",
+                        "warning",
+                    )
+                return back(next_url, payload)
+        finally:
+            engine.dispose()
+
+    def toast(message: str, kind: str = "success") -> dict:
+        return {"kind": kind, "message": message, "events": [], "points": 0}
+
+    @app.get("/library/examples/{kind}")
+    def example_library_link(kind: str):
+        """Stable address of the positive or negative examples."""
+        if kind not in libraries.EXAMPLE_KINDS:
+            raise HTTPException(404, "There are only positive and negative examples.")
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = libraries.example_library(session, kind)
+                session.commit()
+                return RedirectResponse(f"/library/{library.id}", status_code=303)
+        finally:
+            engine.dispose()
+
+    def examples_page(request: Request, session: Session, cfg, library: Library):
+        """A library of example papers: members in order, your choices and the rules."""
+        lists = examples.refresh(session, cfg)
+        session.commit()
+        current = lists[library.kind]
+        papers = current.papers
+        ids = [p.id for p in papers] + [p.id for p, _ in current.removed]
+        readings = {
+            r.paper_id: r for r in session.exec(select(Reading).where(Reading.paper_id.in_(ids)))
+        }
+        rules = examples.RULES[library.kind]
+        order = current.rules + [r for r in rules if r not in current.rules]
+        return render(
+            request,
+            "examples.html",
+            session,
+            cfg,
+            library=library,
+            current=current,
+            other=lists[
+                examples.NEGATIVE if library.kind == examples.POSITIVE else examples.POSITIVE
+            ],
+            readings=readings,
+            rule_rows=[(name, *rules[name], name in current.rules) for name in order],
+            library_rules=examples.LIBRARY_RULES,
+            choosable=[
+                lib
+                for lib in libraries.all_libraries(session)
+                if lib.kind not in libraries.EXAMPLE_KINDS
+            ],
+            no_library_used=no_library_used(session),
+            export_formats=EXPORT_FORMATS,
+        )
+
+    def example_library_of(session: Session, library_id: int) -> Library:
+        library = session.get(Library, library_id)
+        if library is None or library.kind not in libraries.EXAMPLE_KINDS:
+            raise HTTPException(404, "That list of examples does not exist.")
+        return library
+
+    def example_remove(session: Session, cfg, library: Library, paper_id: int):
+        url = f"/library/{library.id}"
+        if session.get(Paper, paper_id) is None:
+            return error(url, "Unknown paper")
+        if not examples.remove(session, cfg, paper_id, library.kind):
+            return error(url, "Not in this list")
+        examples.refresh(session, cfg)
+        session.commit()
+        return back(url, toast("Removed from the list. “Removed by you” can restore it.", "info"))
+
+    @app.post("/library/{library_id}/restore/{paper_id}")
+    def example_restore(library_id: int, paper_id: int):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = example_library_of(session, library_id)
+                if not examples.restore(session, paper_id, library.kind):
+                    return error(f"/library/{library_id}", "You did not remove this paper")
+                examples.refresh(session, cfg)
+                session.commit()
+                return back(
+                    f"/library/{library_id}",
+                    toast("Restored: the rules may choose this paper again.", "info"),
+                )
+        finally:
+            engine.dispose()
+
+    @app.post("/library/{library_id}/add")
+    def example_add(library_id: int, ref: str = Form("")):
+        """Add a paper by DOI, pmid:N, PMCn, citation key or title words."""
+        cfg, engine = open_session()
+        url = f"/library/{library_id}"
+        try:
+            with Session(engine) as session:
+                library = example_library_of(session, library_id)
+                try:
+                    if not ref.strip():
+                        raise ReadingError("Enter a DOI, pmid:N, PMCn or title words")
+                    paper = find_paper(session, ref)
+                    if paper is None:
+                        http = make_http(cfg)
+                        try:
+                            paper = fetch_paper(session, cfg, http, ref)
+                        finally:
+                            http.close()
+                except ReadingError as exc:
+                    session.rollback()
+                    return error(url, str(exc))
+                examples.include(session, paper, library.kind)
+                lists = examples.refresh(session, cfg)
+                session.commit()
+                message = f"Added: {paper.title}"
+                kind = "success"
+                if not paper.doi:
+                    message += " (it has no DOI, so Semantic Scholar cannot use it)"
+                    kind = "warning"
+                elif paper.id not in lists[library.kind].origins:
+                    message += " (not in the list: you added more papers than it holds)"
+                    kind = "warning"
+                return back(url, toast(message, kind))
+        finally:
+            engine.dispose()
+
+    @app.post("/library/{library_id}/rules")
+    async def example_rules(request: Request, library_id: int):
+        """Save the rules and the size of a list in the profile's settings."""
+        form = await request.form()
+        url = f"/library/{library_id}"
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = example_library_of(session, library_id)
+                kind = library.kind
+                chosen = []
+                for position, name in enumerate(examples.RULES[kind]):
+                    if name not in form.getlist("rule"):
+                        continue
+                    raw = str(form.get(f"order_{name}") or "").strip()
+                    try:
+                        order = float(raw) if raw else 1000 + position
+                    except ValueError:
+                        return error(url, f"Not saved: the order of '{name}' must be a number")
+                    chosen.append((order, position, name))
+                rules = [name for *_, name in sorted(chosen)]
+                raw_count = str(form.get("count") or "").strip()
+                if not raw_count.isdigit():
+                    return error(url, "Not saved: the number of examples must be a whole number")
+                try:
+                    cfg = save_profile_settings(
+                        {
+                            "selection": {
+                                f"s2_{kind}_rules": rules,
+                                f"s2_{kind}_count": int(raw_count),
+                            }
+                        }
+                    )
+                except (SettingsError, ProfilesError, ValueError) as exc:
+                    return error(url, f"Not saved: {friendly_error(exc)}")
+                lists = examples.refresh(session, cfg)
+                session.commit()
+                return back(
+                    url,
+                    toast(f"Saved. The list now has {len(lists[kind].papers)} papers."),
+                )
+        finally:
+            engine.dispose()
+
+    @app.post("/library/{library_id}/reset")
+    def example_reset(library_id: int):
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = example_library_of(session, library_id)
+                undone = examples.reset(session, library.kind)
+                examples.refresh(session, cfg)
+                session.commit()
+                return back(
+                    f"/library/{library_id}",
+                    toast(
+                        f"Undid {undone} change{'s' if undone != 1 else ''}: the list follows "
+                        "the rules again.",
+                        "info",
+                    ),
+                )
+        finally:
+            engine.dispose()
 
     # --- profile -------------------------------------------------------------------
 
@@ -1846,6 +2090,37 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                     kind="warning" if outcome.award.points < 0 else "info",
                 )
                 return back(safe(next_url), payload)
+        finally:
+            engine.dispose()
+
+    @app.post("/papers/{paper_id}/example")
+    def example_action(paper_id: int, role: str = Form(...)):
+        """Use a paper as positive or negative example, or as none."""
+        url = f"/papers/{paper_id}"
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                paper = session.get(Paper, paper_id)
+                if paper is None:
+                    return error("/", "Unknown paper")
+                if role in libraries.EXAMPLE_KINDS:
+                    examples.include(session, paper, role)
+                    message = f"Used as {role} example for Semantic Scholar's recommendations."
+                elif role == "none":
+                    examples.not_an_example(session, cfg, paper_id)
+                    message = "Not used as an example any more."
+                else:
+                    return error(url, "Choose positive, negative or none")
+                lists = examples.refresh(session, cfg)
+                session.commit()
+                kind = "success"
+                if role in libraries.EXAMPLE_KINDS and not paper.doi:
+                    message += " It has no DOI, so Semantic Scholar cannot use it."
+                    kind = "warning"
+                elif role in libraries.EXAMPLE_KINDS and paper_id not in lists[role].origins:
+                    message += " It is not in the list: you added more papers than it holds."
+                    kind = "warning"
+                return back(url, toast(message, kind))
         finally:
             engine.dispose()
 

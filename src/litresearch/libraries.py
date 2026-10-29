@@ -6,6 +6,9 @@
   (only those); litresearch creates it on the first one.
 - The **reading queue** is shown as a library too, but it is not stored: it
   always contains exactly the papers currently on the queue.
+- **Positive examples** and **Negative examples** are the papers sent to
+  Semantic Scholar's recommendations; ``examples.py`` regenerates them from
+  rules and your manual choices. They never count as your library.
 
 A paper exists once, however many libraries contain it (``LibraryPaper``
 links it to each, with that library's citation key, folders and labels).
@@ -31,6 +34,16 @@ from litresearch.db import IngestRun, Library, LibraryPaper, Paper, Reading, Rea
 IMPORTED = "imported"
 ID_CHUNK = 500  # SQLite limits the number of variables in one statement
 RECOMMENDED = "recommended"
+POSITIVE = "positive"
+NEGATIVE = "negative"
+EXAMPLE_KINDS = (POSITIVE, NEGATIVE)
+EXAMPLE_NAMES = {POSITIVE: "Positive examples", NEGATIVE: "Negative examples"}
+EXAMPLE_DESCRIPTIONS = {
+    POSITIVE: "Papers Semantic Scholar's recommendations should resemble.",
+    NEGATIVE: "Papers Semantic Scholar's recommendations should not resemble.",
+}
+# overview order: imported libraries, Recommended, then the example lists
+KIND_ORDER = {IMPORTED: 0, RECOMMENDED: 1, POSITIVE: 2, NEGATIVE: 3}
 QUEUE_NAME = "Reading queue"
 RECOMMENDED_NAME = "Recommended"
 DEFAULT_NAME = "My library"
@@ -45,9 +58,9 @@ class LibraryError(ValueError):
 
 
 def all_libraries(session: Session) -> list[Library]:
-    """Imported libraries by name, then the Recommended library."""
+    """Imported libraries by name, then Recommended, Positive and Negative examples."""
     libraries = session.exec(select(Library)).all()
-    return sorted(libraries, key=lambda lib: (lib.kind != IMPORTED, lib.name.lower()))
+    return sorted(libraries, key=lambda lib: (KIND_ORDER.get(lib.kind, 9), lib.name.lower()))
 
 
 def find(session: Session, name_or_id: str | int) -> Library:
@@ -106,6 +119,8 @@ def update(
     if description is not None:
         library.description = description.strip()
     if use_for_recommendations is not None:
+        if use_for_recommendations and library.kind in EXAMPLE_KINDS:
+            raise LibraryError(f"'{library.name}' cannot be used as your library")
         library.use_for_recommendations = use_for_recommendations
     library.updated_at = now()
     session.add(library)
@@ -117,6 +132,11 @@ def delete(session: Session, library: Library) -> int:
 
     Returns the number of papers it contained.
     """
+    if library.kind in EXAMPLE_KINDS:
+        raise LibraryError(
+            f"'{library.name}' is kept by litresearch and cannot be deleted; "
+            "use “Undo my changes” or turn its rules off instead"
+        )
     links = session.exec(select(LibraryPaper).where(LibraryPaper.library_id == library.id)).all()
     ids = {link.paper_id for link in links}
     for link in links:
@@ -212,6 +232,42 @@ def add_recommended(session: Session, paper: Paper) -> None:
     session.flush()
 
 
+def example_library(session: Session, kind: str) -> Library:
+    """The library of positive or negative examples (created on first use)."""
+    if kind not in EXAMPLE_KINDS:
+        raise LibraryError(f"Unknown example list '{kind}'")
+    library = session.exec(select(Library).where(Library.kind == kind)).first()
+    if library is None:
+        library = create(
+            session,
+            _free_name(session, EXAMPLE_NAMES[kind]),
+            EXAMPLE_DESCRIPTIONS[kind],
+            kind=kind,
+            use_for_recommendations=False,
+        )
+    return library
+
+
+def set_used(session: Session, chosen: set[int]) -> list[Library]:
+    """Use exactly the libraries ``chosen`` (ids) for recommendations.
+
+    The example libraries are never used; returns the libraries now used.
+    """
+    used = []
+    for library in session.exec(select(Library)).all():
+        if library.kind in EXAMPLE_KINDS:
+            continue
+        wanted = library.id in chosen
+        if library.use_for_recommendations != wanted:
+            library.use_for_recommendations = wanted
+            library.updated_at = now()
+            session.add(library)
+        if wanted:
+            used.append(library)
+    session.flush()
+    return used
+
+
 def _free_name(session: Session, name: str) -> str:
     taken = {lib.name.lower() for lib in session.exec(select(Library)).all()}
     candidate, number = name, 2
@@ -262,7 +318,7 @@ def refresh_flags(session: Session, paper_ids: set[int] | None = None) -> None:
 
 def recommendation_library(session: Session) -> list[Paper]:
     """The papers that stand for *your library* when scoring recommendations."""
-    every = session.exec(select(Library)).all()
+    every = [lib for lib in session.exec(select(Library)).all() if lib.kind not in EXAMPLE_KINDS]
     if not every:  # a database that has not been migrated yet
         return list(session.exec(select(Paper).where(Paper.in_library)).all())
     chosen = [lib.id for lib in every if lib.use_for_recommendations]
@@ -355,10 +411,10 @@ def store_upload(cfg: Config, library: Library, raw: bytes, fmt: str) -> Path:
 def migrate(session: Session, cfg: Config) -> Library | None:
     """Databases from before libraries existed: their library becomes "My library".
 
-    Runs once (only while no library exists); nothing is lost: citation keys,
-    folders, labels and the import history are kept.
+    Runs once (only while no library exists; the example lists do not count);
+    nothing is lost: citation keys, folders, labels and the import history are kept.
     """
-    if session.exec(select(Library)).first() is not None:
+    if session.exec(select(Library).where(Library.kind.not_in(EXAMPLE_KINDS))).first():
         return None
     papers = session.exec(select(Paper).where(Paper.in_library)).all()
     runs = session.exec(select(IngestRun)).all()

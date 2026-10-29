@@ -67,6 +67,21 @@
         {% endif %}
       </div>
     </div>
+    <div class="card" id="example">
+      <h3>🧲 Example for Semantic Scholar</h3>
+      {% if example_role %}{% set kind, origin = example_role %}
+      <p>{{ "👍 Positive" if kind == "positive" else "👎 Negative" }} example <span class="chip">{{ "✋ " if origin == "added by you" else "⚙️ " }}{{ origin }}</span>
+        · <a href="/library/examples/{{ kind }}">see the list</a></p>
+      {% elif example_choices %}
+      <p class="muted">Not an example: you removed it{% for kind, action in example_choices.items() if action == "exclude" %} from the {{ kind }} examples{{ "," if not loop.last }}{% endfor %}.</p>
+      {% else %}<p class="muted">Not an example now.</p>{% endif %}
+      {% if not paper.doi %}<p class="muted"><small>Without a DOI, Semantic Scholar cannot use this paper.</small></p>{% endif %}
+      <form method="post" action="/papers/{{ paper.id }}/example" class="row">
+        {% if not example_role or example_role[0] != "positive" or example_role[1] != "added by you" %}<button class="small" name="role" value="positive">👍 Use as positive example</button>{% endif %}
+        {% if not example_role or example_role[0] != "negative" or example_role[1] != "added by you" %}<button class="small" name="role" value="negative">👎 Use as negative example</button>{% endif %}
+        {% if example_role or "include" in example_choices.values() %}<button class="small ghost" name="role" value="none">✖ Not an example</button>{% endif %}
+      </form>
+    </div>
     <div class="card">
       <h3>💰 XP from this paper</h3>
       {% for e in xp_events %}

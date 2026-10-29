@@ -421,7 +421,7 @@ status, notes and points are shared.
 | **Import** into a new library | Library → Import, `library import FILE --new NAME` | the file becomes the library; *Update from file* / `ingest` read it again later |
 | Import into an existing library | `--to NAME` (add) or `--to NAME --replace` | **add** its papers, or **replace** the library (papers missing in the file leave this library, nothing else changes) |
 | **Export** | library page, `library export NAME [FILE] --format bibtex\|ris [--status]` | BibTeX (Paperpile, Zotero, Mendeley, JabRef) or RIS (EndNote, Citavi); *with reading status* adds keywords such as `litresearch-read`, `litresearch-rating-4` (labels in your reference manager) |
-| 🎯 **Used for recommendations** | library page, `library edit NAME --no-recommendations` | which libraries form "your library" for the similarity score |
+| 🎯 **Used for recommendations** | Libraries page (checkboxes, *Save*), `library use NAME… [--off]` | which libraries form "your library": the similarity score and the pool of the positive-example rules `recent`, `impact`, `fwci`, `cited` (not `liked`, `read` or papers you add). With none checked, the similarity is 0 for every candidate; the Libraries page and the recommendation warnings say so |
 
 Every file is checked first; an invalid file changes nothing
 ([what an export must contain](#what-an-export-must-contain)). Two libraries
@@ -429,6 +429,19 @@ are kept by litresearch: **Recommended** (a recommendation joins it when you
 queue it, and stays after reading; remove with ✖) and **Reading queue**
 (always exactly the current queue; exportable). Databases from before
 libraries existed are migrated to a library called **My library**.
+
+**Positive examples** and **Negative examples** are the papers sent to
+Semantic Scholar's recommendations ([how they are chosen](#1-candidates)).
+litresearch regenerates them before every list and whenever you open them;
+each paper shows its origin (*added by you* or *rule: …*, also exported as a
+label). On their pages you can **remove** a paper (the rules then skip it;
+*Removed by you* → **Restore**), **add a paper** (DOI, `pmid:N`, `PMCn`,
+citation key or title words), choose the **rules**, their order and the
+**number of examples** (*Save and update the list*, saved in the profile's
+settings), and **Undo my changes**. Every paper page has *Use as positive /
+negative example* and *Not an example*. These two lists never count as your
+library, cannot be deleted or imported into, and are not saved in profile
+files (your choices are, and the lists are rebuilt from them).
 
 ### Settings
 
@@ -457,7 +470,7 @@ keep this chapter and `web/templates/_how_recommend.html` in sync with it.
 
 ```
 topics ─► OpenAlex searches (fresh, landmark) ─┐
-library ─► Semantic Scholar recommendations ───┴─► candidates
+examples ─► Semantic Scholar recommendations ──┴─► candidates
    ─► filters ─► fresh-or-landmark ─► score ─► score floor ─► diverse picks ─► ranked list
 ```
 
@@ -480,10 +493,35 @@ topic, two searches in titles and abstracts, sorted by relevance,
 off-topic hits such as a FASTQ tool for "circulating tumor DNA".)
 
 **Semantic Scholar recommendations** (`sources.semanticscholar`): recent
-papers similar to *positive* and unlike *negative* examples. Positives (up
-to 100): papers rated 4–5 stars or read thoroughly, then your most recent
-library papers. Negatives (up to 50): papers marked **not relevant**. When
-the free service is busy, this step is skipped with a warning.
+papers similar to *positive* and unlike *negative* example papers. Both
+lists are libraries (Library → *Positive examples*, *Negative examples*;
+`litresearch examples`) and are built in this order, without duplicates,
+papers you removed and papers without DOI, until `s2_positive_count` (100)
+or `s2_negative_count` (50) papers are reached:
+
+1. papers you added yourself, newest first (more than the count: the newest
+   are used, with a warning);
+2. the rules `s2_positive_rules` (`liked`, `recent`) or `s2_negative_rules`
+   (`dismissed`), one after the other:
+
+| Rule | List | Papers, best first |
+|---|---|---|
+| `liked` | positive | rated 4–5 stars or read thoroughly; most recently read first |
+| `read` | positive | skimmed or deeper; most recently read first |
+| `recent` | positive | libraries used for recommendations, by publication date |
+| `impact` | positive | same libraries, by OpenAlex citation percentile (field and year normalised), then FWCI |
+| `fwci` | positive | same libraries, by field-weighted citation impact |
+| `cited` | positive | same libraries, by number of citations |
+| `dismissed` | negative | marked **not relevant**; most recent first |
+| `low_rated` | negative | rated 1–2 stars; most recent first |
+
+A paper is never in both lists: adding it to one removes it from the other,
+and the positive rules skip papers chosen as negative examples (a library
+paper you marked not relevant is a negative example only). Without positive
+examples, or when the free service is busy, this step is skipped with a
+warning. The batch records the rules, counts and the number of examples
+used; the evidence tree says e.g. "Semantic Scholar recommendation #7 (from
+100 positive / 3 negative examples)".
 
 ### 2. Filters
 
@@ -594,8 +632,11 @@ Shown under **Why was this recommended?**:
 
 ### Feedback loop
 
-- **Not relevant**: never shown again; a negative example for Semantic Scholar.
-- **Rating 4–5 or thorough read**: a positive example for Semantic Scholar.
+- **Not relevant**: never shown again; a negative example for Semantic Scholar
+  (rule `dismissed`).
+- **Rating 4–5 or thorough read**: a positive example for Semantic Scholar
+  (rule `liked`).
+- **Your own examples**: add or remove papers in the example lists.
 - Your queue, read papers and the cooldown keep the list fresh.
 
 
@@ -759,7 +800,8 @@ paper counts once).
 | Command | Purpose |
 |---|---|
 | `profile list\|create\|adopt\|use\|show\|save\|load\|compare` | profiles: list, create (rules locked), take over old data, choose the current one, show rules, save, load as a new profile, compare |
-| `library list\|import\|export\|edit\|delete` | `import FILE --new NAME` or `--to NAME [--replace]` (`--check` only checks); `export NAME\|queue [FILE] [--format bibtex\|ris] [--status]`; `edit NAME [--name] [--description] [--recommendations/--no-recommendations]` |
+| `library list\|import\|export\|edit\|use\|delete` | `import FILE --new NAME` or `--to NAME [--replace]` (`--check` only checks); `export NAME\|queue [FILE] [--format bibtex\|ris] [--status]`; `edit NAME [--name] [--description] [--recommendations/--no-recommendations]`; `use NAME… [--off]` (libraries used for recommendations) |
+| `examples [positive\|negative]` | example papers for Semantic Scholar with their origin; `add\|remove\|restore positive\|negative REF`; `reset positive\|negative`; `rules positive\|negative [RULE…] [--none] [--count N]` (saved in the profile's settings) |
 | `ingest [--no-s2]` | update every library from its file; resolve DOIs; fetch metrics and embeddings |
 | `check-bib [FILE]` | check an export (BibTeX, RIS, CSL-JSON) without importing |
 | `status` | libraries: coverage, top folders, papers per library |
@@ -797,7 +839,7 @@ personal data:
 **What leaves your machine:** titles/authors of library papers without DOI
 (Crossref); DOIs/PMIDs (OpenAlex, Semantic Scholar, Europe PMC, PubMed); your
 topic queries (OpenAlex); what you type into the paper search (Europe PMC,
-PubMed); the DOIs of library, well-rated and dismissed papers (Semantic
+PubMed); the DOIs of the positive and negative example papers (Semantic
 Scholar recommendations; switch off with `sources.semanticscholar`). PubMed
 requests carry `tool=litresearch` but no e-mail; `api.contact_email` stays
 `n/a` unless you want the polite pools.
@@ -903,6 +945,10 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 | `citations_per_year_saturation` | 200 | citations/year for impact 1.0 without a percentile |
 | `landmark_timeliness` | 0.4 | timeliness of landmark papers |
 | `min_relative_score` | 0.6 | picks need this share of the best score |
+| `s2_positive_rules` | `[liked, recent]` | rules for the positive examples of Semantic Scholar, in order: `liked`, `read`, `recent`, `impact`, `fwci`, `cited` ([rules](#1-candidates)) |
+| `s2_positive_count` | 100 | number of positive examples (1–500) |
+| `s2_negative_rules` | `[dismissed]` | rules for the negative examples: `dismissed`, `low_rated` |
+| `s2_negative_count` | 50 | number of negative examples (0–500) |
 
 ### `queue`, `game`, `backup`
 
@@ -935,7 +981,7 @@ Each profile has its own folder `data/profiles/<profile>/`;
 
 | What | Where (default) | Rebuildable? |
 |---|---|---|
-| **Your progress**: statuses, ratings, notes, history, queue, XP, badges, recommendations, locked rules | `data/profiles/<profile>/litresearch.sqlite` | **no**, back it up |
+| **Your progress**: statuses, ratings, notes, history, queue, XP, badges, recommendations, example choices, locked rules | `data/profiles/<profile>/litresearch.sqlite` | **no**, back it up |
 | Libraries, paper metadata, metrics, embeddings | same database | yes, from the export files |
 | Uploaded export files | `data/profiles/<profile>/libraries/` | yes, export again |
 | Topics and settings | `data/profiles/<profile>/settings.yaml` | no; in every backup |
@@ -980,7 +1026,7 @@ Two files per backup, named with `YYYYMMDD_HHMMSS`:
 | File | Content | Use |
 |---|---|---|
 | `litresearch_20261008_070000.sqlite` | complete database snapshot (SQLite online backup API, consistent while the server writes, integrity-checked) | `litresearch restore FILE` |
-| `litresearch_progress_20261008_070000.json` | the whole **profile**: rules, settings, statuses, ratings, notes, history, queue, XP, badges, recommendations, libraries, enough metadata to find each paper again, and a checksum | `profile load` (new profile) or `import-progress` (merge) |
+| `litresearch_progress_20261008_070000.json` | the whole **profile**: rules, settings, statuses, ratings, notes, history, queue, XP, badges, recommendations, libraries, example choices (merged: the newer choice wins), enough metadata to find each paper again, and a checksum | `profile load` (new profile) or `import-progress` (merge) |
 
 The oldest files beyond `backup.keep` (default 14 of each) are deleted.
 Profiles you save yourself (`litresearch_profile_<name>_<date>_<time>.json`)
@@ -1061,7 +1107,8 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `ingest/bibtex.py`, `ingest/formats.py` | BibTeX (LaTeX decoding, Paperpile's month/day format, DOI normalisation, folders/labels), RIS and CSL-JSON parsers, format detection |
 | `ingest/check.py` | checks of an export (required fields, coverage, duplicates) |
 | `ingest/pipeline.py` | import into a library (new, add, replace), matching, DOI resolution, OpenAlex and S2 enrichment, per-source error isolation, import history |
-| `libraries.py`, `export.py`, `cli_library.py` | libraries and memberships, Recommended and queue libraries, uploads, migration; BibTeX/RIS export; `library` commands |
+| `libraries.py`, `export.py`, `cli_library.py` | libraries and memberships, Recommended and queue libraries, uploads, migration; BibTeX/RIS export; `library` and `examples` commands |
+| `examples.py` | the positive and negative example lists for Semantic Scholar: rules, your choices, regeneration |
 | `sources/http.py` | JSON client: SQLite cache with max age and clean-up, per-host throttling, retries (`Retry-After`, backoff) |
 | `sources/crossref.py`, `openalex.py`, `semanticscholar.py`, `europepmc.py`, `pubmed.py`, `hits.py` | API clients; a common search `Hit` with merging |
 | `papers.py`, `search.py` | storing works and search hits without overwriting library metadata; one search query translated for Europe PMC, PubMed and the library |
@@ -1087,6 +1134,7 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `statusevent` / `xpevent` | append-only logs of status changes (incl. whether the paper was on top) and of every point earned or lost |
 | `achievement` / `profile` | unlocked badges / the game profile with a locked copy of the rules and fingerprint |
 | `ingestrun` | every import: library, mode, format, time, source, file hash, counts, checks |
+| `examplechoice` | papers you added to (`include`) or removed from (`exclude`) the positive or negative examples |
 
 Design choices: progress is **event-sourced** (statistics, streaks, quests
 and the ledger are computed from the logs, so the score is auditable); each

@@ -383,12 +383,13 @@ def test_overview_and_first_import(site):
     assert "Import your first library" in client.get("/library").text
     done = upload(client, SAMPLE_BIB.read_bytes(), description="from Paperpile")
     assert "Paperpile: 7 entries imported (7 new)" in done.text
-    assert done.url.path == "/library/1"
+    # ids 1 and 2: the example lists, created when the overview was shown
+    assert done.url.path == "/library/3"
     assert "from Paperpile" in done.text and "<b>7</b> papers" in done.text
     overview = client.get("/library").text
     assert "Paperpile" in overview and "🎯" in overview
     # the upload is kept as the library's file
-    files = list((profile_cfg(path).paths.database.parent / "libraries").glob("1_paperpile.bib"))
+    files = list((profile_cfg(path).paths.database.parent / "libraries").glob("3_paperpile.bib"))
     assert files and files[0].read_bytes() == SAMPLE_BIB.read_bytes()
 
 

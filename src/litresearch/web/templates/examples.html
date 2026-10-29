@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta with context %}
+{% set active = "library" %}
+{% set positive = library.kind == "positive" %}
+{% block title %}{{ library.name }}{% endblock %}
+{% block heading %}{{ "👍" if positive else "👎" }} {{ library.name }}{% endblock %}
+{% block content %}
+{% include "_library_tabs.html" %}
+{% set url = "/library/" ~ library.id %}
+
+<div class="card library-head">
+  <p style="margin:0">{{ library.description }} litresearch makes this list from the rules below and your changes; it is updated before every recommendation. <a href="/docs/5-how-papers-are-recommended#1-candidates">How it works →</a></p>
+  <p class="muted" style="margin:.4rem 0 0">
+    <b>{{ current.papers | length }}</b>/{{ current.count }} paper{{ 's' if current.count != 1 }}
+    {% if current.manual %}· <b>{{ current.manual }}</b> added by you{% endif %}
+    {% if current.removed %}· {{ current.removed | length }} removed by you{% endif %}
+    {% if current.without_doi %}· {{ current.without_doi }} skipped without DOI (Semantic Scholar needs one){% endif %}
+    · never counts as your library
+  </p>
+  {% if not cfg.sources.semanticscholar %}<div class="notice warn" style="margin:.6rem 0 0">Semantic Scholar is turned off in the settings: this list is not used now.</div>{% endif %}
+  {% for w in current.warnings %}<div class="notice warn" style="margin:.6rem 0 0">⚠️ {{ w }}</div>{% endfor %}
+
+  <div class="grid two" style="margin-top:.8rem">
+    <div class="sub-card">
+      <h3>➕ Add a paper</h3>
+      <form method="post" action="{{ url }}/add" class="row" data-loading="Looking up the paper…">
+        <label class="sr-only" for="example-ref">DOI, pmid:N, PMCn, citation key or title words</label>
+        <input id="example-ref" class="grow" type="text" name="ref" placeholder="DOI, pmid:N, PMCn, citation key or title words" style="flex:1 1 220px" required>
+        <button class="primary small">➕ Add</button>
+      </form>
+      <small class="muted">Papers you add come first and leave the list “{{ other.library.name }}”. You can also use the buttons on any paper's page.</small>
+    </div>
+    <div class="sub-card">
+      <h3>⬇️ Export</h3>
+      <form method="get" action="{{ url }}/export" class="row export-form">
+        <select name="format" aria-label="format">{% for key, (label, _) in export_formats.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+        <label class="row"><input type="checkbox" name="status" value="true" style="width:auto"> with reading status</label>
+        <button class="small">⬇️ Export {{ current.papers | length }} papers</button>
+      </form>
+      <small class="muted">Each paper carries its origin (“added by you” or the rule) as a label.</small>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="rules" style="margin-top:1rem">
+  <h2>⚙️ How this list is chosen</h2>
+  <p class="muted">First the papers you added (newest first), then the checked rules in the given order, without duplicates, papers you removed{{ ", papers you added to the positive examples and papers already positive examples" if not positive else " and papers you added to the negative examples" }}, until the list is full. Saved in your profile's settings.</p>
+  <form method="post" action="{{ url }}/rules" class="grid" style="gap:.5rem">
+    <table>
+      <thead><tr><th>Use</th><th>Order</th><th>Rule</th></tr></thead>
+      {% for name, label, help, on in rule_rows %}
+      <tr>
+        <td><input type="checkbox" id="rule-{{ name }}" name="rule" value="{{ name }}" {{ "checked" if on }} style="width:auto"></td>
+        <td><label class="sr-only" for="order-{{ name }}">Order of the rule “{{ label }}”</label><input type="number" id="order-{{ name }}" name="order_{{ name }}" value="{{ loop.index }}" min="1" max="99" step="1" style="max-width:5rem"></td>
+        <td><label for="rule-{{ name }}"><b>{{ label }}</b> <code>{{ name }}</code><br><small class="muted">{{ help }}{% if name in library_rules %} (libraries used for recommendations){% endif %}</small></label></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="row">
+      <label for="example-count">Number of examples</label>
+      <input type="number" id="example-count" name="count" value="{{ current.count }}" min="{{ 1 if positive else 0 }}" max="500" step="1" style="max-width:6rem" required>
+      <button class="primary small">💾 Save and update the list</button>
+    </div>
+  </form>
+  {% if positive %}
+  <h3 style="margin-top:1rem">🎯 Libraries the library rules choose from</h3>
+  {% if no_library_used %}<div class="notice warn">⚠️ No library is used for recommendations: the rules newest, highest impact, highest FWCI and most cited find nothing, and the similarity to your library is 0.</div>{% endif %}
+  {% if choosable %}
+  <form method="post" action="/library/use" class="grid" style="gap:.4rem">
+    <input type="hidden" name="next_url" value="{{ url }}#rules">
+    <fieldset style="border:0; padding:0; margin:0">
+      <legend class="sr-only">Libraries used for recommendations</legend>
+      {% for lib in choosable %}
+      <label class="row" style="font-weight:400"><input type="checkbox" name="library" value="{{ lib.id }}" {{ "checked" if lib.use_for_recommendations }} style="width:auto"> {{ "✨" if lib.kind == "recommended" else "🗂️" }} {{ lib.name }}</label>
+      {% endfor %}
+    </fieldset>
+    <div><button class="small">💾 Save libraries</button></div>
+  </form>
+  {% else %}<p class="muted">No libraries yet. <a href="/library/import">Import one</a>.</p>{% endif %}
+  {% endif %}
+  {% if current.manual or current.removed %}
+  <form method="post" action="{{ url }}/reset" data-confirm="Undo all your additions and removals in this list?" style="margin-top:.8rem">
+    <button class="small danger">↩️ Undo my changes</button> <small class="muted">The list then follows the rules only.</small>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>Papers <small class="muted">in the order they are used</small></h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th class="num">#</th><th>Paper</th><th>Origin</th><th>Status</th><th></th></tr></thead>
+    {% for paper in current.papers %}{% set reading = readings.get(paper.id) %}{% set origin = current.origins[paper.id] %}
+    <tr>
+      <td class="num">{{ loop.index }}</td>
+      <td><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br>{{ paper_meta(paper, library_chip=False) }}</td>
+      <td><span class="chip">{{ "✋ " if origin == "added by you" else "⚙️ " }}{{ origin }}</span></td>
+      <td style="white-space:nowrap">{% if reading %}{{ status_icons[reading.status.value] }} {{ reading.status.value }}{% if reading.rating %} {{ "★" * reading.rating }}{% endif %}{% else %}<span class="muted">unread</span>{% endif %}</td>
+      <td><form class="inline" method="post" action="{{ url }}/remove/{{ paper.id }}"><button class="small ghost" aria-label="Remove {{ paper.title | truncate(40) }} from this list">✖ Remove</button></form></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">This list is empty. Check the rules above or add papers.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+
+{% if current.removed %}
+<details class="card" style="margin-top:1rem">
+  <summary><h2 style="display:inline">🚫 Removed by you</h2> <small class="muted">{{ current.removed | length }} paper{{ "s" if current.removed | length != 1 }} the rules will not choose</small></summary>
+  <table style="margin-top:.6rem">
+    {% for paper, choice in current.removed %}
+    <tr>
+      <td><a href="/papers/{{ paper.id }}">{{ paper.title }}</a><br><small class="muted">removed {{ choice.at.isoformat() }}</small></td>
+      <td><form class="inline" method="post" action="{{ url }}/restore/{{ paper.id }}"><button class="small" aria-label="Restore {{ paper.title | truncate(40) }}">↩️ Restore</button></form></td>
+    </tr>
+    {% endfor %}
+  </table>
+</details>
+{% endif %}
+{% endblock %}

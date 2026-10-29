@@ -8,9 +8,11 @@ from datetime import date, datetime, time, timedelta
 import numpy as np
 from sqlmodel import Session, select
 
+from litresearch import examples
 from litresearch.config import Config
 from litresearch.db import (
     Embedding,
+    Library,
     Paper,
     QueueItem,
     Reading,
@@ -39,8 +41,6 @@ MEETING_ABSTRACT = re.compile(
     r"|0\d{1,4}\s"  # zero-padded abstract numbers: 0865
     r"|\d{1,5}[.:]\s)"  # 123. / 123:
 )
-S2_POSITIVES = 100
-S2_NEGATIVES = 50
 
 
 def week_start(day: date) -> date:
@@ -55,6 +55,8 @@ class Gathered:
     found_by: dict[str, list[dict]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     without_doi: int = 0
+    # what the Semantic Scholar step used (ExampleLists.snapshot), None if skipped
+    s2_examples: dict | None = None
 
     def add(
         self,
@@ -63,6 +65,7 @@ class Gathered:
         topic: str | None = None,
         query: str | None = None,
         position: int | None = None,
+        **details,
     ) -> None:
         if not work.doi:
             self.without_doi += 1
@@ -72,7 +75,7 @@ class Gathered:
         if topic:
             self.topics.setdefault(work.doi, set()).add(topic)
         self.found_by.setdefault(work.doi, []).append(
-            {"source": source, "topic": topic, "query": query, "position": position}
+            {"source": source, "topic": topic, "query": query, "position": position, **details}
         )
 
 
@@ -111,26 +114,16 @@ def gather_topic_candidates(cfg: Config, openalex: OpenAlex, today: date, out: G
 
 
 def gather_s2_candidates(
-    session: Session, s2: SemanticScholar, openalex: OpenAlex, out: Gathered
+    session: Session, cfg: Config, s2: SemanticScholar, openalex: OpenAlex, out: Gathered
 ) -> None:
-    """Recently published papers similar to the library and to well-rated papers."""
-    library = [p for p in recommendation_library(session) if p.doi]
-    liked = session.exec(
-        select(Paper)
-        .join(Reading, Reading.paper_id == Paper.id)
-        .where(Paper.doi.is_not(None), (Reading.rating >= 4) | (Reading.status == "thorough"))
-    ).all()
-    dismissed = session.exec(
-        select(Paper)
-        .join(Reading, Reading.paper_id == Paper.id)
-        .where(Paper.doi.is_not(None), Reading.status == ReadStatus.dismissed)
-    ).all()
-    # liked papers first, then the most recent library papers
-    recent = sorted(library, key=lambda p: p.pub_date or date(p.year or 1900, 7, 1), reverse=True)
-    positives = list(dict.fromkeys(f"DOI:{p.doi}" for p in liked + recent))[:S2_POSITIVES]
-    negatives = [f"DOI:{p.doi}" for p in dismissed][:S2_NEGATIVES]
+    """Recently published papers similar to the positive and unlike the negative
+    example papers (``examples.py``: rules and your choices)."""
+    lists = examples.refresh(session, cfg)
+    out.warnings.extend(lists.positive.warnings + lists.negative.warnings)
+    positives, negatives = lists.positive.ids, lists.negative.ids
     if not positives:
         return
+    out.s2_examples = lists.snapshot()
     try:
         dois = s2.recommend(positives, negatives)
         works = openalex.works_by_doi(dois)
@@ -139,7 +132,23 @@ def gather_s2_candidates(
         return
     rank = {doi: i for i, doi in enumerate(dois, start=1)}
     for work in works.values():
-        out.add(work, "s2-recs", position=rank.get(work.doi))
+        out.add(
+            work,
+            "s2-recs",
+            position=rank.get(work.doi),
+            positives=len(positives),
+            negatives=len(negatives),
+        )
+
+
+def no_library_used(session: Session) -> bool:
+    """You have libraries, but none of them is used for recommendations."""
+    from litresearch.libraries import EXAMPLE_KINDS, IMPORTED
+
+    every = [lib for lib in session.exec(select(Library)).all() if lib.kind not in EXAMPLE_KINDS]
+    return any(lib.kind == IMPORTED for lib in every) and not any(
+        lib.use_for_recommendations for lib in every
+    )
 
 
 def exclusion_sets(session: Session, cfg: Config, today: date) -> dict[str, set[int]]:
@@ -238,7 +247,13 @@ def build_recommendations(
     if cfg.sources.openalex:
         gather_topic_candidates(cfg, openalex, today, gathered)
     if use_s2 and cfg.sources.semanticscholar:
-        gather_s2_candidates(session, s2, openalex, gathered)
+        gather_s2_candidates(session, cfg, s2, openalex, gathered)
+    if no_library_used(session):
+        gathered.warnings.append(
+            "No library is used for recommendations: the similarity to your library is "
+            "0 for every candidate, so papers are ranked by topic, impact and timeliness "
+            "only. Choose libraries on the Library page."
+        )
 
     exclusions = exclusion_sets(session, cfg, today)
     removed = dict.fromkeys(["wrong_type", "meeting_abstract", *exclusions, "excluded_term"], 0)
@@ -305,6 +320,8 @@ def build_recommendations(
         "library_papers": len(library),
         "library_embedded": len(lib_vectors),
         "candidates_embedded": len(cand_vectors),
+        "s2_positives": (gathered.s2_examples or {}).get("positives", 0),
+        "s2_negatives": (gathered.s2_examples or {}).get("negatives", 0),
     }
     batch = RecommendationBatch(
         # the set belongs to the day it was built for (the cooldown counts from it)
@@ -321,6 +338,7 @@ def build_recommendations(
                 "openalex": cfg.sources.openalex,
                 "semanticscholar": cfg.sources.semanticscholar and use_s2,
             },
+            "s2_examples": gathered.s2_examples,
         },
     )
     session.add(batch)

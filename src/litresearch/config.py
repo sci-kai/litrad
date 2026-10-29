@@ -11,6 +11,11 @@ from litresearch.rules import GameRules
 # value used in config files for "not set"
 NA = "n/a"
 
+# rules that choose the example papers for Semantic Scholar's recommendations
+# (see examples.py; their labels and descriptions are there)
+S2_POSITIVE_RULES = ("liked", "read", "recent", "impact", "fwci", "cited")
+S2_NEGATIVE_RULES = ("dismissed", "low_rated")
+
 
 class _Base(BaseModel):
     # inf and nan are valid YAML floats but no valid setting
@@ -117,6 +122,28 @@ class Selection(_Base):
     landmark_timeliness: float = Field(0.4, ge=0, le=1)
     # picks need at least this share of the best score (diversity must not pull in weak papers)
     min_relative_score: float = Field(0.6, ge=0, le=1)
+    # example papers for Semantic Scholar's recommendations: rules in order, and how many
+    s2_positive_rules: list[str] = ["liked", "recent"]
+    s2_positive_count: int = Field(100, ge=1, le=500)
+    s2_negative_rules: list[str] = ["dismissed"]
+    s2_negative_count: int = Field(50, ge=0, le=500)
+
+    @field_validator("s2_positive_rules", "s2_negative_rules", mode="before")
+    @classmethod
+    def _known_rules(cls, value, info):
+        if value is None or (isinstance(value, str) and value.strip().lower() == NA):
+            return []
+        if isinstance(value, str):
+            value = [value]
+        known = S2_POSITIVE_RULES if info.field_name == "s2_positive_rules" else S2_NEGATIVE_RULES
+        names = []
+        for name in value:
+            name = str(name).strip().lower()
+            if name not in known:
+                raise ValueError(f"unknown rule '{name}'; choose from {', '.join(known)}")
+            if name not in names:
+                names.append(name)
+        return names
 
     @model_validator(mode="before")
     @classmethod

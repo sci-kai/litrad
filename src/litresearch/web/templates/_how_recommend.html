@@ -4,7 +4,7 @@
 <div class="card">
   <h2>🧭 Overview</h2>
   <ol>
-    <li><b>Collect candidates</b> from OpenAlex topic searches and Semantic Scholar recommendations for your library.</li>
+    <li><b>Collect candidates</b> from OpenAlex topic searches and Semantic Scholar recommendations for your example papers.</li>
     <li><b>Filter</b> out what you know, have handled, or what is not a research paper.</li>
     <li><b>Eligibility</b>: keep only papers that are <i>fresh</i> or <i>landmarks</i>.</li>
     <li><b>Score</b> each paper on relevance, impact and timeliness.</li>
@@ -32,9 +32,12 @@
   <h3 style="margin-top:1rem">Semantic Scholar recommendations {{ "✅" if cfg.sources.semanticscholar else "❌ (disabled)" }}</h3>
   <p>Semantic Scholar suggests recently published papers similar to a set of <i>positive</i> papers and unlike <i>negative</i> ones:</p>
   <ul>
-    <li>positives: papers you rated ≥ 4 stars or read thoroughly, then your most recent library papers (up to 100);</li>
-    <li>negatives: papers you marked “not relevant” (up to 50). <b>Your feedback steers future batches here.</b></li>
+    <li><a href="/library/examples/positive">positive examples</a> (up to <code>{{ s.s2_positive_count }}</code>): papers you added yourself, then by the rules
+      {% for r in s.s2_positive_rules %}<code>{{ r }}</code>{{ " → " if not loop.last }}{% else %}<i>none</i>{% endfor %};</li>
+    <li><a href="/library/examples/negative">negative examples</a> (up to <code>{{ s.s2_negative_count }}</code>): papers you added yourself, then by the rules
+      {% for r in s.s2_negative_rules %}<code>{{ r }}</code>{{ " → " if not loop.last }}{% else %}<i>none</i>{% endfor %}. <b>Your feedback steers future batches here.</b></li>
   </ul>
+  <p class="muted">Rules: <code>liked</code> rated 4–5 stars or read thoroughly · <code>read</code> skimmed or deeper · <code>recent</code>, <code>impact</code>, <code>fwci</code>, <code>cited</code> papers of the libraries used for recommendations by publication date, citation percentile, FWCI or citations · <code>dismissed</code> marked not relevant · <code>low_rated</code> rated 1–2 stars. Papers without DOI and papers you removed are skipped; a paper is never in both lists. Both lists are libraries: see and change them on the Library page.</p>
 </div>
 
 <div class="card">
@@ -68,7 +71,7 @@
   <p class="tree"><span class="formula">relevance = <b>{{ s.similarity_share }}</b> × similarity rank + <b>{{ (1 - s.similarity_share) | round(2) }}</b> × topic bonus</span></p>
   <ul>
     <li><b>Library similarity</b>: SPECTER2 embeddings (scientific-paper vectors from Semantic Scholar) of the candidate are compared with your library; the mean cosine similarity to the <code>{{ s.knn }}</code> most similar library papers is turned into a rank among all candidates (0 = least, 1 = most similar). Papers without an embedding use TF-IDF text similarity of title + abstract instead.</li>
-    <li><b>Topic bonus</b>: topic weight ÷ highest topic weight for papers found by a topic search; <code>{{ s.s2_only_topic_bonus }}</code> for papers found only by Semantic Scholar's library-based recommendations; 0 otherwise.</li>
+    <li><b>Topic bonus</b>: topic weight ÷ highest topic weight for papers found by a topic search; <code>{{ s.s2_only_topic_bonus }}</code> for papers found only by Semantic Scholar's recommendations for your example papers; 0 otherwise.</li>
   </ul>
 
   <h3>🏛️ Impact</h3>
@@ -98,5 +101,5 @@
 
 <div class="card">
   <h2>🔐 Data &amp; privacy</h2>
-  <p>Only free services are used, within their free limits; no personal data is sent{{ " (a contact e-mail is configured and sent as mailto)" if cfg.api.contact_email }}. Leaves your machine: topic queries and DOIs (OpenAlex), DOIs of library / liked / dismissed papers (Semantic Scholar, if enabled), titles of library papers without DOI (Crossref, during ingest).</p>
+  <p>Only free services are used, within their free limits; no personal data is sent{{ " (a contact e-mail is configured and sent as mailto)" if cfg.api.contact_email }}. Leaves your machine: topic queries and DOIs (OpenAlex), DOIs of library and example papers (Semantic Scholar, if enabled), titles of library papers without DOI (Crossref, during ingest).</p>
 </div>

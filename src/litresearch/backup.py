@@ -37,6 +37,7 @@ from litresearch.config import Config
 from litresearch.db import (
     Achievement,
     Category,
+    ExampleChoice,
     Library,
     LibraryPaper,
     Paper,
@@ -251,8 +252,17 @@ def export_progress(
         select(Recommendation).order_by(Recommendation.batch_id, Recommendation.rank)
     ).all()
     profile = session.exec(select(Profile).order_by(Profile.id)).first()
-    library_rows = session.exec(select(Library).order_by(Library.id)).all()
-    memberships = session.exec(select(LibraryPaper)).all()
+    # the example lists are regenerated from rules and your choices, not saved
+    library_rows = [
+        lib
+        for lib in session.exec(select(Library).order_by(Library.id)).all()
+        if lib.kind not in ("positive", "negative")
+    ]
+    kept = {lib.id for lib in library_rows}
+    memberships = [m for m in session.exec(select(LibraryPaper)).all() if m.library_id in kept]
+    example_choices = session.exec(
+        select(ExampleChoice).order_by(ExampleChoice.at, ExampleChoice.paper_id)
+    ).all()
 
     ids = (
         {m.paper_id for m in memberships}
@@ -261,6 +271,7 @@ def export_progress(
         | {q.paper_id for q in queue}
         | {e.paper_id for e in xp if e.paper_id is not None}
         | {r.paper_id for r in recommendations}
+        | {c.paper_id for c in example_choices}
     )
     columns = [getattr(Paper, name) for name in PAPER_FIELDS]
     rows = session.exec(select(Paper.id, Paper.pub_date, *columns).order_by(Paper.id)).all()
@@ -366,6 +377,12 @@ def export_progress(
             for e in xp
         ],
         "settings": settings or {},
+        # papers you added to or removed from the example lists for Semantic Scholar
+        "example_choices": [
+            {"paper": ref(c.paper_id), "kind": c.kind, "action": c.action, "at": _iso(c.at)}
+            for c in example_choices
+            if ref(c.paper_id)
+        ],
         "achievements": [
             {"code": a.code, "unlocked_at": _iso(a.unlocked_at)} for a in achievements
         ],
@@ -399,6 +416,7 @@ class ImportReport:
     queue_added: int = 0
     batches_added: int = 0
     libraries_added: int = 0
+    example_choices: int = 0
     profile_adopted: bool = False
     queue_skipped: list[str] = field(default_factory=list)
 
@@ -413,6 +431,7 @@ class ImportReport:
             f"Queue entries:             {self.queue_added}",
             f"Recommendation batches:    {self.batches_added}",
             f"Libraries created:         {self.libraries_added}",
+            f"Example choices:           {self.example_choices}",
         ]
         if self.profile_adopted:
             out.append("Profile and its locked rules taken over from the file.")
@@ -688,6 +707,9 @@ def import_progress(
         report.batches_added = len(added)
 
         report.libraries_added = _merge_libraries(session, data.get("libraries", []), ids)
+        report.example_choices = _merge_example_choices(
+            session, data.get("example_choices", []), ids
+        )
 
         queued = session.exec(select(QueueItem).order_by(QueueItem.position)).all()
         position = len(queued)
@@ -726,6 +748,39 @@ def import_progress(
     return report
 
 
+def _merge_example_choices(session: Session, incoming: list[dict], ids: dict[str, int]) -> int:
+    """Your example choices: the newer choice per paper and list wins.
+
+    A paper you added to both lists (on two machines) stays in the list of
+    the newer addition. Returns the number of choices added or changed.
+    """
+    local = {(c.paper_id, c.kind): c for c in session.exec(select(ExampleChoice)).all()}
+    changed = 0
+    for item in incoming:
+        kind, action = item["kind"], item["action"]
+        if kind not in ("positive", "negative") or action not in ("include", "exclude"):
+            raise ValueError(f"unknown example choice {kind}/{action}")
+        paper_id, at = ids[item["paper"]], _dt(item.get("at")) or now()
+        choice = local.get((paper_id, kind))
+        if choice is not None and (choice.at >= at or choice.action == action):
+            continue
+        if choice is None:
+            choice = ExampleChoice(paper_id=paper_id, kind=kind, action=action, at=at)
+            local[(paper_id, kind)] = choice
+        choice.action, choice.at = action, at
+        session.add(choice)
+        changed += 1
+    session.flush()
+    for (paper_id, kind), choice in list(local.items()):
+        other = local.get((paper_id, "negative" if kind == "positive" else "positive"))
+        both = other is not None and choice.action == other.action == "include"
+        if both and choice.at < other.at:
+            session.delete(choice)
+            del local[(paper_id, kind)]
+    session.flush()
+    return changed
+
+
 def _numbered(name: str, number: int) -> str:
     return name if number == 1 else f"{name} {number}"
 
@@ -739,11 +794,14 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
     created, touched = 0, set()
     for entry in incoming:
         wanted = entry.get("kind") or libraries.IMPORTED
+        if wanted in libraries.EXAMPLE_KINDS:
+            continue  # regenerated from the rules and your choices
         library, number = None, 1
         while (found := existing.get(_numbered(entry["name"], number).lower())) is not None:
-            # same name but another kind (e.g. an import called "Recommended") is a
-            # different library: look for its renamed copy ("Recommended 2") instead
-            if (wanted == libraries.RECOMMENDED) == (found.kind == libraries.RECOMMENDED):
+            # same name but another kind (e.g. an import called "Recommended" or
+            # "Positive examples") is a different library: look for its renamed copy
+            # ("Recommended 2") instead
+            if found.kind == wanted:
                 library = found
                 break
             number += 1
@@ -786,6 +844,7 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
 
 
 PERSONAL_TABLES = (
+    ExampleChoice,
     Recommendation,
     RecommendationBatch,
     QueueItem,

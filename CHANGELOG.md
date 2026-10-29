@@ -3,6 +3,26 @@
 All notable changes are listed here. Versions follow
 [semantic versioning](https://semver.org); dates are ISO 8601.
 
+## Unreleased
+
+### Added
+
+- **Examples for Semantic Scholar recommendations**: the positive and
+  negative example papers are two libraries (*Positive examples*, *Negative
+  examples*) that show each paper's origin. Choose the rules that fill them
+  (`liked`, `read`, `recent`, `impact`, `fwci`, `cited`; `dismissed`,
+  `low_rated`), their order and the number of examples; add, remove and
+  restore papers yourself, also from any paper's page; undo your changes.
+  New settings `selection.s2_positive_rules`, `s2_positive_count`,
+  `s2_negative_rules`, `s2_negative_count` (the defaults keep the previous
+  choice, except that a paper you marked not relevant is no longer also a
+  positive example); command `litresearch examples`. Your choices are part
+  of profile files and backups; the evidence tree names the number of
+  examples used.
+- **Choose the libraries used for recommendations** with checkboxes on the
+  Libraries page (and on the positive examples' page) or with
+  `litresearch library use NAME… [--off]`; a warning when none is used.
+
 ## 0.2.0-dev (2026-10-29)
 
 A development release for testing the new search and libraries.

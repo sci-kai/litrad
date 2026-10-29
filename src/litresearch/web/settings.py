@@ -291,7 +291,7 @@ GROUPS = (
                 ("sources", "semanticscholar"),
                 "Semantic Scholar",
                 "Recommendations based on your library, SPECTER2 embeddings and TL;DRs. "
-                "Sends DOIs of library, liked and dismissed papers to Semantic Scholar.",
+                "Sends DOIs of library papers and of the example papers to Semantic Scholar.",
                 "bool",
             ),
         ),
@@ -501,6 +501,11 @@ FIELD_LABELS: dict[tuple, str] = {
     **{s.path: s.label for s in ALL_SETTINGS},
     **{(name,): label for _, _, fields in RULE_GROUPS for name, label, *_ in fields},
     **{("game", name): label for _, _, fields in RULE_GROUPS for name, label, *_ in fields},
+    # set on the pages of the example lists (Library → Positive / Negative examples)
+    ("selection", "s2_positive_rules"): "Rules of the positive examples",
+    ("selection", "s2_positive_count"): "Number of positive examples",
+    ("selection", "s2_negative_rules"): "Rules of the negative examples",
+    ("selection", "s2_negative_count"): "Number of negative examples",
 }
 _PART_NAMES = {"topics": "Topic", "levels": "Level"}
 

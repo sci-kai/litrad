@@ -170,6 +170,7 @@ class Library(SQLModel, table=True):
     name: str = Field(index=True)
     description: str = ""
     # imported: from a reference manager export · recommended: recommendations you queued
+    # · positive / negative: example papers for Semantic Scholar (kept by examples.py)
     kind: str = "imported"
     # bibtex | ris | csl-json (of the last import)
     format: str | None = None
@@ -192,6 +193,21 @@ class LibraryPaper(SQLModel, table=True):
     folders: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     tags: list[str] = Field(default_factory=empty_list, sa_column=Column(JSON))
     added_at: NaiveDatetime = Field(default_factory=now)
+
+
+class ExampleChoice(SQLModel, table=True):
+    """Your choice about a paper as example for Semantic Scholar's recommendations.
+
+    ``include`` puts it into the list of that kind (positive or negative),
+    ``exclude`` keeps the rules from choosing it (see ``examples.py``).
+    """
+
+    paper_id: int = Field(foreign_key="paper.id", primary_key=True)
+    # positive | negative
+    kind: str = Field(primary_key=True)
+    # include | exclude
+    action: str
+    at: NaiveDatetime = Field(default_factory=now)
 
 
 class IngestRun(SQLModel, table=True):
