@@ -1,92 +1,67 @@
-# Testing litresearch
+# Testing litresearch 0.2.0-dev
 
-Thank you for testing! This alpha needs people who use it with their **own
-library for real reading**, not only a quick click through. This guide says
-what to try and how to report it. Everything takes about 30 minutes to set
-up; then use it for a few weeks as part of your reading.
+Thank you for testing! Use litresearch with your **own library for real
+reading** for a few weeks, not only a quick click through. Setting it up
+takes about 30 minutes.
 
 ## Before you start
 
-- Install with `python3 install.py` (see the [README](README.md)); note your
-  system (e.g. Raspberry Pi OS 64 bit, Ubuntu 24.04), Python version and
-  browser.
-- It is an alpha: run `litresearch backup` now and then, and point
-  `backup.dir` to a synced folder (documentation, chapter "Your data and
-  backups").
-- Your library and notes never leave your machine. When you report, do not
-  paste private data (BibTeX export, notes, API keys); titles of public
-  papers are fine if they help.
+- Install with `python3 install.py` ([README](README.md)); note your system,
+  Python version and browser.
+- Point `backup.dir` to a synced folder and run `litresearch backup` now and
+  then (documentation, "Your data and backups").
+- Never paste private data (exports, notes, API keys) into an issue; titles
+  of public papers are fine.
 
-## Part 1: first steps (first day)
+## First day
 
-Tick what worked; report what did not.
-
-- [ ] Installation with `install.py` (how long did it take?)
-- [ ] `litresearch serve`: choosing the network, opening the address on
-      another device (with `litresearch set-password`)
-- [ ] Creating a profile; changing a game rule before creating it
-- [ ] Exporting your library from Paperpile or another reference manager
-      (BibTeX, RIS or CSL-JSON) and importing it as a new library under
+- [ ] Install; `litresearch serve`; open it from another device (after
+      `litresearch set-password`)
+- [ ] Create a profile; change a game rule before creating it
+- [ ] Export your library (BibTeX, RIS or CSL-JSON) and import it under
       *Library → Import*: were the checks and instructions clear?
-- [ ] A second library (e.g. a project or another manager), an import into an
-      existing library (add / replace), and an export (BibTeX or RIS, with
-      reading status) imported back into your reference manager
-- [ ] Setting up topics on the first visit to *Recommendations*
-- [ ] Getting the first recommendations (how long did it take? warnings?)
-- [ ] Reading the evidence tree of one recommendation: is it understandable?
-- [ ] Adding papers to the queue: from the recommendations, from your
-      library, by DOI, by title
-- [ ] *Library → Find & add*: search Europe PMC and PubMed by keywords,
-      author, journal and years; did you find what you looked for? Add a
-      result to the queue
-- [ ] Logging a read with depth, rating and a note; the XP pop-up
-- [ ] The documentation in the web UI (📖): did you find what you looked for?
+- [ ] Set up topics on the first visit to *Recommendations*; get the first
+      list (how long did it take? warnings?); read one evidence tree
+- [ ] Add papers to the queue: from recommendations, your library, by DOI,
+      `pmid:`, title
+- [ ] Log a read with depth, rating and note; watch the XP pop-up
+- [ ] Find the answer to a question in the documentation (📖)
 
-## Part 2: everyday use (two to four weeks)
+## New in 0.2: libraries and Find & add
 
-- [ ] Get new recommendations when reminded (about once a week)
-- [ ] Mark irrelevant papers as *not relevant*; do later sets get better?
-- [ ] Read from the queue; try to keep a weekly streak and the weekly quest
+- [ ] A **second library** (another manager or project); import into an
+      **existing** library, once *adding* and once *replacing*
+- [ ] **Export** a library as BibTeX or RIS *with reading status* and import
+      it into your reference manager: are the labels kept?
+- [ ] Re-import an updated export: are papers recognised, nothing doubled?
+- [ ] *Recommended* and *Reading queue* libraries; switch a library off for
+      recommendations
+- [ ] **Find & add**: search Europe PMC and PubMed by keywords, author,
+      journal, years, open access; did you find what you looked for? Queue a
+      result; search your own library
+- [ ] Large libraries: how long do import, recommendations and the library
+      pages take, for how many papers?
+
+## Two to four weeks
+
+- [ ] New recommendations when reminded; mark misses *not relevant*; do
+      later lists get better?
+- [ ] Read from the queue; keep a weekly streak and the quest
 - [ ] Remove a paper unread at least once (the penalty)
-- [ ] Update a library after adding papers in your reference manager (export again, or *Update from file*)
-- [ ] Look at *Progress & XP* and the weekly reports on the dashboard
+- [ ] Update a library from your reference manager (*Update from file*)
+- [ ] *Progress & XP*, the XP ledger and weekly reports
 - [ ] Use it from the phone browser
-- [ ] Make a backup; save a profile file; (optional) restore or load it as a
-      second profile and compare the two
-- [ ] (Optional) the command line: `litresearch queue`, `read`, `score`
+- [ ] Save a profile file; (optional) load it as a second profile and compare
 
-## Part 3: tell us how it went
+## Reporting
 
-Use the **Testing feedback** issue template after one week and again after
-four weeks. It asks, among other things:
+- **Testing feedback** template after one and after four weeks: how many
+  recommendations were worth reading, what motivated or annoyed you, what
+  you missed or never used.
+- **Bug report**: steps, expected vs. actual, terminal output (and browser
+  console, F12, for UI problems), `litresearch version` and your system.
+- **Feature request**: check the [roadmap](ROADMAP.md) and existing issues
+  first.
 
-- How many of each set of recommendations were worth reading? What were
-  the misses?
-- Did the game motivate you? Which rule felt unfair?
-- What did you miss most? What did you never use?
-- How long did ingest and recommendations take, for how many papers?
-
-Attach `litresearch version` and, if a step failed, the terminal output.
-
-## Reporting a problem
-
-Open an issue with the **Bug report** template:
-
-1. What you did (steps), what you expected, what happened.
-2. The terminal output of `litresearch serve` or the command, and for UI
-   problems the browser console (F12 → Console).
-3. `litresearch version` and your system.
-
-Ideas go into **Feature request**; check the [roadmap](ROADMAP.md) first,
-and comment on an existing issue rather than opening a duplicate.
-
-## For developers: automated tests
-
-```bash
-python3 install.py --dev
-.venv/bin/pytest             # offline suite, recorded API responses
-.venv/bin/pytest --network   # also against the real APIs
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the Development chapter of the
-documentation.
+Developers: `python3 install.py --dev && .venv/bin/pytest`; see
+[CONTRIBUTING.md](CONTRIBUTING.md).

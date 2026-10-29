@@ -1,85 +1,76 @@
 # litresearch
 
 A personal literature radar built on your reference-manager libraries
-(Paperpile, Zotero, Mendeley, EndNote …). Whenever you ask
-(with a weekly reminder), it proposes **up to 5 papers**, ranked by
-similarity to your library (SPECTER2), your topics, paper impact and
-timeliness: very recent *or* a landmark paper.
+(Paperpile, Zotero, Mendeley, EndNote …). Whenever you ask (with a weekly
+reminder), it proposes **up to 5 papers**, ranked by similarity to your
+library (SPECTER2), your topics, paper impact and timeliness: very recent
+*or* a landmark.
 
-- You pick which papers go on your **reading queue**: short (max 5), ordered,
-  one paper "up next". Any paper can be added by DOI or title.
-- You log how deeply you read (abstract / skimmed / read / thorough), rate
-  and take notes; a **game layer** (XP, streaks, weekly quests, 20 career
-  levels, 44 badges, weekly report cards) keeps you going.
-- Everything belongs to a **profile** with its own libraries, topics,
-  recommendations, progress and game rules, which are locked when the profile
-  is created. Profiles can be saved, loaded and compared.
-- Everything is **transparent**: each recommendation has an evidence tree, and
-  every rule is documented and adjustable.
-- Free data sources only (OpenAlex, Semantic Scholar, Crossref), no personal
-  data sent.
+- **You decide:** pick papers onto a short, ordered **reading queue**; add
+  any paper by DOI, PubMed ID or title, or find it in **Europe PMC and
+  PubMed**.
+- **Track your reading:** abstract / skimmed / read / thorough, ratings and
+  notes; a **game layer** (XP, streaks, weekly quests, 20 levels, 44 badges)
+  keeps you going.
+- **Several libraries** from any reference manager (BibTeX, RIS, CSL-JSON),
+  exportable with your reading status.
+- **Profiles** hold everything personal, with game rules locked on creation;
+  save, load and compare them.
+- **Transparent and private:** an evidence tree for every recommendation,
+  every rule documented; free services only, no personal data sent.
 
-**Status:** alpha (`v0.1.0-alpha.1`), ready for testing. Expect rough
-edges; please [test it](TESTING.md) and report what breaks.
-Runs on Linux (developed on a Raspberry Pi); a phone app (PWA) is planned.
+**Status:** `v0.2.0-dev` (2026-10-29), a development release for testing;
+previous release `v0.1.0-alpha.1`. Runs on Linux (developed on a Raspberry
+Pi). Please [test it](TESTING.md) and report what breaks.
 
-## Install
+## Install and first steps
 
 ```bash
 git clone <repository-url> litresearch && cd litresearch
-python3 install.py                       # add --service to start the web UI automatically
-.venv/bin/litresearch serve              # asks where to serve, prints the address to open
+python3 install.py                 # --service: start the web UI automatically
+.venv/bin/litresearch serve        # asks where to serve, prints the address to open
 ```
 
-In the browser: create a profile, import your library export (BibTeX, RIS or
-CSL-JSON, e.g. from Paperpile) under **Library → Import**, name your topics and get your first
-recommendations (**Reading → Recommendations**). Everything also works on the
-command line:
+In the browser:
+
+1. create a profile (and its game rules);
+2. **Library → Import** your reference-manager export;
+3. **Reading → Recommendations**: name your topics and get your first list;
+4. put papers on your queue, read, and log what you read.
+
+Everything also works on the command line:
 
 ```bash
 .venv/bin/litresearch profile create "Kai"
 .venv/bin/litresearch library import library.bib --new "Paperpile"
-.venv/bin/litresearch recommend          # latest list; --new for new papers
+.venv/bin/litresearch recommend --new
 .venv/bin/litresearch queue add r1
 .venv/bin/litresearch read q1 thorough --rating 5 --note "..."
 .venv/bin/litresearch score
 ```
 
-Update with `git pull && python3 install.py`; your `config/` and `data/` stay.
+Update with `git pull && python3 install.py`; `config/` and `data/` stay.
 
 ## Documentation
 
-Everything is in **[docs/documentation.md](docs/documentation.md)**:
+Everything is in **[docs/documentation.md](docs/documentation.md)**, also
+built into the web UI (📖):
 
 | Part | Contents |
 |---|---|
-| I. Using litresearch | setup (exports from reference managers, what they must contain, sync), the reading loop, profiles, libraries (import and export), the web UI and network access |
-| II. How it works | how papers are recommended (every rule and formula, the evidence tree), points, penalty, levels and badges |
-| III. Reference | all commands, data sources and privacy, configuration, where your data lives, backups, moving machines |
-| IV. How it is built | architecture, modules, algorithms, tests, development workflow, **credits for all packages, services and literature** |
+| I. Using litresearch | setup and exports, the weekly loop, profiles, libraries, the web UI and network access |
+| II. How it works | every recommendation rule and formula; points, penalty, levels and badges |
+| III. Reference | commands, data sources and privacy, configuration, data and backups |
+| IV. How it is built | architecture, development, tests, **credits for all packages, services and literature** |
 
-## Roadmap
-
-`v0.1.0-alpha.1` is in testing; feedback decides the next steps. Planned, in
-this order unless testing says otherwise ([details](ROADMAP.md)):
-
-| Version | Focus |
-|---|---|
-| 0.1.x | alpha testing and fixes ([how to test](TESTING.md)) |
-| 0.2 | **next:** find papers in Europe PMC and PubMed and queue them; several libraries from any reference manager (BibTeX, RIS, CSL-JSON), import into new or existing libraries, export (built, in testing) |
-| 0.3 | your reading history: a tab with all read papers, notes and ratings |
-| 0.4 | PubMed and PubMed Central for recommendations and free full texts |
-| 0.5 | notes as Markdown files, compatible with an Obsidian vault |
-| 0.6 | summaries by a local LLM (LM Studio, Ollama) |
-| 0.7 | reference managers: write-back, automatic updates, Zotero's API |
-| 0.8 | macOS, Windows, Docker, installable phone app |
-| 0.9 / 1.0 | beta with stable data format, then 1.0 |
+Plans: [ROADMAP.md](ROADMAP.md) · changes: [CHANGELOG.md](CHANGELOG.md) ·
+testing: [TESTING.md](TESTING.md).
 
 ## Contributing
 
 Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
-`main` holds releases, `dev` is the development branch, and feature branches
-(`feat-*`, `issueNN-*`) branch off `dev`. Changes: [CHANGELOG.md](CHANGELOG.md).
+`main` holds releases, `dev` is the development branch; feature branches
+(`feat-*`, `issueNN-*`) start from `dev`. Security: [SECURITY.md](SECURITY.md).
 
 ## License
 

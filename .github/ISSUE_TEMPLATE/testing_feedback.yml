@@ -21,7 +21,7 @@ body:
     id: setup
     attributes:
       label: Version, system and library size
-      placeholder: 0.1.0-alpha.1 · Raspberry Pi OS · Paperpile · 450 papers
+      placeholder: 0.2.0-dev · Raspberry Pi OS · Paperpile · 450 papers
     validations:
       required: true
   - type: dropdown

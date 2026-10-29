@@ -1,7 +1,7 @@
 # Contributing to litresearch
 
-Thanks for testing litresearch! It is an **alpha**: things will break, and
-reports of what breaks are the most useful contribution right now.
+Thanks for testing litresearch! It is in early development (`0.x`): things
+will break, and reports of what breaks are the most useful contribution.
 
 ## Reporting problems and ideas
 
