@@ -25,11 +25,18 @@ Pi). Please [test it](TESTING.md) and report what breaks.
 
 ## Install and first steps
 
+Needs Linux with Python ≥ 3.11 and git (Debian, Ubuntu, Raspberry Pi OS:
+`sudo apt install git python3-venv`).
+
 ```bash
 git clone <repository-url> litresearch && cd litresearch
-python3 install.py                 # --service: start the web UI automatically
-.venv/bin/litresearch serve        # asks where to serve, prints the address to open
+python3 install.py                 # checks, installs, offers to start the web UI
+.venv/bin/litresearch serve        # later: start the web UI, open the address it prints
 ```
+
+Options: `--service` (start the web UI automatically), `--repair` (if
+litresearch does not start), `--remove-service`. Details:
+[Setup](docs/documentation.md#1-setup).
 
 In the browser:
 

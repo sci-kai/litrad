@@ -67,6 +67,11 @@ A development release for testing the new search and libraries.
 
 ### Fixed
 
+- **Installer:** checks Python and `venv` first (with the `apt` command to
+  fix it), checks at the end that litresearch actually starts instead of
+  saying "Done" over a broken installation (e.g. a corrupt download), and
+  offers to start the web UI. New options `--repair` (reinstall without
+  pip's cache) and `--remove-service`.
 - **Only a deeper level counts:** logging a paper again at the same or a
   shallower level (also after it was recommended again) no longer counts for
   the weekly quest, streak, report card, badges, personal bests or the

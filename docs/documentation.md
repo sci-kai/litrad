@@ -29,19 +29,29 @@ This is the complete documentation. In the web UI it is under
 
 ### 1. Install
 
-Requires Linux, Python ≥ 3.11 and `git` (developed on a Raspberry Pi 5,
-Python 3.13).
+Requires Linux, Python ≥ 3.11, `git` and an internet connection for the
+installation (developed on a Raspberry Pi 5, Python 3.13). On Debian, Ubuntu
+or Raspberry Pi OS: `sudo apt install git python3-venv`.
 
 ```bash
 git clone <repository-url> litresearch && cd litresearch
-python3 install.py                # --service: start the web UI automatically (systemd user service)
-.venv/bin/litresearch serve       # asks where to serve and prints the address to open
+python3 install.py                # about 1–3 minutes; offers to start the web UI at the end
+.venv/bin/litresearch serve       # later: start the web UI, open the address it prints
 ```
 
-`install.py` creates `.venv`, installs litresearch and creates
-`config/config.yaml` from the example (an existing one is never overwritten).
-`--dev` adds test and lint tools. With `--service` the UI is served on the
-network set as `web.host` without asking.
+`install.py` checks the system, creates `.venv`, installs litresearch,
+creates `config/config.yaml` from the example (an existing one is never
+overwritten) and checks that litresearch starts. If something is missing it
+stops with the fix (e.g. the `apt` command); it never says "Done" over a
+broken installation. Run litresearch commands from the litresearch folder:
+`config/` and `data/` are found relative to it.
+
+| Option | Does |
+|---|---|
+| `--service` | start the web UI automatically (systemd user service), on the network set as `web.host`, without asking |
+| `--remove-service` | stop starting it automatically (data stays) |
+| `--repair` | reinstall all packages without pip's cache, e.g. after an interrupted download ("litresearch does not start") |
+| `--dev` | add test and lint tools |
 
 - **Update:** `litresearch backup`, then `git pull && python3 install.py`.
   `config/` and `data/` are kept; the CHANGELOG says when a version changes
