@@ -101,10 +101,35 @@ def total_xp(session: Session) -> int:
 READ_STATUSES = READ_LEVELS[1:]
 
 
+def deeper_reads(events) -> list[tuple]:
+    """``(event, level)`` for the events that took a paper deeper than ever before.
+
+    ``events`` must be in time order. Logging a paper again at the same or a
+    shallower level (also after it was recommended again) is not progress: it
+    counts for no quest, streak, report card, badge or calendar.
+    """
+    deepest: dict[int, int] = {}
+    found = []
+    for event in events:
+        level = depth(event.status)
+        if level > deepest.get(event.paper_id, 0):
+            deepest[event.paper_id] = level
+            found.append((event, level))
+    return found
+
+
+def _events_in_order(session: Session, *where):
+    return session.exec(
+        select(StatusEvent.paper_id, StatusEvent.status, StatusEvent.at, StatusEvent.was_queue_top)
+        .where(*where)
+        .order_by(StatusEvent.at, StatusEvent.id)
+    ).all()
+
+
 def reading_weeks(session: Session) -> list[date]:
-    """Weeks (Mondays) with at least one paper skimmed or read deeper."""
-    moments = session.exec(select(StatusEvent.at).where(StatusEvent.status.in_(READ_STATUSES)))
-    return sorted({week_start(at.date()) for at in moments})
+    """Weeks (Mondays) in which a paper first reached skimmed or a deeper level."""
+    events = _events_in_order(session, StatusEvent.status.in_(READ_STATUSES))
+    return sorted({week_start(e.at.date()) for e, level in deeper_reads(events) if level >= 2})
 
 
 def streaks(weeks: list[date], today: date) -> tuple[int, int]:
@@ -140,14 +165,10 @@ def week_progress(session: Session, rules, day: date) -> dict:
     """Quest progress for the week containing ``day``."""
     rules = as_rules(rules)
     start = datetime.combine(week_start(day), datetime.min.time())
-    events = session.exec(
-        select(StatusEvent).where(
-            StatusEvent.at >= start, StatusEvent.at < start + timedelta(weeks=1)
-        )
-    ).all()
-    deepest: dict[int, int] = {}
-    for event in events:
-        deepest[event.paper_id] = max(deepest.get(event.paper_id, 0), depth(event.status))
+    events = _events_in_order(
+        session, StatusEvent.at >= start, StatusEvent.at < start + timedelta(weeks=1)
+    )
+    deepest = _week_depths(session, events, start)
     xp = session.exec(
         select(func.coalesce(func.sum(XpEvent.points), 0)).where(
             XpEvent.at >= start, XpEvent.at < start + timedelta(weeks=1)
@@ -156,8 +177,20 @@ def week_progress(session: Session, rules, day: date) -> dict:
     return {"week_start": week_start(day), **quest_progress(deepest.values(), rules), "xp": xp}
 
 
+def _week_depths(session: Session, events, start: datetime) -> dict[int, int]:
+    """Deepest new level each paper of one week's ``events`` reached in that week."""
+    before: list = []
+    for chunk in _chunks(sorted({e.paper_id for e in events})):
+        before += _events_in_order(session, StatusEvent.paper_id.in_(chunk), StatusEvent.at < start)
+    week: dict[int, int] = {}
+    for event, level in deeper_reads([*before, *events]):
+        if event.at >= start:
+            week[event.paper_id] = max(week.get(event.paper_id, 0), level)
+    return week
+
+
 def quest_progress(depths, rules: GameRules) -> dict:
-    """Quest figures from the deepest level each paper reached within one week."""
+    """Quest figures from the deepest new level each paper reached within one week."""
     depths = list(depths)
     detail = sum(d >= 3 for d in depths)
     total = sum(d >= 2 for d in depths)
@@ -210,11 +243,7 @@ def stats(session: Session, today: date, rules=None) -> dict:
         ).all()
     }
     readings = session.exec(select(Reading.notes, Reading.rating, Reading.status)).all()
-    events = session.exec(
-        select(StatusEvent.paper_id, StatusEvent.status, StatusEvent.at).order_by(
-            StatusEvent.at, StatusEvent.id
-        )
-    ).all()
+    events = _events_in_order(session)
     recommended = set(session.exec(select(Recommendation.paper_id).distinct()).all())
 
     deepest: dict[int, int] = {}
@@ -227,9 +256,9 @@ def stats(session: Session, today: date, rules=None) -> dict:
     night: set[int] = set()
     early: set[int] = set()
     weekend: set[int] = set()
-    for event in events:
-        level = depth(event.status)
-        deepest[event.paper_id] = max(deepest.get(event.paper_id, 0), level)
+    # only steps to a deeper level count; re-logging a paper earns nothing
+    for event, level in deeper_reads(events):
+        deepest[event.paper_id] = level
         in_week = week_depths.setdefault(week_start(event.at.date()), {})
         in_week[event.paper_id] = max(in_week.get(event.paper_id, 0), level)
         if level < 2:
@@ -277,15 +306,7 @@ def stats(session: Session, today: date, rules=None) -> dict:
     grades = Counter(
         grade(quest_progress(week_depths[monday].values(), rules), True)[0] for monday in weeks
     )
-    frogs = len(
-        {
-            e.paper_id
-            for e in session.exec(
-                select(StatusEvent.paper_id, StatusEvent.status).where(StatusEvent.was_queue_top)
-            ).all()
-            if depth(e.status) >= 2
-        }
-    )
+    frogs = len({e.paper_id for e, level in deeper_reads(events) if e.was_queue_top and level >= 2})
     return {
         "xp": total_xp(session),
         "papers_read": len(read_ids),
@@ -393,7 +414,9 @@ def award_reading(
             )
 
     new_depth = depth(status)
-    if new_depth > previous_depth:
+    # reading bonuses need a step to a deeper level, never a re-log of the same one
+    deeper = new_depth > previous_depth
+    if deeper:
         previous_xp = base_xp[READ_LEVELS[previous_depth - 1].value] if previous_depth else 0
         base = base_xp[status.value] - previous_xp
         add(base, "read", f"{status.value}: {paper.title[:60]}")
@@ -407,17 +430,22 @@ def award_reading(
         if was_queue_top and new_depth >= 2:
             add(round(base * rules.frog_bonus), "frog", "Ate the frog: read your top paper first")
 
-    if new_depth >= 3 and (paper.citation_percentile or 0) >= rules.classic_percentile:
+    if deeper and new_depth >= 3 and (paper.citation_percentile or 0) >= rules.classic_percentile:
         if not _already(session, "classic", paper.id):
             add(
                 rules.classic_xp,
                 "classic",
                 f"Read a landmark paper (top {100 - rules.classic_percentile:g} % cited)",
             )
-    if new_depth >= 2 and paper.pub_date and 0 <= (today - paper.pub_date).days <= rules.hot_days:
+    if (
+        deeper
+        and new_depth >= 2
+        and paper.pub_date
+        and 0 <= (today - paper.pub_date).days <= rules.hot_days
+    ):
         if not _already(session, "hot", paper.id):
             add(rules.hot_xp, "hot", f"Hot off the press: published within {rules.hot_days} days")
-    if new_depth >= 2 and not _already(session, "recommended", paper.id):
+    if deeper and new_depth >= 2 and not _already(session, "recommended", paper.id):
         recommended = session.exec(
             select(Recommendation).where(Recommendation.paper_id == paper.id)
         ).first()
@@ -520,17 +548,15 @@ def weekly_summary(session: Session, rules, monday: date, today: date) -> dict:
     end = start + timedelta(weeks=1)
     progress = week_progress(session, rules, monday)
     letter, comment = grade(progress, week_over=end.date() <= today)
-    events = session.exec(
-        select(StatusEvent, Paper)
-        .join(Paper, Paper.id == StatusEvent.paper_id)
-        .where(StatusEvent.at >= start, StatusEvent.at < end)
-        .order_by(StatusEvent.at)
-    ).all()
+    # the papers that reached a new level this week (re-logged papers do not count)
+    reached = _week_depths(
+        session, _events_in_order(session, StatusEvent.at >= start, StatusEvent.at < end), start
+    )
     papers: dict[int, dict] = {}
-    for event, paper in events:
-        entry = papers.setdefault(paper.id, {"paper": paper, "status": event.status, "depth": 0})
-        if depth(event.status) >= entry["depth"]:
-            entry.update(status=event.status, depth=depth(event.status))
+    for chunk in _chunks(sorted(reached)):
+        for paper in session.exec(select(Paper).where(Paper.id.in_(chunk))):
+            level = reached[paper.id]
+            papers[paper.id] = {"paper": paper, "status": READ_LEVELS[level - 1], "depth": level}
     xp_events = session.exec(select(XpEvent).where(XpEvent.at >= start, XpEvent.at < end)).all()
     by_kind: dict[str, int] = {}
     for event in xp_events:
@@ -618,10 +644,9 @@ def reading_calendar(session: Session, today: date, weeks: int = 26) -> list[lis
     first = week_start(today) - timedelta(weeks=weeks - 1)
     counts: dict[date, int] = {}
     xp: dict[date, int] = {}
-    for event in session.exec(
-        select(StatusEvent).where(StatusEvent.at >= datetime.combine(first, datetime.min.time()))
-    ).all():
-        if depth(event.status) >= 1:
+    since = datetime.combine(first, datetime.min.time())
+    for event, _ in deeper_reads(_events_in_order(session)):
+        if event.at >= since:
             counts[event.at.date()] = counts.get(event.at.date(), 0) + 1
     for event in session.exec(
         select(XpEvent).where(XpEvent.at >= datetime.combine(first, datetime.min.time()))
@@ -655,8 +680,8 @@ def personal_bests(session: Session, rules, today: date, current: dict | None = 
         per_week[monday] = per_week.get(monday, 0) + event.points
     best_week = max(per_week.items(), key=lambda kv: kv[1], default=(None, 0))
     papers_per_week: dict[date, set[int]] = {}
-    for event in session.exec(select(StatusEvent.paper_id, StatusEvent.status, StatusEvent.at)):
-        if depth(event.status) >= 2:
+    for event, level in deeper_reads(_events_in_order(session)):
+        if level >= 2:
             papers_per_week.setdefault(week_start(event.at.date()), set()).add(event.paper_id)
     busiest = max(papers_per_week.items(), key=lambda kv: len(kv[1]), default=(None, set()))
     s = current if current is not None else stats(session, today, rules)

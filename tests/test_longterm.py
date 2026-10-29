@@ -8,10 +8,21 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
-from litresearch.db import Achievement, Paper, ReadStatus, XpEvent, init_db
+from litresearch.db import (
+    Achievement,
+    Category,
+    Paper,
+    ReadStatus,
+    Recommendation,
+    RecommendationBatch,
+    XpEvent,
+    init_db,
+)
 from litresearch.game import (
     level_for,
     next_read_streak,
+    personal_bests,
+    reading_calendar,
     reading_weeks,
     stats,
     streaks,
@@ -163,6 +174,68 @@ def test_relogging_one_paper_at_night_is_one_night_read(db):
         record_reading(session, cfg, paper, status, at=datetime(2026, 1, 5 + day, 23))
     assert stats(session, date(2026, 1, 10))["night_reads"] == 1
     assert session.get(Achievement, "night_owl") is None
+
+
+def recommend_again(session, paper, day):
+    batch = RecommendationBatch(week_start=week_start(day))
+    session.add(batch)
+    session.flush()
+    session.add(
+        Recommendation(
+            batch_id=batch.id, paper_id=paper.id, rank=1, category=Category.open, score=1
+        )
+    )
+    session.commit()
+
+
+def test_relogging_read_papers_counts_for_no_quest_streak_or_report(db):
+    """Only a deeper level is progress, also for a paper recommended again."""
+    cfg, session = db
+    start_profile(session, cfg, at=datetime(2026, 1, 1))
+    papers = [add(session, f"P{i}") for i in range(3)]
+    first_week = date(2026, 1, 5)
+    for i, paper in enumerate(papers):
+        status = ReadStatus.read if i == 0 else ReadStatus.skimmed
+        record_reading(session, cfg, paper, status, at=datetime(2026, 1, 5 + i, 9))
+    assert week_progress(session, GameRules(), first_week)["done"]
+    xp_before = sum(e.points for e in session.exec(select(XpEvent)).all())
+
+    # three weeks later: the same papers, recommended again and logged again
+    later = date(2026, 1, 26)
+    for i, paper in enumerate(papers):
+        recommend_again(session, paper, later)
+        status = ReadStatus.read if i == 0 else ReadStatus.skimmed
+        record_reading(session, cfg, paper, status, at=datetime(2026, 1, 26 + i, 9))
+        record_reading(session, cfg, paper, ReadStatus.abstract, at=datetime(2026, 1, 26 + i, 10))
+
+    progress = week_progress(session, GameRules(), later)
+    assert progress["total"] == 0 and not progress["done"]
+    assert reading_weeks(session) == [first_week]
+    assert sum(e.points for e in session.exec(select(XpEvent)).all()) == xp_before
+    assert [q.reason for q in xp_of(session, "quest")] == ["Weekly quest 2026-01-05"]
+    summary = weekly_summary(session, GameRules(), later, date(2026, 2, 1))
+    assert summary["papers"] == [] and summary["grade"] == "-"
+    s = stats(session, date(2026, 2, 1))
+    assert s["max_week"] == 3 and s["a_weeks"] == 1 and s["papers_read"] == 3
+    assert personal_bests(session, GameRules(), date(2026, 2, 1))["busiest_week"] == first_week
+    logged = [d for column in reading_calendar(session, date(2026, 2, 1), 5) for d in column]
+    assert {d["date"] for d in logged if d["count"]} == {date(2026, 1, 5 + i) for i in range(3)}
+
+
+def test_a_deeper_level_counts_in_its_week(db):
+    cfg, session = db
+    start_profile(session, cfg, at=datetime(2026, 1, 1))
+    paper = add(session, "Deeper")
+    record_reading(session, cfg, paper, ReadStatus.skimmed, at=datetime(2026, 1, 5, 9))
+    record_reading(session, cfg, paper, ReadStatus.skimmed, at=datetime(2026, 1, 12, 9))
+    assert week_progress(session, GameRules(), date(2026, 1, 12))["total"] == 0
+    recommend_again(session, paper, date(2026, 1, 19))
+    record_reading(session, cfg, paper, ReadStatus.thorough, at=datetime(2026, 1, 19, 9))
+    progress = week_progress(session, GameRules(), date(2026, 1, 19))
+    assert (progress["detail"], progress["thorough"]) == (1, 1)
+    assert reading_weeks(session) == [date(2026, 1, 5), date(2026, 1, 19)]
+    papers = weekly_summary(session, GameRules(), date(2026, 1, 19), date(2026, 1, 25))["papers"]
+    assert [(p["paper"].title, p["status"]) for p in papers] == [("Deeper", ReadStatus.thorough)]
 
 
 # --- drop penalty --------------------------------------------------------------------

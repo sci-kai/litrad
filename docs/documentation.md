@@ -626,17 +626,22 @@ planned to read first), not volume.
 
 Fairness rules that always apply:
 
-- Base points per paper are paid only up to the deepest level ever reached;
-  upgrading pays the difference, re-logging or downgrading pays nothing.
+- **Only a deeper level counts.** A reading counts only when the paper
+  reaches a level it never had before. Upgrading pays the difference;
+  logging a paper again at the same or a shallower level earns nothing and
+  counts for no quest, streak, report card, badge or calendar, even if the
+  paper was recommended again.
 - Paper bonuses (landmark, fresh, recommendation, rating, notes) are paid
-  once per paper. The frog bonus is a share of *newly* earned base points.
+  once per paper; the reading bonuses only with a step to a deeper level. The
+  frog bonus is a share of *newly* earned base points.
 - Dismissing a recommendation you never queued is free.
 - Penalties can lower the total and the level, but never below level 1.
 
 ### Streaks, weekly quest and metrics
 
-- A **reading week** (Monday to Sunday) has at least one paper skimmed or
-  deeper. The **streak** counts consecutive reading weeks and stays alive
+- A **reading week** (Monday to Sunday) has at least one paper that reached
+  skimmed or a deeper level for the first time. The **weekly quest** and
+  the report card count each paper's new level in that week. The **streak** counts consecutive reading weeks and stays alive
   through the following week, so it does not reset on Monday morning.
 - **Weekly grade:** S = quest complete including a thorough read; A = quest
   complete; B = at least half the quest; C = something read; - = rest week.
@@ -665,7 +670,8 @@ few bonuses) is worth about 200–300 XP.
 
 ### Badges (default targets)
 
-"Read" means skimmed or deeper.
+"Read" means skimmed or deeper, reached for the first time (re-logging a
+paper counts once).
 
 | Group | Badge | Requirement | Code |
 |---|---|---|---|

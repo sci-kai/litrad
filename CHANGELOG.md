@@ -67,6 +67,10 @@ A development release for testing the new search and libraries.
 
 ### Fixed
 
+- **Only a deeper level counts:** logging a paper again at the same or a
+  shallower level (also after it was recommended again) no longer counts for
+  the weekly quest, streak, report card, badges, personal bests or the
+  reading calendar, and earns no landmark, fresh or recommendation bonus.
 - Without a password, the web server only answers requests for IP addresses,
   `localhost` or the computer's own name, which blocks DNS-rebinding attacks
   from websites.
