@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 from sqlmodel import Session, select
 
+from litresearch import history as read_history
 from litresearch.cli import (
     ConfigOpt,
     app,
@@ -16,7 +17,7 @@ from litresearch.cli import (
     make_http,
     paper_line,
 )
-from litresearch.db import Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
+from litresearch.db import Library, Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
 from litresearch.game import (
     Award,
     badge_progress,
@@ -507,4 +508,68 @@ def history(
             console.print(
                 f"{when}  {event.status.value:<9} [{colour}]{points:>+4}[/{colour}]  "
                 f"{paper.title[:70]}"
+            )
+
+
+@app.command("read-papers")
+def read_papers(
+    depth: list[Level] = typer.Option([], "--depth", help="Only these depths (repeatable)"),
+    rating: int = typer.Option(0, "--rating", min=0, max=5, help="Minimum rating"),
+    since: str = typer.Option("", "--since", help="Last read on or after YYYY-MM-DD"),
+    until: str = typer.Option("", "--until", help="Last read on or before YYYY-MM-DD"),
+    library: str = typer.Option("", "--library", help="Only papers of this library (name)"),
+    notes: bool = typer.Option(False, "--notes", help="Only papers with notes"),
+    dismissed: bool = typer.Option(False, "--dismissed", help="Include not relevant papers"),
+    search: str = typer.Option("", "--search", help="Words in title, authors or notes"),
+    sort: str = typer.Option("last", "--sort", help="last, first, depth, rating, xp or title"),
+    limit: int = typer.Option(25, help="Rows shown (the TSV file gets all)"),
+    tsv: Path | None = typer.Option(None, "--tsv", help="Write all matching rows to this file"),
+    config: Path = ConfigOpt,
+):
+    """Every paper you marked, with depth, dates, rating, notes and XP."""
+    if sort not in read_history.SORTS:
+        raise typer.BadParameter(f"one of {', '.join(read_history.SORTS)}", param_hint="--sort")
+    for name, text in (("--since", since), ("--until", until)):
+        if text and read_history.parse_date(text) is None:
+            raise typer.BadParameter("use YYYY-MM-DD", param_hint=name)
+    with open_db(config) as (_, session):
+        library_id = None
+        if library:
+            found = session.exec(select(Library).where(Library.name == library)).first()
+            if found is None:
+                names = ", ".join(lib.name for lib in session.exec(select(Library)).all())
+                console.print(f"[red]No library '{library}'. Libraries: {names or 'none'}[/red]")
+                raise typer.Exit(code=1)
+            library_id = found.id
+        found_rows = read_history.rows(
+            session,
+            read_history.HistoryFilter(
+                sort=sort,
+                depths=[d.value for d in depth],
+                min_rating=rating,
+                since=read_history.parse_date(since),
+                until=read_history.parse_date(until),
+                library=library_id,
+                has_notes=notes,
+                dismissed=dismissed,
+                q=search,
+            ),
+        )
+        totals = read_history.counts(found_rows)
+        console.print(
+            "  ".join(f"{k} {v}" for k, v in totals.items()) + f"  total {len(found_rows)}"
+        )
+        if tsv:
+            items = read_history.entries(session, found_rows)
+            tsv.write_text(read_history.to_tsv(items), encoding="utf-8")
+            console.print(f"Wrote {len(items)} rows to {tsv}")
+            return
+        for item in read_history.entries(session, found_rows[:limit]):
+            row = item.row
+            stars = "*" * row.rating if row.rating else "-"
+            console.print(
+                f"{row.last.date().isoformat()}  {read_history.deepest_name(row):<9} "
+                f"{stars:<5} {row.xp:>+5}  {item.paper.title[:70]}",
+                highlight=False,
+                markup=False,
             )
