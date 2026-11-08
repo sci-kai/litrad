@@ -5,17 +5,16 @@
 {% block heading %}Good to see you, {{ profile.name if profile else "reader" }} 👋{% endblock %}
 {% block content %}
 {% if header.reminder %}
-<div class="notice">✨ {% if header.since_batch is none %}You have no recommendations yet.{% else %}Your last recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">Get new recommendations →</a></div>
+<div class="notice">✨ {% if header.since_batch is none %}No recommendations yet.{% else %}Recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">Get recommendations →</a></div>
 {% endif %}
 {% if waiting is not none and waiting >= nudge_days %}
-<div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>. Read it today, or drop it if it no longer matters.</div>
+<div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>: read or remove it.</div>
 {% endif %}
 
 {% if steps %}
 {% set next_step = steps | rejectattr("2") | first %}
 <div class="card onboarding">
   <div class="head"><h2>🚀 Getting started</h2><small class="muted">{{ steps | selectattr("2") | list | length }}/{{ steps | length }} done</small></div>
-  <p class="muted" style="margin:0">Five steps from an empty profile to your first XP. Each one takes a minute.</p>
   <ol class="steps">
     {% for label, url, done in steps %}
     <li class="{{ 'done' if done }}"><span class="grow">{{ label }}</span>
@@ -36,25 +35,24 @@
       {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
     </div>
     <div class="actions">
-      <button class="primary" type="button" data-toggle="dash-read">🐸 I read it</button>
-      <a class="button" href="/papers/{{ paper.id }}">Details &amp; abstract</a>
+      <button class="primary" type="button" data-toggle="dash-read">🐸 Log reading</button>
+      <a class="button" href="/papers/{{ paper.id }}">📄 Abstract</a>
     </div>
     {{ read_form(paper, "/", "dash-read") }}
-    <p class="muted" style="margin-top:.6rem">Reading your top paper first earns the 🐸 frog bonus: +{{ (rules.frog_bonus * 100) | round | int }} % XP.</p>
+    <p class="muted" style="margin-top:.6rem"><small>🐸 top paper first: +{{ (rules.frog_bonus * 100) | round | int }} % XP</small></p>
     {% else %}
     <div class="empty">
       <span class="big" aria-hidden="true">📭</span>
       <h2 style="justify-content:center">Your queue is empty</h2>
-      <p>Pick one of your recommendations or add a paper you want to read.</p>
-      <div class="row"><a class="button primary" href="/recommendations">✨ See your recommendations</a>
-      <a class="button" href="/search">🔍 Find a paper</a></div>
+      <div class="row" style="justify-content:center"><a class="button primary" href="/recommendations">✨ Recommendations</a>
+      <a class="button" href="/search">🔍 Find papers</a></div>
     </div>
     {% endif %}
   </div>
 
   <div class="card">
     <div class="head"><h2>🗓️ Weekly quest</h2><span class="grade {{ 'S' if week.done and week.thorough else ('A' if week.done else '') }}">{{ "S" if week.done and week.thorough else ("A" if week.done else (week.fraction * 100) | int ~ "%") }}</span></div>
-    <p class="muted">Week from {{ week.week_start.isoformat() }}: {{ week.goal_detail }} deep read + {{ week.goal_skim }} more skims · +50 XP</p>
+    <p class="muted">Week from {{ week.week_start.isoformat() }}: {{ week.goal_detail }} deep read + {{ week.goal_skim }} more skims · +{{ rules.quest_xp }} XP</p>
     <div class="quest-track">
       {% for i in range(week.goal_detail) %}<div class="slot deep {{ 'done' if i < week.detail }}" title="deep read"></div>{% endfor %}
       {% set extra = week.total - [week.detail, week.goal_detail] | min %}
@@ -67,8 +65,8 @@
 
 <div class="grid two" style="margin-top:1rem">
   <div class="card">
-    <div class="head"><h2>✨ Latest recommendations</h2><a href="/recommendations">all details →</a></div>
-    {% if batch %}<p class="muted" style="margin:0 0 .4rem">from {{ batch.created_at.date().isoformat() }}{% if recs and rec_status | length == recs | length %} · 🎉 all handled, <a href="/recommendations">get new ones</a>{% endif %}</p>{% endif %}
+    <div class="head"><h2>✨ Latest recommendations</h2><a href="/recommendations">open →</a></div>
+    {% if batch %}<p class="muted" style="margin:0 0 .4rem">from {{ batch.created_at.date().isoformat() }}{% if recs and rec_status | length == recs | length %} · 🎉 all handled{% endif %}</p>{% endif %}
     {% if recs %}
     {% for rec, paper in recs %}
     <div class="list-row">
@@ -78,7 +76,7 @@
     </div>
     {% endfor %}
     {% else %}
-    <p>No recommendations yet.</p>
+    <p class="muted">No recommendations yet.</p>
     <a class="button primary" href="/recommendations">✨ Get recommendations</a>
     {% endif %}
   </div>
@@ -91,7 +89,7 @@
       <a href="/papers/{{ paper.id }}">{{ paper.title | truncate(80) }}</a>
     </div>
     {% else %}
-    <p class="muted">Nothing queued. <a href="/recommendations">Pick from your recommendations →</a></p>
+    <p class="muted">Nothing queued.</p>
     {% endfor %}
     <h3 style="margin-top:1rem">💰 Recent XP</h3>
     {% for row in recent %}
@@ -101,7 +99,7 @@
       <span class="{{ 'pos' if row.event.points >= 0 else 'neg' }}">{{ "%+d" | format(row.event.points) }}</span>
     </div>
     {% else %}
-    <p class="muted">Read your first paper to earn XP.</p>
+    <p class="muted">No XP yet.</p>
     {% endfor %}
   </div>
 </div>
@@ -116,6 +114,6 @@
   </nav>
   {% endif %}
 </div>
-<p class="muted">One report card per week (Monday to Sunday). Grades: <b>S</b> quest done with a thorough read · <b>A</b> quest done · <b>B</b> half way · <b>C</b> started · <b>–</b> rest week.</p>
+<p class="muted"><small>Monday–Sunday · <b>S</b> quest + thorough read · <b>A</b> quest · <b>B</b> half way · <b>C</b> started · <b>–</b> rest</small></p>
 {% include "_weekly.html" %}
 {% endblock %}

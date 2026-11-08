@@ -38,7 +38,7 @@
     <small>optional rating</small>
   </div>
   <label class="sr-only" for="{{ id }}-note">Notes</label>
-  <textarea id="{{ id }}-note" name="note" placeholder="Notes: key findings, methods to reuse, open questions… (140+ characters earn ✍️ +10 XP)"></textarea>
+  <textarea id="{{ id }}-note" name="note" placeholder="Notes ({{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP)"></textarea>
   <div><button class="primary" type="submit">✔ Log reading</button></div>
 </form>
 {%- endmacro %}
@@ -71,9 +71,9 @@
 {% set b = rec.breakdown %}
 {% set ev = b.evidence if b.evidence is defined else none %}
 <details class="evidence">
-  <summary>🌳 Why was this recommended? (evidence tree)</summary>
+  <summary>🌳 Evidence tree</summary>
   {% if not ev %}
-  <p class="muted">This batch was built before detailed evidence was recorded. Build a new batch to see the full tree.</p>
+  <p class="muted">No evidence recorded for this older list.</p>
   {% else %}
   {% set w = ev.weights %}
   {% set c = ev.contributions %}
@@ -104,7 +104,6 @@
             <li class="ok">citation percentile {{ ev.eligibility.citation_percentile }} ≥ {{ ev.eligibility.landmark_min_percentile }}</li>
             <li class="ok">age {{ (ev.eligibility.age_days / 365.25) | round(1) }} years ≤ {{ ev.eligibility.landmark_max_age_years }} years</li>
             {% endif %}
-            <li class="ok">not in your library, not read/dismissed, not queued, not recommended in the cooldown, no excluded term, research article (not a meeting abstract)</li>
           </ul>
         </li>
         {% set r = ev.relevance %}
@@ -155,7 +154,7 @@
 
 {% macro rules_fields(rule_groups, form_rules, levels_text, prefix="rules") -%}
 <details class="rules-box">
-  <summary><b>⚙️ Game rules</b> <small class="muted">rewards, penalty, levels, badges · locked once the profile exists · defaults are fine to start</small></summary>
+  <summary><b>⚙️ Game rules</b> <small class="muted">points, penalty, levels, badges · 🔒 locked after creation · defaults work</small></summary>
   {% for title, intro, fields in rule_groups %}
   <h3 style="margin-top:1rem">{{ title }}</h3>
   <p class="muted" style="margin:0 0 .4rem">{{ intro }}</p>
@@ -201,7 +200,7 @@
 {# topics and excluded terms; the form fields are read by settings.parse_topics #}
 {% macro topics_editor(cfg) %}
   <div class="topics-editor">
-    <p class="muted">Each query runs two OpenAlex searches per batch (fresh and landmark papers). Papers found by a topic get a relevance bonus of weight ÷ highest weight.</p>
+    <p class="muted"><small>Per query: 2 OpenAlex searches (fresh, landmark) · topic bonus = weight ÷ highest weight</small></p>
     <div class="topic-list">
       {% for topic in cfg.topics %}
       {{ topic_row(topic.name, topic.weight, topic.queries | join("\n")) }}
@@ -214,7 +213,7 @@
     <div class="field">
       <label>Excluded terms
       <textarea name="excluded_terms" placeholder="one per line">{{ cfg.excluded_terms | join("\n") }}</textarea></label>
-      <span class="help">Papers whose title or abstract contains one of these (case-insensitive) are never recommended.</span>
+      <span class="help">Never recommended if in title or abstract (case-insensitive).</span>
     </div>
   </div>
 {% endmacro %}

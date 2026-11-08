@@ -20,24 +20,24 @@
       {% if library.source_path %}<p class="muted" style="margin:.2rem 0 0"><small>File: <code>{{ library.source_path }}</code>{% if not file_modified %} <span class="neg">(not found)</span>{% endif %}</small></p>{% endif %}
     </div>
     <div class="row">
-      {% if library.kind == "imported" %}<a class="button primary" href="/library/import?to={{ library.id }}">⬆️ Import into this library</a>{% endif %}
+      {% if library.kind == "imported" %}<a class="button primary" href="/library/import?to={{ library.id }}">⬆️ Import file</a>{% endif %}
       {% if library.source_path and file_modified %}
       <form method="post" action="/library/{{ library.id }}/reimport" data-loading="Updating the library from its file (about a minute)…"><button title="read the library's file again (e.g. after rclone synced a new export)">🔄 Update from file</button></form>
       {% endif %}
     </div>
   </div>
-  {% if age is not none and age >= stale_days and library.kind == "imported" %}<div class="notice warn" style="margin:.6rem 0 0">⏳ Last updated {{ age }} days ago. Export the library from your reference manager again and import it here.</div>{% endif %}
-  {% if last_run and file_modified and file_modified > last_run.at %}<div class="notice warn" style="margin:.6rem 0 0">📥 The library's file changed after the last import. Use “Update from file”.</div>{% endif %}
+  {% if age is not none and age >= stale_days and library.kind == "imported" %}<div class="notice warn" style="margin:.6rem 0 0">⏳ Last updated {{ age }} days ago: export it again and import it.</div>{% endif %}
+  {% if last_run and file_modified and file_modified > last_run.at %}<div class="notice warn" style="margin:.6rem 0 0">📥 The file changed after the last import: use “Update from file”.</div>{% endif %}
 
   <div class="grid two" style="margin-top:.8rem">
     <div class="sub-card">
       <h3>⬇️ Export</h3>
       <form method="get" action="/library/{{ library.id }}/export" class="row export-form">
         <select name="format" aria-label="format">{% for key, (label, _) in export_formats.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
-        <label class="row"><input type="checkbox" name="status" value="true" style="width:auto"> with reading status</label>
+        <label class="row" title="adds keywords such as litresearch-read and litresearch-rating-4 (labels in your reference manager)"><input type="checkbox" name="status" value="true" style="width:auto"> with reading status</label>
         <button class="small">⬇️ Export {{ n_library }} papers</button>
       </form>
-      <small class="muted">BibTeX for Paperpile, Zotero, Mendeley, JabRef; RIS for EndNote and Citavi. “With reading status” adds keywords such as <code>litresearch-read</code> and <code>litresearch-rating-4</code>, which become labels there.</small>
+      <small class="muted">BibTeX: Paperpile, Zotero, Mendeley, JabRef · RIS: EndNote, Citavi</small>
     </div>
     <details class="sub-card">
       <summary><h3 style="display:inline">✏️ Edit</h3></summary>
@@ -48,7 +48,7 @@
         <div><button class="primary small">💾 Save</button></div>
       </form>
       <form method="post" action="/library/{{ library.id }}/delete" class="row" style="margin-top:.8rem">
-        <p class="muted" style="margin:0; flex-basis:100%">Deleting keeps its papers in your other libraries and in your reading history. Type the name to confirm.</p>
+        <p class="muted" style="margin:0; flex-basis:100%"><small>Papers stay in your other libraries and reading history.</small></p>
         <input type="text" name="confirm_name" placeholder="type “{{ library.name }}” to delete" style="max-width:260px" aria-label="Type the library name to confirm deletion" required autocomplete="off">
         <button class="small danger">🗑️ Delete library</button>
       </form>
@@ -57,7 +57,7 @@
 </div>
 
 <div class="card" style="margin-top:1rem">
-  <h2>Papers <small class="muted">{{ n_rows }} of {{ n_library }} · without PDFs</small></h2>
+  <h2>Papers <small class="muted">{{ n_rows }} of {{ n_library }}</small></h2>
   <form method="get" class="row" style="margin-bottom:.8rem">
     <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title, author, journal, DOI, citation key" style="flex:1 1 240px" aria-label="Search this library">
     {% if folders %}
@@ -82,7 +82,7 @@
       <td style="white-space:nowrap">{% if row.reading %}{{ status_icons[row.reading.status.value] }} {{ row.reading.status.value }}{% elif row.queued %}📚 queued{% else %}<span class="muted">unread</span>{% endif %}</td>
       <td style="white-space:nowrap">
         {% if not row.queued and (not row.reading or depth(row.reading.status) < 2) %}
-        <form class="inline" method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="library"><input type="hidden" name="next_url" value="{{ here }}&page={{ page }}"><button class="small">➕ Queue</button></form>
+        <form class="inline" method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="library"><input type="hidden" name="next_url" value="{{ here }}&page={{ page }}"><button class="small">➕ Add to queue</button></form>
         {% endif %}
         {% if library.kind == "recommended" %}
         <form class="inline" method="post" action="/library/{{ library.id }}/remove/{{ paper.id }}"><button class="small ghost" title="remove from this library" aria-label="Remove from this library">✖</button></form>

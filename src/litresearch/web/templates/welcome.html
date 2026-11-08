@@ -12,7 +12,7 @@
 <main class="welcome">
   <div class="welcome-head">
     <div class="brand" style="justify-content:center; font-size:1.6rem"><span class="logo" style="width:46px;height:46px;font-size:1.5rem">📡</span> litresearch</div>
-    <p class="muted">Your literature radar. Everything (library, recommendations, reading queue, notes and progress) belongs to a profile.</p>
+    <p class="muted">Your literature radar. Library, queue and progress belong to a profile.</p>
   </div>
 
   {% if profiles %}
@@ -39,7 +39,7 @@
   <section class="card up-next" style="margin-top:1rem">
     <span class="badge-next">EXISTING DATA FOUND</span>
     <h2>📦 Use your existing library for a profile</h2>
-    <p>Found {{ legacy.library }} library papers and {{ legacy.readings }} reading entries from before profiles existed (<code>{{ legacy.path }}</code>). Turn them into a profile; nothing needs to be imported again, and the original file stays as it is.</p>
+    <p>{{ legacy.library }} library papers and {{ legacy.readings }} reading entries from before profiles (<code>{{ legacy.path }}</code>). The original file stays unchanged.</p>
     <form method="post" action="/welcome/adopt" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
       <div class="field" style="margin:0"><label for="adopt-name">Profile name</label><input type="text" id="adopt-name" name="name" value="{{ legacy.name or '' }}" placeholder="e.g. Kai" maxlength="80" required></div>
       {{ rules_fields(rule_groups, form_rules, levels_text, "adopt") }}
@@ -51,7 +51,7 @@
   <div class="grid two" style="margin-top:1rem; align-items:start">
     <section class="card">
       <h2>✨ Create a new profile</h2>
-      <p class="muted">A fresh start: own library, topics, recommendations and progress. The game rules are fixed when the profile is created and cannot be changed later, which keeps the score honest.</p>
+      <p class="muted">Own library, topics and progress. 🔒 Game rules are locked at creation.</p>
       <form method="post" action="/welcome/create" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
         <div class="field" style="margin:0"><label for="create-name">Profile name</label><input type="text" id="create-name" name="name" placeholder="e.g. Kai" maxlength="80" required></div>
         {{ rules_fields(rule_groups, form_rules, levels_text, "create") }}
@@ -60,7 +60,7 @@
     </section>
     <section class="card">
       <h2>📂 Load a saved profile</h2>
-      <p class="muted">From a backup or a file someone gave you. It becomes a new profile with its own locked rules; files edited outside litresearch are refused.</p>
+      <p class="muted">From a backup or a colleague's file, as a new profile. Files edited outside litresearch are refused.</p>
       <form method="post" action="/welcome/load" enctype="multipart/form-data" class="grid" style="gap:.6rem">
         {% if saves %}
         <div class="field" style="margin:0"><label for="load-saved">Saved file</label>

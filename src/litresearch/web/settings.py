@@ -49,8 +49,7 @@ class Group:
 GROUPS = (
     Group(
         "Recommendation list",
-        "How many papers you get and when you are reminded to ask for new ones. How deeply "
-        "you read each one is up to you; deeper reads earn more XP.",
+        "",
         (
             Setting(
                 ("selection", "n_recommendations"),
@@ -75,7 +74,7 @@ GROUPS = (
     ),
     Group(
         "Eligibility: current or important",
-        "A paper is only considered if it is fresh or a landmark.",
+        "Only fresh papers or landmarks are considered.",
         (
             Setting(
                 ("selection", "fresh_window_months"),
@@ -143,7 +142,7 @@ GROUPS = (
     ),
     Group(
         "Selection",
-        "How the final papers are picked from the scored candidates.",
+        "",
         (
             Setting(
                 ("selection", "mmr_lambda"),
@@ -187,8 +186,7 @@ GROUPS = (
     ),
     Group(
         "Fine-tuning",
-        "Constants inside the score formulas. The defaults are sensible; change them "
-        "only if you understand the effect (see How it works).",
+        "Constants of the score formulas; the defaults are sensible.",
         (
             Setting(
                 ("selection", "similarity_share"),
@@ -278,8 +276,7 @@ GROUPS = (
     ),
     Group(
         "Data sources",
-        "Where candidates come from. Both are free; Semantic Scholar works without a key "
-        "but may be rate-limited.",
+        "Both free; Semantic Scholar without a key may be rate-limited.",
         (
             Setting(
                 ("sources", "openalex"),
@@ -298,8 +295,7 @@ GROUPS = (
     ),
     Group(
         "Reading queue",
-        "The game rules (points, penalty, levels, badges) are set when you start your "
-        "profile and are then locked; see the Profile page.",
+        "Game rules are locked per profile (Profile page).",
         (
             Setting(
                 ("queue", "max_size"),

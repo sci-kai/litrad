@@ -182,7 +182,7 @@ for one command.
 
 ### 1. Get recommendations
 
-Web: **Reading → Recommendations → Get new recommendations**. CLI:
+Web: **Reading → Recommendations → Get recommendations**. CLI:
 
 ```bash
 litresearch recommend          # latest list; no API requests
@@ -192,7 +192,8 @@ litresearch recommend --new    # a new list (about a minute), e.g. after changin
 - Every paper is **fresh** (published within `fresh_window_months`) or a
   **landmark** (top `100 − landmark_min_percentile` % cited in its field and
   year), ranked by score.
-- You are reminded when the list is older than `selection.reminder_days` (7).
+- Ask for a new list any time; you are reminded when it is older than
+  `selection.reminder_days` (7).
 - Papers you ever marked skimmed or deeper, dismissed or queued never show
   up; unread papers from your libraries can. A paper you did not pick can
   come back after `cooldown_weeks` (8).
@@ -375,7 +376,7 @@ exist, the server does not start and lists the choices.
 | | 👋 **Welcome** | choose, create or load a profile; take over existing data |
 | 🏠 | **Dashboard** | the up-next paper with one-click logging, weekly quest, hints, a reminder when recommendations are due, latest recommendations, queue, recent XP, **weekly report cards** |
 | Reading | 📚 **Reading queue** | log a reading (level, rating, note), reorder, remove; add papers by DOI, PubMed ID, citation key or title |
-| Reading | ✨ **Recommendations** | set up topics (first visit); **Get new recommendations**; the ranked list with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; queue or mark not relevant; **How recommendations are made** with your current values |
+| Reading | ✨ **Recommendations** | set up topics (first visit); **Get recommendations**; the ranked list with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; queue or mark not relevant; **How recommendations are made** with your current values |
 | Progress | 🏆 **Progress & XP** | level, streak, Reading Impact Factor, discipline and depth, XP per week, reading calendar, personal bests, badges, career ladder, the **XP ledger** (paginated; filter, totals, TSV export) and the locked rules |
 | Library | 🗂️ **Libraries** | all libraries (papers, read, last update), plus *Reading queue* and *Recommended*; per library: papers (search, folder/label and status filters, 50 per page), **Export**, **Update from file**, edit, delete, import history |
 | Library | ⬆️ **Import** | import a BibTeX, RIS or CSL-JSON file into a new or an existing library; *Check only* first if you like |
@@ -395,7 +396,8 @@ Old addresses (`/ledger`, `/how`, `/paperpile`) redirect.
   leads there.
 - Earlier recommendation sets are grouped by month.
 - Library search results say which ones are shown ("Showing 51–100 · page 2
-  of 12"). Deleting a library asks once: type its name to confirm.
+  of 12"). Deleting a library asks once (type its name); its papers stay in
+  your other libraries, queue and reading history.
 - Compare lists your saved profile files with dates (newest first); you can
   still upload a file.
 - Unknown pages and invalid values show an error page with links back; form
@@ -437,7 +439,7 @@ each paper shows its origin (*added by you* or *rule: …*, also exported as a
 label). On their pages you can **remove** a paper (the rules then skip it;
 *Removed by you* → **Restore**), **add a paper** (DOI, `pmid:N`, `PMCn`,
 citation key or title words), choose the **rules**, their order and the
-**number of examples** (*Save and update the list*, saved in the profile's
+**number of examples** (*Save rules*, saved in the profile's
 settings), and **Undo my changes**. Every paper page has *Use as positive /
 negative example* and *Not an example*. These two lists never count as your
 library, cannot be deleted or imported into, and are not saved in profile
@@ -617,13 +619,13 @@ reading and earn the points your profile defines ([Gamification](#6-gamification
 
 ### The evidence tree
 
-Shown under **Why was this recommended?**:
+Shown under **🌳 Evidence tree**:
 
 | Node | Content |
 |---|---|
 | Score | the formula with actual values and contributions |
 | Found by | each search (topic, query, position) or the S2 recommendation rank |
-| Eligible as | fresh (age vs. window) or landmark (percentile and age vs. thresholds); filters passed |
+| Eligible as | fresh (age vs. window) or landmark (percentile and age vs. thresholds) |
 | Relevance | method (SPECTER2/TF-IDF), mean similarity, rank among N candidates, nearest library papers, topic bonus and reason |
 | Impact | basis (journal / percentile / citations per year) with inputs |
 | Timeliness | age and window |

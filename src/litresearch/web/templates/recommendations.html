@@ -12,15 +12,14 @@
 {% if onboarding %}
 <div class="card onboarding" id="topics">
   <h2>🏷️ What are you interested in?</h2>
-  <p>Recommendations combine <b>similarity to your libraries</b> with <b>topics</b> you name here. Each topic has search queries for OpenAlex
-    (e.g. <i>clonal evolution cancer</i>) and a weight: topics with a higher weight count more. The topics belong to your profile
-    <b>{{ profile.name if profile }}</b>; change them later on this page or in <a href="/settings#topics-card">Settings</a>.</p>
+  <p class="muted">Recommendations combine <b>similarity to your libraries</b> with these <b>topics</b>.
+    <a href="/docs/5-how-papers-are-recommended#1-candidates" title="How topics are used">?</a></p>
   <form method="post" action="/recommendations/topics">
     {{ topics_editor(cfg) }}
     <div class="row"><button class="primary">💾 Save topics</button></div>
   </form>
   <form method="post" action="/recommendations/topics/skip" style="margin-top:.6rem">
-    <button class="ghost small">Skip: use my library only</button>
+    <button class="ghost small">Skip: library only</button>
   </form>
 </div>
 {% else %}
@@ -48,33 +47,30 @@
       </form>
       {% endif %}
       <form method="post" action="/recommendations/build" data-loading="{{ loading }}">
-        <button class="{{ 'primary' if header.reminder or not batch }}">✨ Get new recommendations</button>
+        <button class="{{ 'primary' if header.reminder or not batch }}">✨ Get recommendations</button>
       </form>
     </div>
   </div>
   {% for warning in (batch.warnings if batch else []) %}<div class="notice warn" style="margin:.6rem 0 0">⚠️ {{ warning }}</div>{% endfor %}
-  <p class="muted" style="margin:.5rem 0 0">Ask for new recommendations whenever you like.
-    {% if cfg.selection.reminder_days %}You are reminded {{ cfg.selection.reminder_days }} days after the last list{% else %}Reminders are off{% endif %}
-    (<a href="/settings">change</a>). Papers you did not pick may return after {{ cfg.selection.cooldown_weeks }} weeks.</p>
+  <p class="muted" style="margin:.4rem 0 0"><small>⏰ reminder {% if cfg.selection.reminder_days %}after {{ cfg.selection.reminder_days }} days{% else %}off{% endif %}
+    · ↩️ unpicked papers may return after {{ cfg.selection.cooldown_weeks }} weeks · <a href="/settings">change</a></small></p>
 </div>
 
-{% if queue_full %}<div class="notice warn">📚 Your queue is full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}). Read or drop a paper before picking new ones.</div>{% endif %}
+{% if queue_full %}<div class="notice warn">📚 Queue full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}): read or remove a paper first.</div>{% endif %}
 
 <div class="side-layout">
   <div class="grid">
     {% if finished %}
     <div class="card finished-set">
-      <h2>🎉 Finished this recommendation set!</h2>
-      <p>You handled all {{ recs | length }} papers: {{ rec_status.values() | select("equalto", "queued") | list | length }} on your queue,
+      <h2>🎉 Set finished</h2>
+      <p>All {{ recs | length }} handled: {{ rec_status.values() | select("equalto", "queued") | list | length }} queued,
         {{ rec_status.values() | select("equalto", "dismissed") | list | length }} not relevant{% set other = rec_status.values() | reject("in", ["queued", "dismissed"]) | list | length %}{% if other %}, {{ other }} already read{% endif %}.</p>
       <div class="row">
-        <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get new recommendations</button></form>
-        <a class="button ghost" href="/recommendations?batch={{ batch.id }}">Show this set again</a>
+        <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get recommendations</button></form>
+        <a class="button ghost" href="/recommendations?batch={{ batch.id }}">Show this set</a>
       </div>
-      <p class="muted" style="margin:.6rem 0 0">Earlier sets stay available in the menu above, grouped by month.</p>
     </div>
     {% else %}
-    {% if recs %}<p class="muted" style="margin:0">Ranked by score. How deeply you read is your choice: abstract +{{ base_xp["abstract"] }}, skimmed +{{ base_xp["skimmed"] }}, read +{{ base_xp["read"] }}, thorough +{{ base_xp["thorough"] }} XP.</p>{% endif %}
     {% for rec, paper in recs %}
     <div class="card paper-card">
       <div class="paper">
@@ -99,21 +95,21 @@
         {% if not rec_status.get(paper.id) %}
         <form class="inline" method="post" action="/queue/add">
           <input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="recommendation"><input type="hidden" name="next_url" value="/recommendations{{ '?batch=' ~ batch.id if batch }}">
-          <button class="primary small" {{ "disabled" if queue_full }}>➕ Add to my queue</button>
+          <button class="primary small" {{ "disabled" if queue_full }}>➕ Add to queue</button>
         </form>
         <form class="inline" method="post" action="/papers/{{ paper.id }}/dismiss">
           <input type="hidden" name="next_url" value="/recommendations">
           <button class="small ghost" title="Not relevant: also teaches the recommender">🚫 Not relevant</button>
         </form>
         {% endif %}
-        <a class="button small ghost" href="/papers/{{ paper.id }}">Abstract</a>
+        <a class="button small ghost" href="/papers/{{ paper.id }}">📄 Abstract</a>
       </div>
       {{ evidence_tree(rec, paper, batch) }}
     </div>
     {% endfor %}
     {% endif %}
     {% if batch and not recs %}<div class="card">No eligible papers this time. Check <a href="?topics=1#topics">your topics</a>.</div>{% endif %}
-    {% if not batch %}<div class="card empty"><span class="big" aria-hidden="true">✨</span><h2 style="justify-content:center">Ready when you are</h2><p>Get your first list: up to {{ cfg.selection.n_recommendations }} papers, ranked by score. Then pick the ones you want to read for your queue.</p>
+    {% if not batch %}<div class="card empty"><span class="big" aria-hidden="true">✨</span><h2 style="justify-content:center">Ready when you are</h2><p class="muted">Up to {{ cfg.selection.n_recommendations }} papers per list, ranked by score.</p>
       <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get recommendations</button></form></div>{% endif %}
   </div>
 
@@ -122,8 +118,8 @@
       <h2>🔬 How this list was made</h2>
       {% if batch and batch.funnel %}{{ funnel_view(batch.funnel) }}
       <p class="muted" style="margin-top:.6rem">Library: {{ batch.funnel.library_papers }} papers, {{ batch.funnel.library_embedded }} with SPECTER2 embeddings.</p>
-      {% else %}<p class="muted">Funnel data is available for batches built from now on.</p>{% endif %}
-      <a href="#how" data-open="how">How recommendations are made →</a>
+      {% else %}<p class="muted">No funnel data for this older list.</p>{% endif %}
+      <a href="#how" data-open="how">All rules →</a>
     </div>
     <div class="card" id="topics">
       <div class="head"><h3>🏷️ Your topics</h3></div>
@@ -156,8 +152,8 @@
 {% endif %}
 
 <details class="card how" id="how" style="margin-top:1rem">
-  <summary><h2 style="display:inline">🔎 How recommendations are made</h2> <small class="muted">the exact rules with your current settings</small></summary>
-  <p class="muted">Each recommendation also has an <b>evidence tree</b> with the numbers for that paper. More detail: <a href="/docs/5-how-papers-are-recommended">documentation, chapter 5</a>.</p>
+  <summary><h2 style="display:inline">🔎 How recommendations are made</h2> <small class="muted">rules with your current values</small></summary>
+  <p class="muted"><a href="/docs/5-how-papers-are-recommended">Documentation, chapter 5 →</a></p>
   {% include "_how_recommend.html" %}
 </details>
 {% endblock %}

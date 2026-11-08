@@ -8,7 +8,7 @@
     <span class="badge-next">🔒 RULES LOCKED</span>
     <h2>{{ header.level.icon }} {{ profile.name }}</h2>
     <p>Started {{ profile.created_at.date().isoformat() }} · Level {{ header.level.number }} {{ header.level.title }} · <b>{{ header.xp }} XP</b></p>
-    <p class="muted">Rule fingerprint <code>{{ profile.fingerprint }}</code>: profiles with the same fingerprint played by the same rules and can be compared fairly.</p>
+    <p class="muted" title="Same fingerprint = same rules: fairly comparable">Rule fingerprint <code>{{ profile.fingerprint }}</code></p>
     <div class="row">
       <form method="post" action="/profile/save"><button class="primary">💾 Save profile</button></form>
       <a class="button" href="/profile/download">⬇ Download</a>
@@ -17,12 +17,11 @@
   </div>
   <div class="card">
     <h2>🔁 Other profiles</h2>
-    <p class="muted">Everything you see (progress, queue, recommendations, library, topics and settings) belongs to this profile.
-      Each profile has its own folder <code>{{ folder }}</code>. To play by other rules, create another profile; this one stays as it is.</p>
+    <p class="muted"><small>Folder <code>{{ folder }}</code> · other rules need another profile</small></p>
     {% if others %}
     <table>{% for o in others %}<tr><td>{{ o.level.icon }} <b>{{ o.name }}</b></td><td class="num">{{ o.xp }} XP</td><td class="num">{{ o.papers_read }} read</td></tr>{% endfor %}</table>
     {% endif %}
-    <form method="post" action="/welcome/leave" style="margin-top:.8rem"><button class="primary">🔁 Switch or create a profile</button></form>
+    <form method="post" action="/welcome/leave" style="margin-top:.8rem"><button class="primary">🔁 Switch profile</button></form>
   </div>
 </div>
 

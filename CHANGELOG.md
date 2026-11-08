@@ -23,6 +23,19 @@ All notable changes are listed here. Versions follow
   Libraries page (and on the positive examples' page) or with
   `litresearch library use NAME… [--off]`; a warning when none is used.
 
+### Changed
+
+- **More concise web UI**: much less explanatory text on every page; the
+  numbers, rules with their current values, funnel, evidence trees and
+  warnings (penalties, data loss) stay. Explanations of the obvious are gone
+  or moved to the documentation; XP per reading depth is shown only where a
+  reading is logged. Same action, same label: *Get recommendations*, *Add to
+  queue*, *Log reading*, *Abstract*, *Save*. "Why was this recommended?"
+  is now *Evidence tree*. The "How recommendations are made" and points
+  reference is tightened into lists and tables, still with every value.
+- The evidence tree's filter line no longer claims a paper is "not in your
+  library" (unread library papers can be recommended).
+
 ## 0.2.0-dev (2026-10-29)
 
 A development release for testing the new search and libraries.

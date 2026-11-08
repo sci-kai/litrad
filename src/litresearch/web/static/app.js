@@ -140,7 +140,7 @@
     if (data.level_up) {
       confetti(260);
       setTimeout(() => modal(data.level_up.icon, `Level ${data.level_up.number}!`,
-        `You are now a ${data.level_up.title}. Keep reading!`), 500);
+        `You are now a ${data.level_up.title}.`), 500);
     } else if (data.badges && data.badges.length) {
       confetti(180);
       const b = data.badges[0];

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card" style="margin-bottom:1rem">
   <form method="post" action="/profile/compare" enctype="multipart/form-data" class="grid" style="gap:.6rem">
-    <p class="muted" style="margin:0">Compare your current profile with saved ones: your own archives or files from colleagues. Nothing is loaded or changed.</p>
+    <p class="muted" style="margin:0"><small>Current profile vs. saved files · nothing is loaded or changed</small></p>
     {% if saves %}
     <fieldset class="field" style="margin:0; border:0; padding:0">
       <legend style="font-weight:600; font-size:.9rem; margin-bottom:.25rem">Saved profiles <small class="muted">{{ saves | length }}, newest first</small></legend>
@@ -47,6 +47,6 @@
     <tr><td>Rules</td>{% for row in rows %}<td class="num">{% if row.fingerprint == reference %}<span class="chip queued">same rules</span>{% else %}<span class="chip penalty">different rules</span>{% endif %}<br><small><code>{{ row.fingerprint or "none" }}</code></small></td>{% endfor %}</tr>
     <tr><td>File integrity</td>{% for row in rows %}<td class="num">{% if row.checksum_ok is none %}<small class="muted">no checksum (old file)</small>{% elif row.checksum_ok %}✅ unmodified{% else %}<span class="neg">⚠️ edited outside litresearch</span>{% endif %}</td>{% endfor %}</tr>
   </table>
-  <p class="muted" style="margin-top:.6rem">Green marks the best value per row. XP is only comparable between profiles with the same rules; the checksum reveals files that were edited by hand (it is a consistency check, not a cryptographic proof).</p>
+  <p class="muted" style="margin-top:.6rem"><small>Green: best per row · XP compares fairly only with the same rules · the checksum flags hand-edited files (a consistency check, not a proof)</small></p>
 </div>
 {% endblock %}

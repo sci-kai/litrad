@@ -8,8 +8,7 @@
   <a href="/queue" class="active">📚 Reading queue</a>
   <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
 </nav>
-<p class="muted">Short and ordered on purpose: there is always exactly one paper up next. Reading it first earns the 🐸 frog bonus.
-  Removing a paper before you at least skimmed it (or marking it not relevant) costs <b>{{ rules.drop_penalty }} XP</b>.</p>
+<p class="muted"><small>🐸 q1 first: +{{ (rules.frog_bonus * 100) | round | int }} % XP · ⚠️ removed or not relevant before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
 
 <div class="grid">
   {% for item, paper in queue %}
@@ -21,14 +20,14 @@
       <div class="title"><a href="/papers/{{ paper.id }}">{{ paper.title }}</a></div>
       {{ paper_meta(paper) }}
       <div class="row">
-        <span class="chip">{{ {"recommendation": "✨ from recommendations", "library": "📁 from your library", "manual": "✍️ added by you"}[item.source] | default(item.source) }}</span>
+        <span class="chip">{{ {"recommendation": "✨ recommendation", "library": "📁 library", "manual": "✍️ added by you"}[item.source] | default(item.source) }}</span>
         <span class="chip {{ 'penalty' if waiting >= nudge_days }}">⏳ waiting {{ waiting }} d</span>
         {% if readings[paper.id] %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>{% endif %}
         {% if costs[paper.id] %}<span class="chip penalty" title="Removing it unread costs XP">⚠️ −{{ costs[paper.id] }} XP if removed unread</span>{% endif %}
       </div>
       <div class="actions">
         <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🐸 " if item.position == 1 }}Log reading</button>
-        <a class="button small ghost" href="/papers/{{ paper.id }}">Abstract &amp; notes</a>
+        <a class="button small ghost" href="/papers/{{ paper.id }}">📄 Abstract</a>
         <form class="inline" method="post" action="/queue/{{ paper.id }}/drop"
           {% if costs[paper.id] %}data-confirm="Remove this paper unread? This costs {{ costs[paper.id] }} XP."{% endif %}>
           <button class="small ghost danger">✖ Remove{{ " (−" ~ costs[paper.id] ~ " XP)" if costs[paper.id] }}</button>
@@ -48,23 +47,22 @@
   </div>
   {% else %}
   <div class="card empty"><span class="big" aria-hidden="true">📭</span><h2 style="justify-content:center">Inbox zero!</h2>
-    <p>Your queue is empty. Pick from your recommendations or add a paper below.</p>
-    <div class="row"><a class="button primary" href="/recommendations">✨ See recommendations</a><a class="button" href="/search">🔍 Find papers</a></div></div>
+    <div class="row" style="justify-content:center"><a class="button primary" href="/recommendations">✨ Recommendations</a><a class="button" href="/search">🔍 Find papers</a></div></div>
   {% endfor %}
 
   <div class="card">
-    <h2>➕ Add a paper you want to read</h2>
+    <h2>➕ Add a paper</h2>
     {% if queue | length >= cfg.queue.max_size %}
-    <p class="notice warn">The queue is full. Read or remove a paper first: a short queue gets read, a long one gets ignored.</p>
+    <p class="notice warn">📚 Queue full: read or remove a paper first.</p>
     {% else %}
     <form method="post" action="/queue/add" class="grid" style="gap:.6rem">
       <div class="field" style="margin:0">
         <label for="ref">DOI, PubMed ID, recommendation (r1), citation key or title words</label>
         <input type="text" id="ref" name="ref" placeholder="10.1038/s41586-024-07894-z · pmid:35931863 · r2 · Barkley2022-ri">
-        <span class="help">Unknown DOIs are looked up on OpenAlex (title, authors, journal, metrics).</span>
+        <span class="help">Unknown DOIs are looked up on OpenAlex.</span>
       </div>
       <details>
-        <summary>…or add by title only (no DOI, e.g. a preprint from a colleague)</summary>
+        <summary>…or by title only (no DOI)</summary>
         <div class="grid two" style="margin-top:.5rem">
           <div class="field" style="margin:0"><label for="add-title">Title</label>
             <input type="text" id="add-title" name="title" placeholder="e.g. A preprint on clonal haematopoiesis"></div>
@@ -72,7 +70,7 @@
             <input type="url" id="add-url" name="url" placeholder="https://…"></div>
         </div>
       </details>
-      <label class="row"><input type="checkbox" name="top" value="true" style="width:auto"> Read it next (put it at q1)</label>
+      <label class="row"><input type="checkbox" name="top" value="true" style="width:auto"> Read next (q1)</label>
       <div><button class="primary">➕ Add to queue</button> <a class="button ghost" href="/search">🔍 Find papers</a></div>
     </form>
     {% endif %}

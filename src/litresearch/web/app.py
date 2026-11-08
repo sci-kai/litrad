@@ -231,9 +231,7 @@ def award_payload(award: Award | None, message: str, session: Session, kind="suc
             "icon": award.level_after.icon,
         }
     if award.profile_started:
-        payload["message"] += (
-            " · Your game has started with your configured rules; they are now locked."
-        )
+        payload["message"] += " · Your game has started; its rules are now locked."
     payload["quest"] = any(e.kind == "quest" for e in award.events)
     payload["penalty"] = any(e.points < 0 for e in award.events)
     return payload
@@ -646,13 +644,13 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                     steps = [
                         ("Import your library", "/library/import", has_library is not None),
                         (
-                            "Name your topics of interest",
+                            "Name your topics",
                             "/recommendations?topics=1#topics",
                             bool(cfg.topics) or topics_onboarded(),
                         ),
                         ("Get recommendations", "/recommendations", batch is not None),
-                        ("Put a paper on your reading queue", "/queue", bool(items)),
-                        ("Read it and log it: your first XP", "/queue#top", False),
+                        ("Queue a paper", "/queue", bool(items)),
+                        ("Log your first reading", "/queue#top", False),
                     ]
                 pages = max(1, -(-history // weeks))
                 wpage = min(max(wpage, 1), pages)
@@ -1947,7 +1945,7 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
             "/settings",
             {
                 "kind": "success",
-                "message": "Settings saved. They apply to the next recommendation batch.",
+                "message": "Settings saved; they apply to the next recommendations.",
                 "events": [],
                 "points": 0,
             },

@@ -15,7 +15,7 @@
     {% for rule in field_rules %}<span>{{ rule.label }}</span><div class="bar"><span style="width: {{ (check.coverage[rule.name] * 100) | round(1) }}%"></span></div><b>{{ (check.coverage[rule.name] * 100) | round | int }} %</b>{% endfor %}
   </div>
   {% endif %}
-  <p class="muted" style="margin-top:.6rem">{{ "Nothing was changed yet. Choose the file again below and press “Check & import”." if check.ok else "Nothing was imported. Fix the export (or the choice below) and try again." }}
+  <p class="muted" style="margin-top:.6rem">{{ "Nothing changed yet: choose the file again and press “Check & import”." if check.ok else "Nothing was imported." }}
     <a href="{{ requirements }}">What an export must contain →</a></p>
 </div>
 {% endif %}
@@ -23,19 +23,18 @@
 <form method="post" action="/library/import" enctype="multipart/form-data" class="card import-form" data-loading="Checking and importing (about a minute)…">
   <h2><label for="import-file">1 · The file</label></h2>
   <input type="file" id="import-file" name="file" accept=".bib,.bibtex,.ris,.json,.txt" required>
-  <p class="muted" style="margin:.4rem 0 0">BibTeX (<code>.bib</code>), RIS (<code>.ris</code>) or CSL-JSON (<code>.json</code>), exported from Paperpile, Zotero, Mendeley, EndNote, JabRef or Citavi.
-    Tested with Paperpile's BibTeX export. <a href="{{ requirements }}">What the export must contain →</a></p>
+  <p class="muted" style="margin:.4rem 0 0"><small>BibTeX (<code>.bib</code>), RIS (<code>.ris</code>) or CSL-JSON (<code>.json</code>) · tested with Paperpile's BibTeX · <a href="{{ requirements }}">what the export must contain</a></small></p>
 
   <h2 style="margin-top:1.2rem">2 · Where it goes</h2>
   <div class="import-targets">
     <div class="import-target">
       <label class="choice">
         <input type="radio" name="target" value="new" {{ "checked" if form.target != "existing" or not choices }}>
-        <span><b>A new library</b><br><small class="muted">e.g. one per reference manager, project or lab</small></span>
+        <span><b>A new library</b><br><small class="muted">e.g. per reference manager or project</small></span>
       </label>
       <div class="choice-body new-body">
         <input type="text" name="name" value="{{ form.name or '' }}" placeholder="Name, e.g. Paperpile – cancer evolution" maxlength="80" aria-label="name of the new library">
-        <textarea name="description" placeholder="Description (optional): what is in it, where it comes from" aria-label="description">{{ form.description or "" }}</textarea>
+        <textarea name="description" placeholder="Description (optional)" aria-label="description">{{ form.description or "" }}</textarea>
       </div>
     </div>
     {% if choices %}
@@ -46,8 +45,8 @@
       </label>
       <div class="choice-body existing-body">
         <select name="library_id" aria-label="library">{% for lib in choices %}<option value="{{ lib.id }}" {{ "selected" if form.library_id == lib.id }}>{{ lib.name }}</option>{% endfor %}</select>
-        <label class="mode"><input type="radio" name="mode" value="add" {{ "checked" if form.mode != "replace" }}> <span><b>Add</b> the file's papers <small class="muted">(e.g. a few new references)</small></span></label>
-        <label class="mode"><input type="radio" name="mode" value="replace" {{ "checked" if form.mode == "replace" }}> <span><b>Replace</b> the library with the file <small class="muted">(an updated full export; papers missing in it leave this library)</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="add" {{ "checked" if form.mode != "replace" }}> <span><b>Add</b> the file's papers </span></label>
+        <label class="mode"><input type="radio" name="mode" value="replace" {{ "checked" if form.mode == "replace" }}> <span><b>Replace</b> the library with the file <small class="muted">(papers missing in the file leave this library)</small></span></label>
       </div>
     </div>
     {% endif %}
@@ -57,8 +56,7 @@
     <button name="action" value="check">🔍 Check only</button>
     <button class="primary" name="action" value="import">⬆️ Check &amp; import</button>
   </div>
-  <p class="muted" style="margin:.5rem 0 0">The file is always checked first; nothing changes if it is invalid. Papers that are already in another library are not duplicated, and your reading history is never touched. PDFs are never needed.</p>
+  <p class="muted" style="margin:.5rem 0 0"><small>Always checked first: an invalid file changes nothing. No duplicates across libraries; reading history untouched; no PDFs needed.</small></p>
 </form>
 
-<p class="muted" style="margin-top:1rem">To <b>export</b> a library, open it under <a href="/library">Libraries</a>.</p>
 {% endblock %}

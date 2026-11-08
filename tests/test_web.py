@@ -145,10 +145,31 @@ def test_build_and_show_evidence(app_env):
     assert "New batch" in celebration(response)["message"]
     page = client.get("/recommendations").text
     assert "Clonal evolution of tumours" in page
-    assert "Why was this recommended" in page and "OpenAlex fresh search" in page
+    assert "Evidence tree" in page and "OpenAlex fresh search" in page
     assert "“clonal evolution”" in page and "Eligible as fresh" in page
     assert "Found by searches" in page  # funnel
     assert "Settings used" in page
+
+
+def test_recommendations_page_is_concise(app_env):
+    """No explanations of the obvious; XP per depth belongs to the log dialog."""
+    client, path, _ = app_env
+    post(client, "/recommendations/build", {"s2": "false"})
+    page = client.get("/recommendations").text
+    assert "Ask for new recommendations whenever you like" not in page
+    assert "How deeply you read is your choice" not in page
+    assert "Why was this recommended" not in page
+    assert "🌳 Evidence tree" in page
+    # the rules stay visible as values
+    assert "reminder after 7 days" in page and "return after 8 weeks" in page
+    xp_line = re.compile(r"abstract\s*<span class=\"xp\">\+5</span>")
+    assert not xp_line.search(page) and "thorough +80" not in page
+    rec_id = paper_id(path, title="Clonal evolution of tumours")
+    post(client, "/queue/add", {"ref": f"#{rec_id}", "source": "recommendation"})
+    queue = client.get("/queue").text
+    assert xp_line.search(queue)
+    for level, xp in (("skimmed", 15), ("read", 40), ("thorough", 80)):
+        assert re.search(rf'{level}\s*<span class="xp">\+{xp}</span>', queue)
 
 
 def test_finished_recommendation_set(app_env):
@@ -161,14 +182,14 @@ def test_finished_recommendation_set(app_env):
     engine.dispose()
     assert len(ids) == 2
     post(client, "/queue/add", {"ref": f"#{ids[0]}", "source": "recommendation"})
-    assert "Finished this recommendation set" not in client.get("/recommendations").text
+    assert "Set finished" not in client.get("/recommendations").text
     post(client, f"/papers/{ids[1]}/dismiss", {"next_url": "/recommendations"})
     page = client.get("/recommendations").text
-    assert "Finished this recommendation set!" in page
-    assert "1 on your queue" in page and "1 not relevant" in page
-    assert "Clonal evolution of tumours" not in page.split("Finished")[1]  # list hidden
+    assert "Set finished" in page
+    assert "1 queued" in page and "1 not relevant" in page
+    assert "Clonal evolution of tumours" not in page.split("Set finished")[1]  # list hidden
     again = client.get(f"/recommendations?batch={batch_id}").text
-    assert "Finished this recommendation set" not in again and "Why was this recommended" in again
+    assert "Set finished" not in again and "Evidence tree" in again
     assert "all handled" in client.get("/").text
 
 
@@ -179,7 +200,7 @@ def test_add_recommendation_then_drop_costs_xp(app_env):
     response = post(client, "/queue/add", {"ref": f"#{pid}", "next_url": "/recommendations"})
     assert "Added to your queue" in celebration(response)["message"]
     queue = client.get("/queue").text
-    assert "from recommendations" in queue and "−15 XP if removed unread" in queue
+    assert "✨ recommendation" in queue and "−15 XP if removed unread" in queue
     assert "data-confirm" in queue
     response = post(client, f"/queue/{pid}/drop")
     payload = celebration(response)

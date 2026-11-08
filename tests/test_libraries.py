@@ -379,7 +379,7 @@ def test_overview_and_first_import(site):
     assert "/docs/1-setup#what-an-export-must-contain" in form
     checked = upload(client, SAMPLE_BIB.read_bytes(), action="check").text
     assert "Check of “export.bib”: 7 entries (BibTeX)" in checked
-    assert "Nothing was changed yet" in checked
+    assert "Nothing changed yet" in checked
     assert "Import your first library" in client.get("/library").text
     done = upload(client, SAMPLE_BIB.read_bytes(), description="from Paperpile")
     assert "Paperpile: 7 entries imported (7 new)" in done.text

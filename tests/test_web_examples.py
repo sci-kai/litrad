@@ -44,7 +44,7 @@ def test_pages_render_for_an_empty_profile(site):  # noqa: F811
     for kind in ("positive", "negative"):
         page = client.get(example_url(client, kind)).text
         assert "How this list is chosen" in page and "This list is empty" in page
-        assert "Delete library" not in page and "Import into this library" not in page
+        assert "Delete library" not in page and "Import file" not in page
         labels_ok(page)
     assert "No libraries yet" in client.get(example_url(client, "positive")).text
     assert client.get("/library/examples/neutral").status_code == 404
@@ -53,13 +53,13 @@ def test_pages_render_for_an_empty_profile(site):  # noqa: F811
 def test_overview_and_list_of_a_filled_profile(app_env):  # noqa: F811
     client, path, _ = app_env
     overview = client.get("/library").text
-    assert "Used for recommendations" in overview and "No library is used" not in overview
+    assert "Used for recommendations" in overview and "No library used" not in overview
     assert re.search(r"<b>\d+</b>/100 papers", overview)
     assert "Rules: liked → newest" in overview
     labels_ok(overview)
     url = example_url(client, "positive")
     page = client.get(url).text
-    assert "rule: newest" in page and "skipped without DOI" in page
+    assert "rule: newest" in page and "skipped (no DOI)" in page
     assert "Libraries the library rules choose from" in page
     labels_ok(page)
     export = client.get(f"{url}/export?format=bibtex")
@@ -152,9 +152,9 @@ def test_choose_the_libraries_used_for_recommendations(app_env):  # noqa: F811
     client.get("/library")  # migrates the old data into "My library"
     other = post(client, "/library/use", {})  # nothing checked
     assert "No library is used for recommendations now" in other.text
-    assert "No library is used" in client.get("/library").text
+    assert "No library used" in client.get("/library").text
     positive = client.get(example_url(client, "positive")).text
-    assert "rule: newest" not in positive and "No library is used" in positive
+    assert "rule: newest" not in positive and "No library used" in positive
 
     engine = db(path)
     with Session(engine) as session:

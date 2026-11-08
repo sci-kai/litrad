@@ -4,23 +4,22 @@
 <div class="card">
   <h2>🧭 Overview</h2>
   <ol>
-    <li><b>Collect candidates</b> from OpenAlex topic searches and Semantic Scholar recommendations for your example papers.</li>
-    <li><b>Filter</b> out what you know, have handled, or what is not a research paper.</li>
-    <li><b>Eligibility</b>: keep only papers that are <i>fresh</i> or <i>landmarks</i>.</li>
-    <li><b>Score</b> each paper on relevance, impact and timeliness.</li>
-    <li><b>Select</b> up to {{ s.n_recommendations }} papers that are strong <i>and</i> diverse, ranked by score.</li>
-    <li><b>You decide</b> how deeply to read each one; your marking (abstract → thorough) sets the XP.</li>
+    <li><b>Collect</b> candidates: OpenAlex topic searches, Semantic Scholar recommendations for your example papers.</li>
+    <li><b>Filter</b> out what you handled and what is not a research paper.</li>
+    <li><b>Eligibility</b>: only <i>fresh</i> papers or <i>landmarks</i>.</li>
+    <li><b>Score</b>: relevance, impact, timeliness.</li>
+    <li><b>Select</b> up to <code>{{ s.n_recommendations }}</code> strong <i>and</i> diverse papers, ranked by score.</li>
   </ol>
-  <p>Get a new list whenever you like (you are reminded after {{ s.reminder_days }} days). You decide which papers go on your reading queue.</p>
+  <p class="muted">Reminder after <code>{{ s.reminder_days }}</code> days (0 = off).</p>
 </div>
 
 <div class="card">
   <h2>1 · 🔭 Where candidates come from</h2>
   <h3>OpenAlex topic searches {{ "✅" if cfg.sources.openalex else "❌ (disabled)" }}</h3>
-  <p>For every query of every topic, two searches in titles and abstracts, sorted by relevance, <code>{{ s.results_per_query }}</code> results each:</p>
+  <p>Per topic query, two searches in title and abstract (by relevance, <code>{{ s.results_per_query }}</code> results each):</p>
   <ul>
-    <li><b>fresh</b>: articles, reviews and preprints published within the last <code>{{ s.fresh_window_months }}</code> months;</li>
-    <li><b>landmark</b>: papers above the <code>{{ s.landmark_min_percentile }}</code>th citation percentile, published within the last <code>{{ s.landmark_max_age_years }}</code> years.</li>
+    <li><b>fresh</b>: articles, reviews, preprints of the last <code>{{ s.fresh_window_months }}</code> months;</li>
+    <li><b>landmark</b>: above the <code>{{ s.landmark_min_percentile }}</code>th citation percentile, at most <code>{{ s.landmark_max_age_years }}</code> years old.</li>
   </ul>
   <table>
     <thead><tr><th>Topic</th><th class="num">Weight</th><th class="num">Topic bonus</th><th>Queries</th></tr></thead>
@@ -30,26 +29,25 @@
     {% else %}<tr><td colspan="4" class="muted">No topics defined.</td></tr>{% endfor %}
   </table>
   <h3 style="margin-top:1rem">Semantic Scholar recommendations {{ "✅" if cfg.sources.semanticscholar else "❌ (disabled)" }}</h3>
-  <p>Semantic Scholar suggests recently published papers similar to a set of <i>positive</i> papers and unlike <i>negative</i> ones:</p>
-  <ul>
-    <li><a href="/library/examples/positive">positive examples</a> (up to <code>{{ s.s2_positive_count }}</code>): papers you added yourself, then by the rules
-      {% for r in s.s2_positive_rules %}<code>{{ r }}</code>{{ " → " if not loop.last }}{% else %}<i>none</i>{% endfor %};</li>
-    <li><a href="/library/examples/negative">negative examples</a> (up to <code>{{ s.s2_negative_count }}</code>): papers you added yourself, then by the rules
-      {% for r in s.s2_negative_rules %}<code>{{ r }}</code>{{ " → " if not loop.last }}{% else %}<i>none</i>{% endfor %}. <b>Your feedback steers future batches here.</b></li>
-  </ul>
-  <p class="muted">Rules: <code>liked</code> rated 4–5 stars or read thoroughly · <code>read</code> skimmed or deeper · <code>recent</code>, <code>impact</code>, <code>fwci</code>, <code>cited</code> papers of the libraries used for recommendations by publication date, citation percentile, FWCI or citations · <code>dismissed</code> marked not relevant · <code>low_rated</code> rated 1–2 stars. Papers without DOI and papers you removed are skipped; a paper is never in both lists. Both lists are libraries: see and change them on the Library page.</p>
+  <p>Recent papers similar to the <i>positive</i> and unlike the <i>negative</i> examples (your additions first, then the rules):</p>
+  <table>
+    <thead><tr><th>List</th><th class="num">Max</th><th>Rules, in order</th></tr></thead>
+    <tr><td><a href="/library/examples/positive">👍 positive</a></td><td class="num">{{ s.s2_positive_count }}</td><td>{% for r in s.s2_positive_rules %}<code>{{ r }}</code>{{ " → " if not loop.last }}{% else %}<i>none</i>{% endfor %}</td></tr>
+    <tr><td><a href="/library/examples/negative">👎 negative</a></td><td class="num">{{ s.s2_negative_count }}</td><td>{% for r in s.s2_negative_rules %}<code>{{ r }}</code>{{ " → " if not loop.last }}{% else %}<i>none</i>{% endfor %}</td></tr>
+  </table>
+  <p class="muted"><code>liked</code> 4–5 stars or thorough · <code>read</code> skimmed or deeper · <code>recent</code> / <code>impact</code> / <code>fwci</code> / <code>cited</code> newest, highest percentile, FWCI, citations in the libraries used for recommendations · <code>dismissed</code> not relevant · <code>low_rated</code> 1–2 stars. Skipped: no DOI, removed by you; never in both lists.</p>
 </div>
 
 <div class="card">
   <h2>2 · 🧹 Filters</h2>
-  <p>A candidate is removed if it is</p>
+  <p>Removed if</p>
   <ul>
-    <li>already skimmed, read or read thoroughly, or marked not relevant (papers in your libraries stay eligible until you mark them);</li>
+    <li>skimmed or deeper, or not relevant (unread library papers stay eligible);</li>
     <li>on your reading queue;</li>
-    <li>recommended within the last <code>{{ s.cooldown_weeks }}</code> weeks (it may come back afterwards);</li>
-    <li>containing an excluded term: {% for t in cfg.excluded_terms %}<code>{{ t }}</code>{{ ", " if not loop.last }}{% else %}<i>none set</i>{% endfor %};</li>
-    <li>not a research article, review or preprint (editorials, errata, letters…);</li>
-    <li>a conference abstract from a journal supplement (titles like <code>0865 …</code>, <code>P-123: …</code>).</li>
+    <li>recommended in the last <code>{{ s.cooldown_weeks }}</code> weeks;</li>
+    <li>an excluded term matches: {% for t in cfg.excluded_terms %}<code>{{ t }}</code>{{ ", " if not loop.last }}{% else %}<i>none set</i>{% endfor %};</li>
+    <li>not an article, review or preprint (editorials, errata, letters…);</li>
+    <li>a supplement conference abstract (titles like <code>0865 …</code>, <code>P-123: …</code>).</li>
   </ul>
 </div>
 
@@ -57,33 +55,33 @@
   <h2>3 · ✅ Eligibility: current <i>or</i> important</h2>
   <ul>
     <li><b>fresh</b>: published within <code>{{ s.fresh_window_months }}</code> months (≈ {{ (s.fresh_window_months * 30.5) | round | int }} days);</li>
-    <li><b>landmark</b>: older, but cited more than <code>{{ s.landmark_min_percentile }}</code> % of papers of the same field and year (OpenAlex citation percentile), and at most <code>{{ s.landmark_max_age_years }}</code> years old.</li>
+    <li><b>landmark</b>: cited more than <code>{{ s.landmark_min_percentile }}</code> % of papers of the same field and year (OpenAlex percentile), at most <code>{{ s.landmark_max_age_years }}</code> years old.</li>
   </ul>
-  <p>Everything else is ignored, so you are never shown papers that are neither current nor important.</p>
+  <p class="muted">Everything else is dropped.</p>
 </div>
 
 <div class="card">
   <h2>4 · 🧮 Score</h2>
   <p class="tree"><span class="formula" style="font-size:1rem">score = <b>{{ w.relevance }}</b> × relevance + <b>{{ w.impact }}</b> × impact + <b>{{ w.timeliness }}</b> × timeliness</span></p>
-  <p>Shares of the score: relevance {{ (w.relevance / wsum * 100) | round | int }} %, impact {{ (w.impact / wsum * 100) | round | int }} %, timeliness {{ (w.timeliness / wsum * 100) | round | int }} %. Each component is between 0 and 1.</p>
+  <p class="muted">Shares: relevance {{ (w.relevance / wsum * 100) | round | int }} % · impact {{ (w.impact / wsum * 100) | round | int }} % · timeliness {{ (w.timeliness / wsum * 100) | round | int }} % · each component 0–1.</p>
 
   <h3>🎯 Relevance</h3>
   <p class="tree"><span class="formula">relevance = <b>{{ s.similarity_share }}</b> × similarity rank + <b>{{ (1 - s.similarity_share) | round(2) }}</b> × topic bonus</span></p>
   <ul>
-    <li><b>Library similarity</b>: SPECTER2 embeddings (scientific-paper vectors from Semantic Scholar) of the candidate are compared with your library; the mean cosine similarity to the <code>{{ s.knn }}</code> most similar library papers is turned into a rank among all candidates (0 = least, 1 = most similar). Papers without an embedding use TF-IDF text similarity of title + abstract instead.</li>
-    <li><b>Topic bonus</b>: topic weight ÷ highest topic weight for papers found by a topic search; <code>{{ s.s2_only_topic_bonus }}</code> for papers found only by Semantic Scholar's recommendations for your example papers; 0 otherwise.</li>
+    <li><b>Similarity rank</b>: mean cosine similarity of the SPECTER2 embedding to the <code>{{ s.knn }}</code> closest library papers, as a rank among all candidates (0 = least, 1 = most similar). Without embeddings: TF-IDF of title + abstract.</li>
+    <li><b>Topic bonus</b>: topic weight ÷ highest weight (found by a topic search) · <code>{{ s.s2_only_topic_bonus }}</code> (found only by Semantic Scholar) · 0 otherwise.</li>
   </ul>
 
   <h3>🏛️ Impact</h3>
   <ul>
-    <li><b>Landmark papers</b>: citation percentile ÷ 100 (field- and year-normalised, OpenAlex). Without a percentile: citations per year on a log scale, <code>{{ s.citations_per_year_saturation }}</code>/year = 1.0.</li>
-    <li><b>Fresh papers</b> cannot have citations yet, so the journal counts: log-scaled 2-year mean citedness of the journal (an open impact-factor proxy), where <code>{{ s.top_venue_citedness }}</code> = 1.0; unknown journal = <code>{{ s.unknown_venue_impact }}</code>. Plus up to <code>{{ s.early_citation_bonus }}</code> for early citations (full at <code>{{ s.early_citation_saturation }}</code> citations).</li>
+    <li><b>landmark</b>: citation percentile ÷ 100 (OpenAlex, field- and year-normalised); without one: citations per year, log scale, <code>{{ s.citations_per_year_saturation }}</code>/year = 1.0.</li>
+    <li><b>fresh</b>: journal 2-year mean citedness, log scale, <code>{{ s.top_venue_citedness }}</code> = 1.0 (unknown journal <code>{{ s.unknown_venue_impact }}</code>), plus up to <code>{{ s.early_citation_bonus }}</code> for early citations (full at <code>{{ s.early_citation_saturation }}</code>).</li>
   </ul>
-  <p class="muted">Caveat: journal citedness can be distorted, e.g. by supplements full of meeting abstracts. That is why landmark papers use paper-level percentiles.</p>
+  <p class="muted">Journal citedness can be distorted (e.g. supplements of meeting abstracts), so landmarks use paper-level percentiles.</p>
 
   <h3>⏱️ Timeliness</h3>
   <ul>
-    <li><b>fresh</b>: 0.5 + 0.5 × (1 − age ÷ fresh window): from 1.0 on publication day to 0.5 at the end of the window;</li>
+    <li><b>fresh</b>: 0.5 + 0.5 × (1 − age ÷ fresh window), 1.0 → 0.5;</li>
     <li><b>landmark</b>: constant <code>{{ s.landmark_timeliness }}</code>.</li>
   </ul>
 </div>
@@ -91,15 +89,15 @@
 <div class="card">
   <h2>5 · 🎲 Selection</h2>
   <ul>
-    <li><b>Score floor</b>: only candidates with at least <code>{{ (s.min_relative_score * 100) | int }} %</code> of the best score are considered, so diversity never pulls in weak papers.</li>
-    <li><b>Diversity (maximal marginal relevance)</b>: papers are picked one by one, each time maximising
-      <span class="formula" style="font-family: monospace">{{ s.mmr_lambda }} × score − {{ (1 - s.mmr_lambda) | round(2) }} × similarity to the most similar paper already picked</span>.
-      With λ = 1 the list is strictly by score; lower λ spreads it across subjects.</li>
-    <li>Up to <code>{{ s.n_recommendations }}</code> papers are picked and shown ranked by score.</li>
+    <li><b>Score floor</b>: at least <code>{{ (s.min_relative_score * 100) | int }} %</code> of the best score.</li>
+    <li><b>Diversity (MMR)</b>: picked one by one, maximising
+      <span class="formula" style="font-family: monospace">{{ s.mmr_lambda }} × score − {{ (1 - s.mmr_lambda) | round(2) }} × similarity to the closest earlier pick</span>
+      (λ = 1: strictly by score).</li>
+    <li>Up to <code>{{ s.n_recommendations }}</code> papers, shown ranked by score.</li>
   </ul>
 </div>
 
 <div class="card">
   <h2>🔐 Data &amp; privacy</h2>
-  <p>Only free services are used, within their free limits; no personal data is sent{{ " (a contact e-mail is configured and sent as mailto)" if cfg.api.contact_email }}. Leaves your machine: topic queries and DOIs (OpenAlex), DOIs of library and example papers (Semantic Scholar, if enabled), titles of library papers without DOI (Crossref, during ingest).</p>
+  <p>Free services only; no personal data{{ " (except your contact e-mail, sent as mailto)" if cfg.api.contact_email }}. Sent: topic queries and DOIs (OpenAlex), DOIs of library and example papers (Semantic Scholar, if enabled), titles of library papers without DOI (Crossref, during ingest).</p>
 </div>

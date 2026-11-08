@@ -4,9 +4,9 @@
 {% block title %}Settings{% endblock %}
 {% block heading %}⚙️ Settings{% endblock %}
 {% block content %}
-<p class="muted">These settings belong to your profile <b>{{ profile.name if profile }}</b> and are saved in <code>{{ settings_file }}</code> (comments are kept).
-  They apply to the next recommendations. How they are used: <a href="/recommendations#how">How recommendations are made</a>; every key: <a href="/docs/9-configuration">Configuration</a>.
-  Machine settings (APIs, web server, backups) and the defaults for new profiles are in <code>{{ config_path }}</code>; game rules are locked per profile (<a href="/profile">your profile</a>).</p>
+<p class="muted"><small>Profile <b>{{ profile.name if profile }}</b> · <code>{{ settings_file }}</code> · applies to the next recommendations ·
+  <a href="/recommendations#how">how they are used</a> · <a href="/docs/9-configuration">all keys</a><br>
+  Machine settings and defaults for new profiles: <code>{{ config_path }}</code> · game rules: <a href="/profile">profile</a> (locked)</small></p>
 <form method="post" action="/settings" class="grid">
   <div class="card" id="topics-card">
     <h2>🏷️ Topics</h2>
@@ -16,7 +16,7 @@
   {% for group in groups %}
   <details class="card" {{ "open" if not group.advanced }}>
     <summary><h2 style="display:inline">{{ "🧪 " if group.advanced }}{{ group.title }}</h2></summary>
-    <p class="muted">{{ group.intro }}</p>
+    {% if group.intro %}<p class="muted">{{ group.intro }}</p>{% endif %}
     <div class="grid two">
       {% for s in group.settings %}
       <div class="field">
@@ -43,7 +43,7 @@
   <table>
     <tr><td>Profile folder</td><td><code>{{ settings_file.parent.resolve() }}</code></td></tr>
     <tr><td>Database (your progress lives here)</td><td><code>{{ cfg.paths.database.resolve() }}</code></td></tr>
-    <tr><td>Libraries</td><td><a href="/library">manage your libraries</a> (imports, files, exports)</td></tr>
+    <tr><td>Libraries</td><td><a href="/library">Libraries</a></td></tr>
     <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · automatic every {{ cfg.backup.interval_hours | round(1) }} h while the server runs</td></tr>
     <tr><td>Last backup</td><td>{% if last_backup %}{{ last_backup.isoformat() }}{% else %}<span class="neg">none yet</span>{% endif %}</td></tr>
   </table>
@@ -51,6 +51,6 @@
     <form method="post" action="/backup"><button class="primary">🗄️ Back up now</button></form>
     <a class="button" href="/progress.json">⬇ Download progress (JSON)</a>
   </div>
-  <p class="muted" style="margin-top:.6rem">Tip: point <code>backup.dir</code> to a cloud-synced folder, but keep the database itself local. Restore with <code>litresearch restore</code>; merge progress into another installation with <code>litresearch import-progress</code> (see <a href="/docs/10-your-data-and-backups">Your data and backups</a>).</p>
+  <p class="muted" style="margin-top:.6rem"><small>Tip: <code>backup.dir</code> in a cloud-synced folder, database local · restore: <code>litresearch restore</code> · merge: <code>litresearch import-progress</code> · <a href="/docs/10-your-data-and-backups">Your data and backups</a></small></p>
 </div>
 {% endblock %}

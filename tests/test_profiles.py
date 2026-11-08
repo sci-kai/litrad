@@ -314,7 +314,7 @@ def test_profile_page(client):
     enter_profile(client, "Grace", adopt=False)
     page = client.get("/profile").text
     assert "RULES LOCKED" in page and "Grace" in page and "Ada" in page  # Ada: other profile
-    assert "data/profiles/grace" in page and "Switch or create a profile" in page
+    assert "data/profiles/grace" in page and "Switch profile" in page
     compare = client.post(
         "/profile/compare", files={"file": ("me.json", client.get("/profile/download").content)}
     )
@@ -330,7 +330,7 @@ def test_profile_page(client):
 def test_topics_are_asked_for_first(client, config_path):
     enter_profile(client, "Ada", adopt=False)
     page = client.get("/recommendations").text
-    assert "What are you interested in?" in page and "Skip: use my library only" in page
+    assert "What are you interested in?" in page and "Skip: library only" in page
     bad = {"topic_name": "evo", "topic_weight": "lots", "topic_queries": "q"}
     assert "weight must be a number" in client.post("/recommendations/topics", data=bad).text
     form = {
@@ -344,7 +344,7 @@ def test_topics_are_asked_for_first(client, config_path):
     cfg = profile_cfg(config_path)
     assert cfg.topics[0].queries == ["clonal evolution", "tumour phylogeny"]
     assert cfg.excluded_terms == ["veterinary"]
-    assert "Get new recommendations" in saved and "✏️ Edit topics" in saved
+    assert "Get recommendations" in saved and "✏️ Edit topics" in saved
     assert "How recommendations are made" in saved and "veterinary" in saved
 
 
@@ -367,7 +367,7 @@ def add_batch(config_path, days_ago: int):
 def test_reminder_for_new_recommendations(client, config_path):
     enter_profile(client, "Ada", adopt=False)
     assert 'title="time for new recommendations"' in client.get("/queue").text
-    assert "You have no recommendations yet" in client.get("/").text
+    assert "✨ No recommendations yet." in client.get("/").text
     add_batch(config_path, days_ago=2)
     assert "time for new recommendations" not in client.get("/queue").text
     add_batch(config_path, days_ago=0)

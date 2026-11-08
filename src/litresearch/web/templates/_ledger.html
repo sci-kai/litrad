@@ -16,7 +16,7 @@
       <span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span>
     </a>
     {% endfor %}
-    <p style="margin-top:1rem"><a class="button small" href="/ledger.tsv">⬇ Export as TSV</a></p>
+    <p style="margin-top:1rem"><a class="button small" href="/ledger.tsv">⬇️ Export TSV</a></p>
   </nav>
   <div class="card">
     <div class="table-wrap">
@@ -32,7 +32,7 @@
         <td class="num">{{ row.balance }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="muted">No transactions yet. Log your first reading to earn XP.</td></tr>
+      <tr><td colspan="5" class="muted">No transactions yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
