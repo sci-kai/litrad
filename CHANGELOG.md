@@ -12,6 +12,11 @@ All notable changes are listed here. Versions follow
   no personal data is cached). Needs HTTPS for full installation; guide for
   the home network and Tailscale in the documentation. Icons are drawn by
   `tools/make_icons.py`.
+- **Read papers** (*Reading → Read papers*, `/read`): every paper you marked
+  with deepest depth, last and first reading, rating, notes, XP and source;
+  sort, filter (depth, rating, period, library, notes, not relevant), search
+  in title, authors and notes, 50 per page, **Export TSV** of all matching
+  rows; same as `litresearch read-papers [--tsv FILE]`.
 - **Examples for Semantic Scholar recommendations**: the positive and
   negative example papers are two libraries (*Positive examples*, *Negative
   examples*) that show each paper's origin. Choose the rules that fill them

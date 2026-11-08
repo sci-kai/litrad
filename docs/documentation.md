@@ -282,6 +282,29 @@ Reading levels: `abstract` → `skimmed` → `read` → `thorough`. Reaching
 are stored with an ISO 8601 timestamp. In the web UI, log a reading on the
 queue or the dashboard (level, star rating, note).
 
+#### Read papers
+
+Web: **Reading → Read papers** (`/read`) lists every paper you marked, one
+row each: deepest depth reached (a paper read and later marked not relevant
+stays *read*), dates of the last and the first status change, rating, the
+first 120 characters of your notes, the XP it earned and where it came from
+(recommendation, library, added by you). Sort by last read (default, newest
+first), first read (oldest first), depth, rating, XP or title. Filter by depth,
+minimum rating, period (last read), library and *Has notes*; the search
+looks in title, authors and notes, ignoring case (umlauts included).
+Papers marked not relevant are hidden unless you tick *Include not
+relevant*. 50 per page; **Export TSV** writes all rows matching the filters,
+not only the page.
+
+```bash
+litresearch read-papers --depth thorough --rating 4 --since 2026-01-01
+litresearch read-papers --search "clonal" --library Paperpile --tsv clonal.tsv
+```
+
+TSV columns: title, authors, year, journal, doi, pmid, deepest depth, first
+read, last read, rating, notes, xp, source. Tabs and newlines in a cell are
+written as `\t` and `\n`, empty values as `n/a`.
+
 ### 4. Check your score
 
 Web: **Progress & XP** and the dashboard. CLI: `litresearch score` shows
@@ -426,6 +449,7 @@ login protects your data. Never open the port to the internet directly.
 | | 👋 **Welcome** | choose, create or load a profile; take over existing data |
 | 🏠 | **Dashboard** | the up-next paper with one-click logging, weekly quest, hints, a reminder when recommendations are due, latest recommendations, queue, recent XP, **weekly report cards** |
 | Reading | 📚 **Reading queue** | log a reading (level, rating, note), reorder, remove; add papers by DOI, PubMed ID, citation key or title |
+| Reading | ✅ **Read papers** | every paper you marked with depth, dates, rating, notes snippet, XP and source; sort, filter, search, **Export TSV** ([details](#read-papers)) |
 | Reading | ✨ **Recommendations** | set up topics (first visit); **Get recommendations**; the ranked list with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; queue or mark not relevant; **How recommendations are made** with your current values |
 | Progress | 🏆 **Progress & XP** | level, streak, Reading Impact Factor, discipline and depth, XP per week, reading calendar, personal bests, badges, career ladder, the **XP ledger** (paginated; filter, totals, TSV export) and the locked rules |
 | Library | 🗂️ **Libraries** | all libraries (papers, read, last update), plus *Reading queue* and *Recommended*; per library: papers (search, folder/label and status filters, 50 per page), **Export**, **Update from file**, edit, delete, import history |
@@ -864,6 +888,7 @@ paper counts once).
 | `read REF LEVEL [--rating] [--note]` | log a reading and earn XP |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant |
 | `score`, `history` | level, streak, grade, badges / reading log |
+| `read-papers [--depth LEVEL]… [--rating N] [--since DATE] [--until DATE] [--library NAME] [--notes] [--dismissed] [--search WORDS] [--sort last\|first\|depth\|rating\|xp\|title] [--limit N] [--tsv FILE]` | your reading history; `--tsv` writes all matching rows |
 | `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI |
 | `set-password [--remove]` | password for network access |
 | `backup`, `restore FILE` | snapshot + progress export / restore a snapshot |
@@ -1188,6 +1213,7 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `papers.py`, `search.py` | storing works and search hits without overwriting library metadata; one search query translated for Europe PMC, PubMed and the library |
 | `recommend/engine.py`, `scoring.py`, `text.py` | candidates with provenance, filters and funnel, batches with settings snapshot; eligibility, relevance, impact, timeliness, MMR, evidence tree; TF-IDF fallback |
 | `reading.py` | paper references (`r1`, `q2`, DOI …), queue, reading log, notes, drop penalty |
+| `history.py` | reading history: filter, sort and aggregate in SQL, TSV export (Read papers tab, `read-papers`) |
 | `rules.py`, `profile.py`, `game.py` | `GameRules`, badge catalog, fingerprint; locking; points, anti-farming, streaks, quests, levels, badges, summaries, ledger, calendar |
 | `profiles.py` | profile folders, settings overlay, current profile, taking over old data, loading saved files |
 | `backup.py` | atomic writes, snapshots, rotation, restore, profile files with checksum, merge, comparison in an in-memory database, automatic backup thread |
