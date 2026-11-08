@@ -17,6 +17,7 @@ from web_bigdata import populate
 MENU = [
     "/",
     "/queue",
+    "/read",
     "/recommendations",
     "/recommendations?topics=1",
     "/progress",
@@ -297,7 +298,14 @@ def test_html_in_user_text_is_escaped(user):
         "/recommendations/topics",
         {"topic_name": evil, "topic_weight": "1", "topic_queries": evil},
     )
-    for url in ("/", "/queue", "/recommendations", "/settings", "/search?q=img&where=library"):
+    for url in (
+        "/",
+        "/queue",
+        "/read",
+        "/recommendations",
+        "/settings",
+        "/search?q=img&where=library",
+    ):
         assert "<img src=x" not in client.get(url).text, url
     payload = post(client, "/queue/add", {"title": evil + "2"})
     raw = re.search(r'<script id="celebration"[^>]*>(.*?)</script>', payload.text, re.S).group(1)

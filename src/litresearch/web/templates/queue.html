@@ -7,6 +7,7 @@
 <nav class="tabs" aria-label="Reading">
   <a href="/queue" class="active">📚 Reading queue</a>
   <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
+  <a href="/read">✅ Read papers</a>
 </nav>
 <p class="muted"><small>🐸 q1 first: +{{ (rules.frog_bonus * 100) | round | int }} % XP · ⚠️ removed or not relevant before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
 

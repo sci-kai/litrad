@@ -29,6 +29,7 @@
       <div class="group">Reading</div>
       <a href="/queue" class="sub {{ 'active' if active == 'queue' }}"{% if active == 'queue' %} aria-current="page"{% endif %}><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
       <a href="/recommendations" class="sub {{ 'active' if active == 'recommendations' }}"{% if active == 'recommendations' %} aria-current="page"{% endif %}><span class="icon">✨</span>Recommendations{% if header.reminder %}<span class="dot" title="time for new recommendations"><span class="sr-only">(time for new ones)</span></span>{% endif %}</a>
+      <a href="/read" class="sub {{ 'active' if active == 'read' }}"{% if active == 'read' %} aria-current="page"{% endif %}><span class="icon">✅</span>Read papers</a>
       <div class="group">Progress</div>
       <a href="/progress" class="sub {{ 'active' if active == 'progress' }}"{% if active == 'progress' %} aria-current="page"{% endif %}><span class="icon">🏆</span>Progress &amp; XP</a>
       <div class="group">Library</div>

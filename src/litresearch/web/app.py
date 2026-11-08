@@ -35,9 +35,10 @@ from collections import OrderedDict
 from datetime import date, datetime
 from itertools import groupby
 from pathlib import Path
+from typing import Annotated
 from urllib.parse import urlencode, urlsplit
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
@@ -50,7 +51,7 @@ from sqlalchemy import case, func
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from litresearch import __version__, examples, export, libraries, profiles
+from litresearch import __version__, examples, export, history, libraries, profiles
 from litresearch.backup import (
     BackupError,
     export_progress,
@@ -838,6 +839,116 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                 )
         finally:
             engine.dispose()
+
+    # --- read papers (reading history) -------------------------------------------------
+
+    def history_filter(
+        sort: str,
+        depth: list[str] | None,
+        rating: str,
+        since: str,
+        until: str,
+        library: str,
+        notes: str,
+        dismissed: str,
+        q: str,
+    ) -> history.HistoryFilter:
+        return history.HistoryFilter(
+            sort=sort if sort in history.SORTS else "last",
+            depths=[d for d in depth or [] if d in history.DEPTHS],
+            min_rating=int(rating) if rating in ("1", "2", "3", "4", "5") else 0,
+            since=history.parse_date(since),
+            until=history.parse_date(until),
+            library=int(library) if library.isdigit() else None,
+            has_notes=bool(notes),
+            dismissed=bool(dismissed),
+            q=q,
+        )
+
+    @app.get("/read", response_class=HTMLResponse)
+    def read_page(
+        request: Request,
+        sort: str = "last",
+        depth: Annotated[list[str] | None, Query()] = None,
+        rating: str = "",
+        since: str = "",
+        until: str = "",
+        library: str = "",
+        notes: str = "",
+        dismissed: str = "",
+        q: str = "",
+        page: int = 1,
+    ):
+        """Every paper you marked, filtered and sorted; 50 per page."""
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                f = history_filter(sort, depth, rating, since, until, library, notes, dismissed, q)
+                found = history.rows(session, f)
+                pages = max(1, -(-len(found) // history.PAGE_SIZE))
+                page = min(max(page, 1), pages)
+                shown = found[(page - 1) * history.PAGE_SIZE : page * history.PAGE_SIZE]
+                query = urlencode(
+                    [
+                        ("sort", f.sort),
+                        *(("depth", d) for d in f.depths),
+                        ("rating", rating),
+                        ("since", since),
+                        ("until", until),
+                        ("library", library),
+                        ("notes", notes),
+                        ("dismissed", dismissed),
+                        ("q", q),
+                    ]
+                )
+                return render(
+                    request,
+                    "read.html",
+                    session,
+                    cfg,
+                    items=history.entries(session, shown),
+                    n_rows=len(found),
+                    counts=history.counts(found),
+                    page=page,
+                    pages=pages,
+                    f=f,
+                    form=dict(since=since, until=until, q=q),
+                    here=f"/read?{query}",
+                    tsv=f"/read.tsv?{query}",
+                    libs=session.exec(select(Library).order_by(Library.name)).all(),
+                    sorts=history.SORTS,
+                    depths=history.DEPTHS,
+                    sources=history.SOURCES,
+                    first_shown=(page - 1) * history.PAGE_SIZE + 1,
+                )
+        finally:
+            engine.dispose()
+
+    @app.get("/read.tsv")
+    def read_tsv(
+        sort: str = "last",
+        depth: Annotated[list[str] | None, Query()] = None,
+        rating: str = "",
+        since: str = "",
+        until: str = "",
+        library: str = "",
+        notes: str = "",
+        dismissed: str = "",
+        q: str = "",
+    ):
+        """All rows matching the filters (not only the page) as TSV."""
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                f = history_filter(sort, depth, rating, since, until, library, notes, dismissed, q)
+                text = history.to_tsv(history.entries(session, history.rows(session, f)))
+        finally:
+            engine.dispose()
+        return Response(
+            text,
+            media_type="text/tab-separated-values",
+            headers={"Content-Disposition": "attachment; filename=litresearch_read_papers.tsv"},
+        )
 
     def _year(text: str) -> int | None:
         return int(text) if text.strip().isdigit() else None
