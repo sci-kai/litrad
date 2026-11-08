@@ -6,6 +6,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from litresearch.locations import base_dir, resolve_path
 from litresearch.rules import GameRules
 
 # value used in config files for "not set"
@@ -30,6 +31,9 @@ class _Base(BaseModel):
 
 
 class Paths(_Base):
+    # relative paths below (and backup.dir) are resolved against this folder;
+    # not set: see locations.base_dir (set by load_config to the folder in use)
+    base_dir: Path | None = None
     # used when no profile is selected (and as the source of "existing data")
     bibtex: Path = Path("data/paperpile/library.bib")
     database: Path = Path("data/litresearch.sqlite")
@@ -205,24 +209,61 @@ class Config(_Base):
     schedule: Schedule = Schedule()
     web: Web = Web()
 
+    @model_validator(mode="after")
+    def _resolve_paths(self):
+        """Make relative paths absolute against ``paths.base_dir`` (when absolute)."""
+        base = self.paths.base_dir
+        if base is None or not base.is_absolute():
+            return self
+        fields = ("bibtex", "database", "profiles_dir", "cache_dir", "obsidian_vault")
+        updates = {
+            name: resolve_path(base, getattr(self.paths, name))
+            for name in fields
+            if getattr(self.paths, name) is not None
+        }
+        self.paths = self.paths.model_copy(update=updates)
+        self.backup = self.backup.model_copy(update={"dir": resolve_path(base, self.backup.dir)})
+        return self
+
 
 class ConfigError(ValueError):
     """A missing or invalid config file, with a message for humans."""
 
 
+def config_base_dir(path: Path, raw_paths: dict | None = None) -> tuple[Path, str]:
+    """Base folder of relative paths for the config file at ``path`` and the rule used.
+
+    ``raw_paths`` is the ``paths`` section as read from the file.
+    """
+    explicit = (raw_paths or {}).get("base_dir")
+    if isinstance(explicit, str) and explicit.strip().lower() in ("", NA):
+        explicit = None
+    if explicit is not None:
+        explicit = Path(str(explicit)).expanduser()
+    base, rule = base_dir(Path(path).absolute(), explicit)
+    return Path(base), rule
+
+
 def load_config(path: Path) -> Config:
-    """Read and validate ``config.yaml``; problems become a readable ConfigError."""
+    """Read and validate ``config.yaml``; problems become a readable ConfigError.
+
+    Relative paths become absolute, resolved against the base folder (see
+    ``litresearch.locations``), so they do not depend on the current folder.
+    """
     try:
         with open(path, encoding="utf-8") as handle:
             raw = yaml.safe_load(handle) or {}
     except FileNotFoundError as error:
         raise ConfigError(
-            f"No config file at {path}. Copy config/config.example.yaml to config/config.yaml."
+            f"No config file at {path}. Copy config/config.example.yaml there, or run "
+            "'litresearch where' to see where litresearch looks for it."
         ) from error
     except yaml.YAMLError as error:
         raise ConfigError(f"{path} is not valid YAML: {error}") from error
     if not isinstance(raw, dict):
         raise ConfigError(f"{path} must contain settings (key: value), not {type(raw).__name__}")
+    if isinstance(raw.get("paths"), dict):
+        raw["paths"] = dict(raw["paths"], base_dir=str(config_base_dir(path, raw["paths"])[0]))
     try:
         return Config.model_validate(raw)
     except ValueError as error:

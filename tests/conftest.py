@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import httpx
+import platformdirs
 import pytest
 
 from litresearch.config import Config
@@ -26,20 +27,49 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+# the real per-user folders, looked up before any test can redirect them
+REAL_USER_DIRS = [
+    Path(platformdirs.user_config_dir("litresearch", appauthor=False)),
+    Path(platformdirs.user_data_dir("litresearch", appauthor=False)),
+]
+
+
+def _state(path: Path):
+    """Enough to notice that a test created or changed a folder."""
+    if not path.exists():
+        return None
+    return sorted((str(p), p.stat().st_mtime_ns) for p in [path, *path.rglob("*")])
+
+
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     """Keep every test away from the real data folders.
 
     Relative default paths (data/, config/) resolve inside a temporary working
-    directory, and `serve` never starts the real backup thread.
+    directory, the per-user config and data folders are temporary folders,
+    and `serve` never starts the real backup thread. A test that still
+    touches the real per-user folders fails.
     """
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LITRESEARCH_CONFIG", raising=False)
+    user_home = tmp_path / "user-home"
+    for variable, folder in (("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data")):
+        monkeypatch.setenv(variable, str(user_home / folder))
+    monkeypatch.setattr(
+        "litresearch.locations.user_config_dir", lambda: user_home / "config" / "litresearch"
+    )
+    monkeypatch.setattr(
+        "litresearch.locations.user_data_dir", lambda: user_home / "data" / "litresearch"
+    )
+    before = [_state(path) for path in REAL_USER_DIRS]
     started = []
     monkeypatch.setattr(
         "litresearch.backup.start_backup_thread",
         lambda config_path, log=print: started.append(config_path) or (None, None),
     )
-    return started
+    yield started
+    after = [_state(path) for path in REAL_USER_DIRS]
+    assert after == before, f"a test wrote into the real per-user folders {REAL_USER_DIRS}"
 
 
 def _bare_doi(url):

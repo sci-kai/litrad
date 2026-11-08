@@ -21,7 +21,23 @@ app = typer.Typer(help="Personal literature radar on top of your reference-manag
 
 console = Console(highlight=False)
 
-ConfigOpt = typer.Option(Path("config/config.yaml"), "--config", "-c", help="Path to config.yaml")
+
+def _config_path(value: Path | None) -> Path:
+    """The config file to use (see ``litresearch.locations``); created on the first run."""
+    from litresearch.locations import locate_config
+
+    return locate_config(value, announce=lambda msg: typer.echo(msg, err=True)).path
+
+
+ConfigOpt = typer.Option(
+    None,
+    "--config",
+    "-c",
+    callback=_config_path,
+    help="Path to config.yaml (default: $LITRESEARCH_CONFIG, config/config.yaml in the current "
+    "folder, else your per-user config; see 'litresearch where')",
+    show_default=False,
+)
 
 # set by the global --profile option
 state: dict = {"profile": None}
@@ -97,6 +113,46 @@ def main(
 def version():
     """Print the version."""
     typer.echo(__version__)
+
+
+@app.command()
+def where(
+    config: Path = typer.Option(
+        None, "--config", "-c", help="Path to config.yaml", show_default=False
+    ),
+):
+    """Show which config file and data folders are used, and why."""
+    from litresearch import locations
+    from litresearch.config import config_base_dir
+
+    choice = locations.find_config(config)
+    rows = [("Config file", choice.path, choice.description)]
+    if choice.path.exists():
+        import yaml
+
+        try:
+            raw = yaml.safe_load(choice.path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            raw = {}
+        raw_paths = raw.get("paths") if isinstance(raw, dict) else None
+        base, rule = config_base_dir(choice.path, raw_paths if isinstance(raw_paths, dict) else {})
+        rows.append(("Data folder", base, f"base of relative paths: {locations.BASE_RULES[rule]}"))
+        cfg = load_config(choice.path)
+        rows += [
+            ("Profiles", cfg.paths.profiles_dir, "paths.profiles_dir"),
+            ("Backups", cfg.backup.dir, "backup.dir"),
+            ("Cache", cfg.paths.cache_dir, "paths.cache_dir"),
+            ("Data before profiles", cfg.paths.database, "paths.database"),
+        ]
+    else:
+        rows.append(("Data folder", locations.user_data_dir(), "per-user data folder"))
+    for label, path, why in rows:
+        typer.echo(f"{label + ':':<22}{path}")
+        typer.echo(f"{'':<22}({why})")
+    typer.echo(
+        f"Per-user folders:     config {locations.user_config_dir()}, "
+        f"data {locations.user_data_dir()}"
+    )
 
 
 @app.command()

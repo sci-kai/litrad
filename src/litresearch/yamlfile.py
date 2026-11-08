@@ -33,16 +33,22 @@ def update_yaml(path: Path, updates: dict) -> None:
     topic name, so fields the caller does not mention (``mesh_terms``,
     ``seed_dois``) survive.
     """
+    text = updated_text(path.read_text(encoding="utf-8") if path.exists() else "", updates)
+    if path.exists():
+        shutil.copy2(path, path.with_name(path.name + ".bak"))
+    atomic_write_text(path, text)
+
+
+def updated_text(text: str, updates: dict) -> str:
+    """The YAML document ``text`` with ``updates`` applied, comments kept."""
     yaml = YAML()
     yaml.preserve_quotes = True
-    document = yaml.load(path.read_text(encoding="utf-8")) if path.exists() else None
+    document = yaml.load(text) if text.strip() else None
     document = document if document is not None else {}
     _apply(document, updates)
     buffer = io.StringIO()
     yaml.dump(document, buffer)
-    if path.exists():
-        shutil.copy2(path, path.with_name(path.name + ".bak"))
-    atomic_write_text(path, buffer.getvalue())
+    return buffer.getvalue()
 
 
 def _apply(node, updates: dict) -> None:

@@ -1,12 +1,17 @@
-# litresearch configuration -- copy to config/config.yaml and adapt.
+# litresearch configuration. `litresearch where` shows which file is in use;
+# a git installation keeps it as config/config.yaml (install.py copies this
+# example there), otherwise the first run creates a per-user copy.
 # Dates follow ISO 8601 (YYYY-MM-DD).
 
 # Machine settings and the DEFAULTS of every profile. Each profile keeps its own
-# data in data/profiles/<profile>/ and may override topics, excluded_terms,
+# data in <profiles_dir>/<profile>/ and may override topics, excluded_terms,
 # selection, sources, queue, library and paths.bibtex in its settings.yaml
 # (written by the web UI).
 
 paths:
+  # relative paths (also backup.dir) start from here; n/a = the folder that
+  # contains config/ (git installation), else this file's folder
+  base_dir: n/a
   # one folder per profile: litresearch.sqlite, library.bib, settings.yaml
   profiles_dir: data/profiles
   # data from before profiles existed (can be taken over as a profile)
