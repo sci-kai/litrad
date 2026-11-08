@@ -87,6 +87,15 @@ exported in documented standard formats that later versions keep reading:
 - **Export everything:** one button and one command write a single archive
   with all of the above plus a README that describes each file; importing
   it rebuilds the profile without loss (tested round trip).
+- **Consistency checks on import:** before anything changes, an import is
+  checked against the schema and for internal consistency: every reading,
+  log entry, XP event, queue item, note and recommendation must point to a
+  paper contained in the import (matched by DOI, PMID or id); references
+  between files must match (libraries and papers, ledger and readings,
+  badges and rules), and totals such as XP must add up. Problems are listed
+  by file and record; nothing is imported until the check passes (all or
+  nothing), unless you explicitly import only the consistent part. The same
+  checks apply to backups, profile files and progress merges.
 - **Compatibility tests:** example files and databases from every released
   version are kept in the test suite and must load in the current version.
 
