@@ -13,8 +13,8 @@ from pathlib import Path
 import markdown
 from markdown.extensions.toc import slugify
 
-# docs/documentation.md; web/documentation.md is a symlink to it that the
-# package build turns into a copy, so the docs also ship in wheels
+# docs/documentation.md is the source; web/documentation.md is a real copy kept
+# identical by tools/sync_docs.py (a test checks), so the docs ship in wheels
 DEFAULT_PATH = Path(__file__).parent / "documentation.md"
 EXTENSIONS = ["tables", "fenced_code", "toc", "sane_lists"]
 

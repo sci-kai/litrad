@@ -57,7 +57,11 @@ git push -u origin issue12-queue-limit     # then open a pull request into dev
 
 - tests for new behaviour and for every fixed bug;
 - the documentation (`docs/documentation.md`). The web UI renders it, and a
-  test checks that all its internal links work. Changes to the scoring also
+  test checks that all its internal links work. The package ships a real
+  copy (`src/litresearch/web/documentation.md`, no symlink: those break in
+  wheels and Windows checkouts); after editing run
+  `python tools/sync_docs.py` (the same for `config/config.example.yaml`),
+  a test fails if the copies differ. Changes to the scoring also
   update the "How recommendations are made" panel
   (`src/litresearch/web/templates/_how_recommend.html`);
 - a line in `CHANGELOG.md` under the unreleased version;
@@ -93,3 +97,29 @@ To release (maintainers):
    publishes a GitHub release with the CHANGELOG section as notes
    (pre-releases for versions with a `-` suffix).
 5. On `dev`, bump to the next `-dev` version in its own commit.
+
+Two more workflows run for every `v*` tag:
+
+- **`publish-pypi.yml`** uploads the wheel and source archive to PyPI for
+  releases (`vX.Y.Z`) and pre-releases PEP 440 accepts (`v0.3.0rc1`,
+  `v0.3.0-rc.1`). `-dev` tags (`0.2.0-dev` is PEP 440 `0.2.0.dev0`) are
+  skipped, and a tag that differs from the version in `pyproject.toml`
+  fails. "Run workflow" uploads to TestPyPI instead.
+- **`docker.yml`** builds the image for `linux/amd64` and `linux/arm64` and
+  pushes it to `ghcr.io/<owner>/<repository>` (tag = version; `latest` only
+  for releases). Docker is not needed locally; to try it:
+  `docker build -t litresearch .`
+
+One-time set-up (repository owner):
+
+1. PyPI: *Your projects → Publishing → Add a pending publisher* with the
+   project name `litresearch`, this repository, workflow `publish-pypi.yml`
+   and environment `pypi`. Do the same on test.pypi.org with environment
+   `testpypi`. No token is stored in GitHub (Trusted Publishing).
+2. GitHub: *Settings → Environments*: create `pypi` and `testpypi`
+   (optionally require your approval for `pypi`).
+3. GitHub: after the first image push, *Packages → litresearch → Package
+   settings*: set the visibility to public and link it to the repository.
+4. TODO: add `[project.urls]` (Homepage, Issues, Changelog) to
+   `pyproject.toml` once the public repository URL is fixed; PyPI then links
+   to it.

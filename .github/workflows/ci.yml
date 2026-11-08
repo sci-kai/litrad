@@ -24,7 +24,7 @@ jobs:
         run: python -m pip install --editable ".[dev]"
       - name: Lint
         run: |
-          ruff check src tests install.py
-          ruff format --check src tests install.py
+          ruff check src tests tools install.py
+          ruff format --check src tests tools install.py
       - name: Test
         run: pytest -q
