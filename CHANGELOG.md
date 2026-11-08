@@ -22,6 +22,21 @@ All notable changes are listed here. Versions follow
 - **Choose the libraries used for recommendations** with checkboxes on the
   Libraries page (and on the positive examples' page) or with
   `litresearch library use NAME… [--off]`; a warning when none is used.
+- **Runs from any folder and as an installed package.** litresearch looks
+  for its configuration in `--config`, `LITRESEARCH_CONFIG`,
+  `config/config.yaml` in the current folder (git installations: unchanged),
+  then in your per-user config folder; if there is none, the first command
+  creates one from the example with the data in your per-user data folder
+  (Linux, macOS, Windows; new dependency `platformdirs`). New command
+  `litresearch where` shows the files and folders in use and why.
+
+### Changed
+
+- Relative paths in the configuration (`paths.*`, `backup.dir`, a profile's
+  `paths.bibtex`) no longer depend on the folder you run a command in: they
+  start from the folder that contains `config/` (as before when run from the
+  litresearch folder), else from the config file's folder, or from the new
+  setting `paths.base_dir`. `~` is expanded.
 
 ### Changed
 

@@ -44,7 +44,7 @@ creates `config/config.yaml` from the example (an existing one is never
 overwritten) and checks that litresearch starts. If something is missing it
 stops with the fix (e.g. the `apt` command); it never says "Done" over a
 broken installation. Run litresearch commands from the litresearch folder:
-`config/` and `data/` are found relative to it.
+there `config/config.yaml` is found, and `data/` lives next to `config/`.
 
 | Option | Does |
 |---|---|
@@ -57,9 +57,20 @@ broken installation. Run litresearch commands from the litresearch folder:
   `config/` and `data/` are kept; the CHANGELOG says when a version changes
   the data format.
 - **Without the installer:** `python3 -m venv .venv && .venv/bin/pip install -e .`
-  and `cp config/config.example.yaml config/config.yaml`. Each GitHub release
-  also has a wheel (`pip install litresearch-*.whl`); litresearch then keeps
-  `config/` and `data/` in the folder you run it from.
+  and `cp config/config.example.yaml config/config.yaml`.
+- **As a package** (the wheel of a GitHub release, `pip install
+  litresearch-*.whl`, or `pipx`): no git folder needed, run it from any
+  folder. The first command creates your configuration and data in your
+  per-user folders:
+
+  | System | Configuration | Data (profiles, backups, cache) |
+  |---|---|---|
+  | Linux | `~/.config/litresearch/config.yaml` | `~/.local/share/litresearch/` |
+  | macOS | `~/Library/Application Support/litresearch/config.yaml` | `~/Library/Application Support/litresearch/` |
+  | Windows | `%LOCALAPPDATA%\litresearch\config.yaml` | `%LOCALAPPDATA%\litresearch\` |
+
+`litresearch where` shows which configuration and data folders are in use
+and why ([lookup order](#9-configuration)).
 
 ### 2. Export your library from your reference manager
 
@@ -121,8 +132,9 @@ Watching the file and re-importing automatically is planned (roadmap 1.1).
 
 ### 4. Configure
 
-`config/config.yaml` holds the machine settings (APIs, web server, backups)
-and the defaults for new profiles ([Configuration](#9-configuration)). It and
+`config/config.yaml` (or your per-user config, see `litresearch where`)
+holds the machine settings (APIs, web server, backups) and the defaults for
+new profiles ([Configuration](#9-configuration)). In a git folder it and
 `data/` are git-ignored, so API keys stay local. Recommended, both free:
 
 - a **Semantic Scholar API key** (<https://www.semanticscholar.org/product/api>):
@@ -819,6 +831,7 @@ paper counts once).
 | `backup`, `restore FILE` | snapshot + progress export / restore a snapshot |
 | `export-progress FILE`, `import-progress FILE [--dry-run]` | move or merge progress between machines |
 | `check` | database integrity, contents, last backup |
+| `where` | the config file, data folder, profiles, backups and cache in use, and why |
 | `db-init`, `version` | create the database / show the version |
 
 Global options: `-p/--profile NAME`, `-v/--verbose` (HTTP requests and
@@ -859,7 +872,7 @@ Planned: PubMed as a recommendation source and PubMed Central full texts
 
 ## 9. Configuration
 
-- **`config/config.yaml`** (or `-c PATH`): machine settings (`api`,
+- **`config.yaml`**: machine settings (`api`,
   `embeddings`, `backup`, `web`, `llm`, `schedule`), the defaults for new
   profiles (`game`) and the defaults every profile starts from. Start from
   [`config/config.example.yaml`](../config/config.example.yaml).
@@ -869,14 +882,31 @@ Planned: PubMed as a recommendation source and PubMed Central full texts
   starts without topics; a profile taken over from old data starts with the
   topics of `config.yaml`.
 
+**Which `config.yaml`** (the first that applies; `litresearch where` shows
+the choice):
+
+1. `-c/--config PATH`;
+2. the environment variable `LITRESEARCH_CONFIG`;
+3. `config/config.yaml` in the current folder (a git installation);
+4. your per-user config file ([Setup](#1-install)). If it does not exist
+   yet, the first command creates it from the example, with the data in your
+   per-user data folder, and prints where.
+
+**Relative paths** (`paths.*`, `backup.dir`, a profile's `paths.bibtex`) are
+resolved against the *data folder*, not the folder you run the command in:
+`paths.base_dir` if set (relative to the config file's folder); otherwise
+the folder that contains `config/` when the file is `.../config/config.yaml`
+(a git installation keeps `data/` next to `config/`, as before); otherwise
+the config file's folder. `~` stands for your home folder.
+
 Use `n/a` for "not set". Unknown keys, and infinite or NaN numbers, are
-rejected. Relative paths are resolved from the directory you run the command
-in. Sections marked *(planned)* are validated but not used yet.
+rejected. Sections marked *(planned)* are validated but not used yet.
 
 ### `paths`
 
 | Key | Default | Meaning |
 |---|---|---|
+| `base_dir` | `n/a` | folder relative paths start from (see above); a new per-user config sets it to your per-user data folder |
 | `profiles_dir` | `data/profiles` | one folder per profile |
 | `bibtex` | `data/paperpile/library.bib` | an export file that `ingest` imports into **My library** when no library has a file yet (the set-up before 0.2); a profile uses `library.bib` in its folder unless its `settings.yaml` sets it |
 | `database` | `data/litresearch.sqlite` | database *before profiles*; a profile uses `litresearch.sqlite` in its folder |
@@ -978,8 +1008,12 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 
 ### Where everything is stored
 
-Each profile has its own folder `data/profiles/<profile>/`;
-`data/profiles/.current` names the profile the command line uses.
+`data/` below is the data folder: in a git installation `data/` next to
+`config/`; installed as a package, your per-user data folder (without the
+`data/` part, e.g. `~/.local/share/litresearch/profiles/`).
+`litresearch where` prints the actual folders. Each profile has its own
+folder `data/profiles/<profile>/`; `data/profiles/.current` names the
+profile the command line uses.
 
 | What | Where (default) | Rebuildable? |
 |---|---|---|
@@ -987,7 +1021,7 @@ Each profile has its own folder `data/profiles/<profile>/`;
 | Libraries, paper metadata, metrics, embeddings | same database | yes, from the export files |
 | Uploaded export files | `data/profiles/<profile>/libraries/` | yes, export again |
 | Topics and settings | `data/profiles/<profile>/settings.yaml` | no; in every backup |
-| Machine settings | `config/config.yaml` | no; keep a copy |
+| Machine settings | `config/config.yaml` or the per-user config file | no; keep a copy |
 | Cached API answers (all profiles) | `data/cache/http_cache.sqlite` | yes, delete any time |
 | Login cookie key | `data/web_secret` | yes; deleting it logs everyone out |
 | Backups | `data/backups/<profile>/` (`backup.dir`) | they *are* the copy |
@@ -1269,6 +1303,7 @@ licenses that permit use in this project.
 | [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) | 2.1.0 | MIT | parsing BibTeX (v2 API, LaTeX decoding and name-splitting middlewares) |
 | [httpx](https://www.python-httpx.org) | 0.28.1 | BSD-3-Clause | HTTP client for all APIs; `MockTransport` in tests |
 | [numpy](https://numpy.org) | 2.5.3 | BSD-3-Clause | embeddings and vector maths (cosine, kNN, MMR, TF-IDF) |
+| [platformdirs](https://github.com/tox-dev/platformdirs) | 4.14.5 | MIT | per-user config and data folders on Linux, macOS and Windows |
 | [pydantic](https://github.com/pydantic/pydantic) | 2.13.5 | MIT | configuration models and validation |
 | [PyYAML](https://pyyaml.org/) | 6.0.3 | MIT | reading `config.yaml` |
 | [ruamel.yaml](https://sourceforge.net/projects/ruamel-yaml/) | 0.19.1 | MIT | writing YAML while keeping comments and order |
