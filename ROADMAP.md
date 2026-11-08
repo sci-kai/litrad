@@ -10,11 +10,10 @@ Each milestone is a GitHub milestone with its issues.
 | 0.2 | Find papers in Europe PMC and PubMed; several libraries, import from any reference manager, export | released as dev `v0.2.0-dev` (2026-10-29), in testing |
 | 0.3 | Desktop app for Windows, macOS and Linux (default); server mode as today; Docker, PyPI, installable phone web app | next |
 | 0.4 | Your reading history | planned |
-| 0.5 | PubMed and PubMed Central for recommendations and full texts | planned |
-| 0.6 | Notes as Markdown, compatible with Obsidian | planned |
-| 0.7 | Summaries by a local LLM | planned |
-| 0.8 | Reference managers: write-back and automatic updates | planned |
-| 0.9 / 1.0 | Beta with stable data format, then 1.0 | planned |
+| 0.5 | Notes as Markdown, compatible with Obsidian | planned |
+| 0.6 | **Stable, open data formats** and a complete export of everything | planned |
+| 0.7 / 1.0 | Beta (feature freeze), then 1.0 with a compatibility promise | planned |
+| 1.1 | PubMed and PubMed Central; summaries by a local LLM; reference managers: write-back and automatic updates | after 1.0 |
 
 ## Principles
 
@@ -68,28 +67,51 @@ marked, with date, depth, rating, notes and XP; sort, filter, search notes,
 export (TSV). Open: show dismissed papers here? Should unread drops leave
 *Recommended*?
 
-**0.5 · PubMed and PMC.** Europe PMC/PubMed as recommendation sources (topic
-queries, MeSH terms), merged with OpenAlex candidates and shown in funnel and
-evidence tree; free full texts (JATS XML) from PubMed Central on request.
-
-**0.6 · Notes, compatible with Obsidian.** One Markdown file per paper with
+**0.5 · Notes, compatible with Obsidian.** One Markdown file per paper with
 front matter and templates, an editor with preview, `[[citation-key]]`
 links, two-way sync with an Obsidian vault (`paths.obsidian_vault`) that
 shows conflicts instead of overwriting; existing notes are migrated.
 
-**0.7 · Local LLM summaries.** Summaries, key findings, methods and
-limitations from abstract or full text by a model you run (LM Studio,
-Ollama, llama.cpp; `llm` settings), marked as AI-generated; optional and
-cached; never influences the ranking by default.
+**0.6 · Stable, open data formats.** Everything you build up in litresearch
+(libraries, reading log, statuses, ratings, notes, XP ledger, badges, queue,
+recommendations with their evidence, settings and game rules) is stored and
+exported in documented standard formats that later versions keep reading:
 
-**0.8 · Reference managers.** Paperpile write-back (a file of only what
-changed), watching an auto-export file and re-importing, folders and labels
-as topic suggestions; Zotero's local API or Better BibTeX; tested profiles
-for Mendeley, EndNote, JabRef and Citavi.
+- **Formats:** libraries as BibTeX, RIS and CSL-JSON; progress, logs and
+  recommendations as JSON with a published JSON Schema and a format version;
+  tables (reading log, XP ledger) also as TSV; notes as Markdown with YAML
+  front matter; settings as YAML.
+- **Versioned storage:** the live SQLite database carries a schema version
+  and is upgraded by tested migrations, never reset. The data format has
+  its own version, independent of the app version.
+- **Export everything:** one button and one command write a single archive
+  with all of the above plus a README that describes each file; importing
+  it rebuilds the profile without loss (tested round trip).
+- **Compatibility tests:** example files and databases from every released
+  version are kept in the test suite and must load in the current version.
 
-**0.9 / 1.0 · Beta and stable.** Feature freeze; stable data format,
-configuration and profile files with migrations from every earlier version;
-tested upgrade path from 0.1; no known data-loss bugs.
+**0.7 / 1.0 · Beta, then stable.** Feature freeze in the beta; tested upgrade
+path from 0.1; no known data-loss bugs. **From 1.0 on, the compatibility
+promise holds:** every 1.x version reads and upgrades all data, settings and
+exports of earlier versions without breaking them. New features only add
+(optional fields, new tables, new files); renaming or removing anything
+would need 2.0. This is what lets the features below arrive as minor
+versions.
+
+**1.1 · More sources and helpers** (after 1.0, without breaking data):
+
+- **PubMed and PMC:** Europe PMC/PubMed as recommendation sources (topic
+  queries, MeSH terms), merged with OpenAlex candidates and shown in funnel
+  and evidence tree; free full texts (JATS XML) from PubMed Central on
+  request.
+- **Local LLM summaries:** summaries, key findings, methods and limitations
+  from abstract or full text by a model you run (LM Studio, Ollama,
+  llama.cpp; `llm` settings), marked as AI-generated; optional and cached;
+  never influences the ranking by default.
+- **Reference managers:** Paperpile write-back (a file of only what
+  changed), watching an auto-export file and re-importing, folders and
+  labels as topic suggestions; Zotero's local API or Better BibTeX; tested
+  profiles for Mendeley, EndNote, JabRef and Citavi.
 
 ## Ideas for later
 

@@ -117,7 +117,7 @@ litresearch library import ~/litresearch-exports/paperpile.bib --new "Paperpile"
 litresearch ingest                # then e.g. daily from cron
 ```
 
-Watching the file and re-importing automatically is planned (roadmap 0.8).
+Watching the file and re-importing automatically is planned (roadmap 1.1).
 
 ### 4. Configure
 
@@ -852,7 +852,7 @@ warning.
 
 Paperpile has no public API, so its BibTeX auto-export is the interface.
 Planned: PubMed as a recommendation source and PubMed Central full texts
-(roadmap 0.5).
+(roadmap 1.1).
 
 
 ## 9. Configuration
@@ -967,7 +967,7 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
   `local` need a password. `127.0.0.1` and `0.0.0.0` still work. `web.port`
   (8080). `web.password_hash` is set by `set-password`; never edit it.
   See [Web UI](#using-it-from-your-laptop-local-network).
-- `llm` *(planned, roadmap 0.7)*: any OpenAI-compatible endpoint (LM Studio,
+- `llm` *(planned, roadmap 1.1)*: any OpenAI-compatible endpoint (LM Studio,
   Ollama, an institutional server): `enabled`, `base_url`, `model`, `api_key`.
 - `schedule.cron` *(planned)*: when to build a new list (cron syntax).
 
