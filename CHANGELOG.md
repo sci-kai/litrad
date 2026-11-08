@@ -17,6 +17,16 @@ All notable changes are listed here. Versions follow
   sort, filter (depth, rating, period, library, notes, not relevant), search
   in title, authors and notes, 50 per page, **Export TSV** of all matching
   rows; same as `litresearch read-papers [--tsv FILE]`.
+- **Docker image and PyPI package.** `Dockerfile` for server mode (ARM and
+  x86, non-root, data and `config.yaml` in the volume `/data`, built and
+  pushed to GitHub's container registry for every tag); the package is
+  published on PyPI for releases (Trusted Publishing), so `pipx install
+  litresearch` works. `LITRESEARCH_CONFIG` pointing at a missing file now
+  creates it on the first run (data next to it); `set-password
+  --password-file FILE` sets the password without a prompt. The
+  documentation inside the package is a real file instead of a symlink
+  (`python tools/sync_docs.py` keeps it in sync); the package no longer
+  claims to be Linux-only.
 - **Examples for Semantic Scholar recommendations**: the positive and
   negative example papers are two libraries (*Positive examples*, *Negative
   examples*) that show each paper's origin. Choose the rules that fill them

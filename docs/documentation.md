@@ -58,9 +58,9 @@ there `config/config.yaml` is found, and `data/` lives next to `config/`.
   the data format.
 - **Without the installer:** `python3 -m venv .venv && .venv/bin/pip install -e .`
   and `cp config/config.example.yaml config/config.yaml`.
-- **As a package** (the wheel of a GitHub release, `pip install
-  litresearch-*.whl`, or `pipx`): no git folder needed, run it from any
-  folder. The first command creates your configuration and data in your
+- **As a package** (`pipx install litresearch` once it is on PyPI, or the
+  wheel of a GitHub release: `pip install litresearch-*.whl`): no git folder
+  needed, run it from any folder. The first command creates your configuration and data in your
   per-user folders:
 
   | System | Configuration | Data (profiles, backups, cache) |
@@ -71,6 +71,30 @@ there `config/config.yaml` is found, and `data/` lives next to `config/`.
 
 `litresearch where` shows which configuration and data folders are in use
 and why ([lookup order](#9-configuration)).
+
+**With Docker** (server mode for a Pi, NAS or lab server; the image runs on
+ARM and x86). The image is named after the GitHub repository,
+`ghcr.io/<owner>/litresearch` below:
+
+```bash
+docker run --rm -it -v litresearch:/data ghcr.io/<owner>/litresearch litresearch set-password   # once
+docker run -d --name litresearch --restart unless-stopped -p 8080:8080 \
+    -v litresearch:/data ghcr.io/<owner>/litresearch
+```
+
+Open `http://<host>:8080` and log in. The server listens on all networks of
+the container and refuses to start without a password, so set it first; for a
+script or a Docker secret use `set-password --password-file FILE` (first line
+of the file) instead of the prompt. Everything lives in the volume `/data`
+(configuration `/data/config.yaml`, created on first start, profiles,
+database, backups in `/data/backups`); to edit the file, find the volume
+with `docker volume inspect litresearch`.
+
+**Update:** run `docker exec litresearch litresearch backup`, then
+`docker pull` the image, `docker rm -f litresearch` and start it again with
+the same volume. The port is plain HTTP: keep
+it in your home network or behind a VPN, as described in
+[Web UI](#using-it-from-your-laptop-local-network).
 
 ### 2. Export your library from your reference manager
 
@@ -890,7 +914,7 @@ paper counts once).
 | `score`, `history` | level, streak, grade, badges / reading log |
 | `read-papers [--depth LEVEL]… [--rating N] [--since DATE] [--until DATE] [--library NAME] [--notes] [--dismissed] [--search WORDS] [--sort last\|first\|depth\|rating\|xp\|title] [--limit N] [--tsv FILE]` | your reading history; `--tsv` writes all matching rows |
 | `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI |
-| `set-password [--remove]` | password for network access |
+| `set-password [--remove] [--password-file FILE]` | password for network access |
 | `backup`, `restore FILE` | snapshot + progress export / restore a snapshot |
 | `export-progress FILE`, `import-progress FILE [--dry-run]` | move or merge progress between machines |
 | `check` | database integrity, contents, last backup |
@@ -949,7 +973,7 @@ Planned: PubMed as a recommendation source and PubMed Central full texts
 the choice):
 
 1. `-c/--config PATH`;
-2. the environment variable `LITRESEARCH_CONFIG`;
+2. the environment variable `LITRESEARCH_CONFIG` (a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
 3. `config/config.yaml` in the current folder (a git installation);
 4. your per-user config file ([Setup](#1-install)). If it does not exist
    yet, the first command creates it from the example, with the data in your
@@ -1072,8 +1096,10 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 ### Where everything is stored
 
 `data/` below is the data folder: in a git installation `data/` next to
-`config/`; installed as a package, your per-user data folder (without the
-`data/` part, e.g. `~/.local/share/litresearch/profiles/`).
+`config/`; installed as a package (pip, pipx), your per-user data folder
+(without the `data/` part, e.g. `~/.local/share/litresearch/profiles/`); in
+the Docker image the volume `/data` (also holding `config.yaml`; find it on
+the host with `docker volume inspect litresearch`).
 `litresearch where` prints the actual folders. Each profile has its own
 folder `data/profiles/<profile>/`; `data/profiles/.current` names the
 profile the command line uses.
