@@ -8,12 +8,12 @@ Each milestone is a GitHub milestone with its issues.
 |---|---|---|
 | 0.1 | Recommendations, reading queue, game, profiles, web UI | released `v0.1.0-alpha.1` (2026-10-09) |
 | 0.2 | Find papers in Europe PMC and PubMed; several libraries, import from any reference manager, export | released as dev `v0.2.0-dev` (2026-10-29), in testing |
-| 0.3 | Your reading history | next |
-| 0.4 | PubMed and PubMed Central for recommendations and full texts | planned |
-| 0.5 | Notes as Markdown, compatible with Obsidian | planned |
-| 0.6 | Summaries by a local LLM | planned |
-| 0.7 | Reference managers: write-back and automatic updates | planned |
-| 0.8 | macOS, Windows, Docker, installable phone app | planned |
+| 0.3 | Desktop app for Windows, macOS and Linux (default); server mode as today; Docker, PyPI, installable phone web app | next |
+| 0.4 | Your reading history | planned |
+| 0.5 | PubMed and PubMed Central for recommendations and full texts | planned |
+| 0.6 | Notes as Markdown, compatible with Obsidian | planned |
+| 0.7 | Summaries by a local LLM | planned |
+| 0.8 | Reference managers: write-back and automatic updates | planned |
 | 0.9 / 1.0 | Beta with stable data format, then 1.0 | planned |
 
 ## Principles
@@ -45,33 +45,47 @@ or CSL-JSON into new or existing libraries, export with reading status;
 libraries and long use. Testing asks: do non-Paperpile exports import
 cleanly? Are several libraries useful? Do searches find what you look for?
 
-**0.3 · Reading history.** A **Reading → Read papers** tab: every paper you
+**0.3 · Desktop app and distribution.** Two ways to run litresearch:
+
+- **Desktop mode (default):** double-click; it starts on this computer only
+  (a free local port), opens in the browser and quits cleanly. Downloads on
+  GitHub Releases, built automatically for every tag: Windows installer,
+  Linux AppImage, macOS `.dmg`.
+- **Server mode (as today):** `litresearch serve` on a Pi, NAS or lab server,
+  reachable from your other devices on chosen networks with a password;
+  also as a Docker image (ARM and x86) and `pipx install litresearch`.
+
+Groundwork: data and settings in per-user folders (`platformdirs`) with a
+first-run setup; existing git installations keep their folder. For phones:
+an installable web app (PWA) for server mode, with a guide to reach your
+server (same Wi-Fi or a VPN such as Tailscale, which also gives HTTPS). Open:
+unsigned builds trigger SmartScreen/Gatekeeper warnings; code signing costs
+money. Not planned: native Android/iOS apps (a phone would need its own
+database and Apple's App Store; the web app covers the use).
+
+**0.4 · Reading history.** A **Reading → Read papers** tab: every paper you
 marked, with date, depth, rating, notes and XP; sort, filter, search notes,
 export (TSV). Open: show dismissed papers here? Should unread drops leave
 *Recommended*?
 
-**0.4 · PubMed and PMC.** Europe PMC/PubMed as recommendation sources (topic
+**0.5 · PubMed and PMC.** Europe PMC/PubMed as recommendation sources (topic
 queries, MeSH terms), merged with OpenAlex candidates and shown in funnel and
 evidence tree; free full texts (JATS XML) from PubMed Central on request.
 
-**0.5 · Notes, compatible with Obsidian.** One Markdown file per paper with
+**0.6 · Notes, compatible with Obsidian.** One Markdown file per paper with
 front matter and templates, an editor with preview, `[[citation-key]]`
 links, two-way sync with an Obsidian vault (`paths.obsidian_vault`) that
 shows conflicts instead of overwriting; existing notes are migrated.
 
-**0.6 · Local LLM summaries.** Summaries, key findings, methods and
+**0.7 · Local LLM summaries.** Summaries, key findings, methods and
 limitations from abstract or full text by a model you run (LM Studio,
 Ollama, llama.cpp; `llm` settings), marked as AI-generated; optional and
 cached; never influences the ranking by default.
 
-**0.7 · Reference managers.** Paperpile write-back (a file of only what
+**0.8 · Reference managers.** Paperpile write-back (a file of only what
 changed), watching an auto-export file and re-importing, folders and labels
 as topic suggestions; Zotero's local API or Better BibTeX; tested profiles
 for Mendeley, EndNote, JabRef and Citavi.
-
-**0.8 · More systems and devices.** macOS and Windows (portable network
-detection, installers, CI on all three), a Docker image, an installable
-phone app (PWA) with offline queue, an HTTPS option, accessibility check.
 
 **0.9 / 1.0 · Beta and stable.** Feature freeze; stable data format,
 configuration and profile files with migrations from every earlier version;
