@@ -489,6 +489,12 @@ def serve(
 def set_password(
     config: Path = ConfigOpt,
     remove: bool = typer.Option(False, "--remove", help="Remove the password (no login)"),
+    password_file: Path = typer.Option(
+        None,
+        "--password-file",
+        help="Read the new password from the first line of this file instead of asking "
+        "(for scripts and Docker secrets)",
+    ),
 ):
     """Set the password for the web UI (stored as a salted hash in config.yaml)."""
     from litresearch.web.auth import hash_password
@@ -498,7 +504,15 @@ def set_password(
         write_values(config, {"web": {"password_hash": "n/a"}})
         console.print("Password removed. The UI now only starts on this computer (127.0.0.1).")
         return
-    password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
+    if password_file is not None:
+        try:
+            lines = password_file.read_text(encoding="utf-8").splitlines()
+        except OSError as error:
+            console.print(f"[red]Cannot read {password_file}: {error.strerror}[/red]")
+            raise typer.Exit(code=1) from None
+        password = lines[0] if lines else ""
+    else:
+        password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
     try:
         stored = hash_password(password)
     except ValueError as error:

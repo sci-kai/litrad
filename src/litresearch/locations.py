@@ -3,7 +3,9 @@
 Which config file is used (first match wins):
 
 1. ``--config``/``-c PATH`` on the command line;
-2. the environment variable ``LITRESEARCH_CONFIG``;
+2. the environment variable ``LITRESEARCH_CONFIG``; if that file does not
+   exist yet, the first run creates it from the bundled example, with the
+   data in the same folder (the Docker image sets ``/data/config.yaml``);
 3. ``config/config.yaml`` in the current folder (a git installation run
    from its folder, as before 0.3);
 4. the per-user config file, e.g. ``~/.config/litresearch/config.yaml`` on
@@ -115,6 +117,12 @@ def locate_config(option: Path | None = None, announce=None) -> ConfigChoice:
     ``announce`` receives a message naming the created file.
     """
     choice = find_config(option)
+    if choice.rule == "env" and not choice.path.exists():
+        # a container or service points LITRESEARCH_CONFIG at a fresh folder
+        path = first_run_setup(choice.path, choice.path.parent)
+        if announce is not None:
+            announce(f"Created your configuration {path} (data in {path.parent}).")
+        return ConfigChoice(path, "env")
     if choice.rule != "missing":
         return choice
     path = first_run_setup(choice.path, user_data_dir())
