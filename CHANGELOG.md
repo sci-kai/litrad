@@ -7,6 +7,11 @@ All notable changes are listed here. Versions follow
 
 ### Added
 
+- **Phone app (server mode)**: litresearch can be installed on a phone's
+  home screen (web app manifest, icons, service worker with an offline page;
+  no personal data is cached). Needs HTTPS for full installation; guide for
+  the home network and Tailscale in the documentation. Icons are drawn by
+  `tools/make_icons.py`.
 - **Examples for Semantic Scholar recommendations**: the positive and
   negative example papers are two libraries (*Positive examples*, *Negative
   examples*) that show each paper's origin. Choose the rules that fill them

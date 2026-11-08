@@ -52,7 +52,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "litresearch" = ["config.example.yaml"]
-"litresearch.web" = ["templates/*.html", "static/*", "documentation.md"]
+"litresearch.web" = ["templates/*.html", "static/*", "documentation.md", "sw.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

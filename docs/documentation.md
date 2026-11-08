@@ -379,7 +379,45 @@ exist, the server does not start and lists the choices.
 - Plain HTTP: fine in your home network, but never expose the port to the
   internet; use a VPN (Tailscale, WireGuard) from outside.
 - Run it in the background: `python3 install.py --service`.
-- A desktop app (Windows, macOS, Linux) and an installable phone web app for server mode are planned (roadmap 0.3).
+- A desktop app (Windows, macOS, Linux) is planned (roadmap 0.3).
+
+### Using it on your phone
+
+litresearch can be installed on the phone's home screen as an app (server
+mode). The phone only shows pages from your server; nothing is stored on it
+except the icon, style files and a small "You are offline" page, never your
+papers or ratings.
+
+**At home (same Wi-Fi).**
+
+1. Serve on the network with a password (see above), e.g.
+   `litresearch set-password` once, then `litresearch serve`.
+2. Open the printed address (`http://<server-ip>:8080/`) in the phone's
+   browser and log in.
+3. Browser menu, **Add to Home Screen** (Safari: Share, then **Add to Home
+   Screen**; Chrome: menu, **Add to Home screen** or **Install app**).
+
+Browsers only allow the full installation and the offline page on HTTPS (or
+`localhost`). Over plain `http://` the result is a home-screen shortcut that
+opens litresearch in the browser, without the offline page.
+
+**From anywhere, with HTTPS (Tailscale).**
+
+1. Install Tailscale on the server and on the phone and sign in with the same
+   account; in the Tailscale admin console enable MagicDNS and HTTPS
+   certificates.
+2. On the server, with litresearch running locally (`litresearch serve`, the
+   default address `127.0.0.1:8080`), run `tailscale serve --bg 8080`. It
+   prints an address like `https://<machine>.<tailnet>.ts.net`; only your
+   own devices can reach it.
+3. Open that address on the phone, log in, and add it to the home screen as
+   above.
+
+A password is required: without one litresearch only answers IP addresses
+and the computer's own names and answers the `*.ts.net` name with "Unknown
+host name" (HTTP 421). With a password set, any host name is accepted and the
+login protects your data. Never open the port to the internet directly.
+
 
 ### Pages
 

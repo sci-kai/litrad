@@ -3,7 +3,8 @@
 How a request flows:
 
 1. ``require_login`` (middleware): with ``web.password_hash`` set, every page
-   except /login and /static needs the signed session cookie.
+   except /login, /static and the phone-app files (see pwa.py) needs the
+   signed session cookie.
 2. The same middleware sends requests without a valid profile cookie to
    /welcome and otherwise stores the chosen profile in ``CURRENT_PROFILE``.
    Every route then works on that profile: ``current_cfg()`` merges
@@ -128,6 +129,7 @@ from litresearch.recommend.engine import (
 )
 from litresearch.search import SORTS, SOURCES, SearchQuery, enabled_sources, search_library
 from litresearch.search import search as literature_search
+from litresearch.web import pwa
 from litresearch.web.auth import (
     COOKIE,
     SESSION_DAYS,
@@ -248,6 +250,7 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
     app = FastAPI(title="litresearch", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
+    pwa.register(app, templates, HERE)  # manifest, service worker, offline page
     celebrations = Celebrations()
 
     env = templates.env
@@ -303,7 +306,8 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
         """Password (for network access) first, then a chosen profile."""
         base = base_config()
         path = request.url.path
-        open_paths = path in ("/login", "/logout") or path.startswith("/static/")
+        open_paths = path in ("/login", "/logout") or path in pwa.OPEN_PATHS
+        open_paths = open_paths or path.startswith("/static/")
         password_hash = base.web.password_hash
         if password_hash and not open_paths:
             if not check_session(request.cookies.get(COOKIE), secret(), password_hash):
