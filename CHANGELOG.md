@@ -119,12 +119,32 @@ All notable changes are listed here. Versions follow
 - Progress and profile files (`import-progress`, *Load a saved profile*,
   *Compare*) are checked against a JSON Schema and for consistency before
   anything changes; problems are listed by record. They are now *legacy
-  formats*: still written by backups and *Save profile*, always read.
+  formats*: always read, written by `export-progress` and *Download*.
+- **Backups and *Save profile* write the archive** (`litresearch_backup_*.zip`,
+  `litresearch_profile_*.zip`) instead of the progress JSON and notes zip;
+  `profile load`, `profile compare`, `import-progress` and the web UI take
+  both. Old and new backups are rotated together.
+- The **game-rules fingerprint is stable across versions**: a rule added
+  later counts only with a non-default value; merges and comparisons
+  recompute it from the rules. Existing fingerprints are unchanged.
+- Copies in `<profile>/upgrade-backups/` are rotated (newest 3 kept);
+  `litresearch where` shows the folder.
 - `restore` checks the snapshot's schema version and references before
   replacing anything; `check` shows the schema version.
 - Merging a file keeps identical history and XP entries it contains twice
   (two logs within a second) instead of merging them into one; papers
   created from a file keep all their metadata.
+
+### Fixed
+
+- A note file that cannot be written after a committed archive import (e.g.
+  a full disk) no longer fails the import: it is listed, the note stays in
+  the database and `notes sync` writes it.
+- Loading or comparing a file that is not UTF-8 or not a JSON object gives a
+  message instead of a traceback, and leaves no profile folder behind.
+- The database fixtures of the compatibility tests are committed (they were
+  git-ignored).
+- Performance tests no longer fail on a busy machine.
 
 ## 0.2.0-dev (2026-10-29)
 

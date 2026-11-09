@@ -101,7 +101,7 @@ game:
   weekly_skim_goal: 2
 
 backup:
-  # consistent database snapshots + portable progress exports (JSON);
+  # consistent database snapshots + archives of everything (zip, open formats);
   # point this to a cloud-synced folder, but keep paths.database local
   dir: data/backups
   keep: 14

@@ -125,7 +125,7 @@ there `config/config.yaml` is found, and `data/` lives next to `config/`.
   the data format.
 - **Without the installer:** `python3 -m venv .venv && .venv/bin/pip install -e .`
   and `cp config/config.example.yaml config/config.yaml`.
-- **As a package** (`pipx install litresearch` once it is on PyPI, or the
+- **As a package** (`pipx install litresearch`, or the
   wheel of a GitHub release: `pip install litresearch-*.whl`): no git folder
   needed, run it from any folder. The first command creates your configuration and data in your
   per-user folders:
@@ -605,7 +605,7 @@ exist, the server does not start and lists the choices.
 - Plain HTTP: fine in your home network, but never expose the port to the
   internet; use a VPN (Tailscale, WireGuard) from outside.
 - Run it in the background: `python3 install.py --service`.
-- A desktop app (Windows, macOS, Linux) is planned (roadmap 0.3).
+- Only for yourself on one computer: the [desktop app](#desktop-app).
 
 ### Using it on your phone
 
@@ -1106,13 +1106,13 @@ paper counts once).
 | `app [--port N] [--no-browser]` | desktop mode: the web UI on this computer only, opened in your browser; Quit in the sidebar. `--no-browser` or `LITRESEARCH_NO_BROWSER=1`: do not open a browser. Also as `litresearch-app` |
 | `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI (server mode) |
 | `set-password [--remove] [--password-file FILE]` | password for network access |
-| `backup`, `restore FILE` | snapshot + progress export / restore a snapshot |
-| `export-progress FILE`, `import-progress FILE [--dry-run]` | move or merge progress between machines |
+| `backup`, `restore FILE` | snapshot + archive of everything / restore a snapshot |
+| `export-progress FILE`, `import-progress FILE [--dry-run]` | progress as JSON (legacy format) / merge a JSON file or an archive into the current profile |
 | `export-all [FILE.zip]` | everything of the profile in one documented archive ([Data formats](#the-archive-export-everything)); default: a new file in `backup.dir` |
 | `import-all FILE.zip [--new NAME \| --into PROFILE] [--dry-run] [--partial]` | import an archive as a new profile or merge it; checked first, all or nothing ([details](#importing-an-archive)) |
 | `check` | database integrity, schema version, references, contents, last backup |
 | `where` | the config file, data folder, profiles, backups and cache in use, and why |
-| `db-init`, `version` | create the database / show the version |
+| `version` | show the version |
 
 Global options: `-p/--profile NAME`, `-v/--verbose` (HTTP requests and
 retries), `-c/--config PATH`.
@@ -1269,7 +1269,7 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 |---|---|---|
 | `queue.max_size` | 5 | maximum queue length (1–20); keep it small |
 | `game.*` | see [Gamification](#rules-you-can-set-defaults) | defaults for the **next** profile; copied and locked when a profile is created (easier to set on the welcome screen) |
-| `backup.dir` | `data/backups` | snapshots and progress exports, one subfolder per profile; a cloud-synced folder is ideal |
+| `backup.dir` | `data/backups` | snapshots and archives, one subfolder per profile; a cloud-synced folder is ideal |
 | `backup.keep` | 14 | snapshots (and exports) to keep |
 | `backup.interval_hours` | 24 | `serve` backs up at start and then every N hours; 0 = off |
 
@@ -1372,7 +1372,7 @@ version understands (a snapshot of a newer litresearch is refused; an older
 one is upgraded when it is next opened) and no rows referring to papers,
 libraries or batches that do not exist. Paths that do not exist are refused
 too. Note files:
-missing ones are written back from the notes zip of the same backup (or from
+missing ones are written back from the archive of the same backup (or from
 the restored copy); an existing file whose text differs from the restored
 copy is never overwritten but becomes a [conflict](#notes-and-obsidian).
 

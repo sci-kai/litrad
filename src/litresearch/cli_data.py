@@ -37,7 +37,7 @@ def _fail(message: str):
 
 @app.command()
 def backup(config: Path = ConfigOpt):
-    """Snapshot the database and export your progress into backup.dir."""
+    """Snapshot the database and write an archive of everything into backup.dir."""
     cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     try:

@@ -69,7 +69,7 @@
           {% for path, shown in saves %}<option value="{{ path.name }}">{{ shown }}</option>{% endfor %}
         </select></div>
         {% endif %}
-        <div class="field" style="margin:0"><label for="load-file">{{ "…or upload a file" if saves else "Profile file (.zip, .json)" }}</label>
+        <div class="field" style="margin:0"><label for="load-file">{{ "…or upload a file" if saves else "Profile file (.json)" }}</label>
         <input type="file" id="load-file" name="file" accept=".zip,.json,application/zip,application/json"></div>
         <div class="field" style="margin:0"><label for="load-name">Name <small class="muted">(optional; default: the saved name)</small></label>
         <input type="text" id="load-name" name="name" maxlength="80"></div>
