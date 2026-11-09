@@ -369,9 +369,117 @@ litresearch history
 ```
 
 Reading levels: `abstract` → `skimmed` → `read` → `thorough`. Reaching
-`skimmed` or deeper, or dismissing, removes the paper from the queue. Notes
-are stored with an ISO 8601 timestamp. In the web UI, log a reading on the
-queue or the dashboard (level, star rating, note).
+`skimmed` or deeper, or dismissing, removes the paper from the queue. A note
+given with `read`/`note` (or in the *Log reading* dialog) is added to the
+paper's note with an ISO 8601 timestamp. In the web UI, log a reading on the
+queue or the dashboard (level, star rating, note). Notes are Markdown files
+you can also edit in Obsidian: [Notes and Obsidian](#notes-and-obsidian).
+
+#### Notes and Obsidian
+
+Each paper's notes are **one Markdown file** (UTF-8, LF line endings). Edit
+it on the paper page (**✏️ Edit**, **👁 Preview**, **💾 Save**) or in any
+editor; litresearch picks up the change.
+
+**Where the files are.** `<profile folder>/notes/`, or, with
+`paths.obsidian_vault` set (in `config.yaml` or the profile's
+`settings.yaml`), `<vault>/<paths.notes_subfolder>/` (default subfolder
+`litresearch`). Obsidian then edits the same files; nothing is copied.
+Profiles that share a vault need different subfolders. Subfolders inside
+the notes folder are allowed (move or rename files freely).
+`litresearch notes path REF` prints a paper's file; Settings → Data &
+backups shows the folder.
+
+**File name.** The paper's citation key (from its first library) with
+everything but `a-z A-Z 0-9 - _ .` replaced by `-` and accents removed
+(`Müller2020:ab` → `Muller2020-ab.md`); without a key `doi-<doi>.md`, else
+`paper-<id>.md`. A name taken by another paper gets `-2`, `-3` …
+
+**Format `litresearch-note/1`.** YAML front matter, then your note:
+
+```markdown
+---
+litresearch_id: 42
+title: Clonal evolution in melanoma
+authors:
+  - Smith, Jane
+  - Doe, A
+year: 2020
+journal: Nature
+doi: 10.1038/xyz
+pmid: '31234567'
+citekey: Smith2020-ab
+status: thorough
+rating: 5
+tags:
+  - tumour-evolution
+updated: '2026-11-09T08:30:00'
+format: litresearch-note/1
+---
+
+## Summary
+Key figure 3 shows … see also [[Barkley2022-ri]].
+```
+
+| Key | Meaning |
+|---|---|
+| `litresearch_id` | the paper's id in this profile; finds the file again after a rename (checked against DOI and PMID) |
+| `title`, `authors`, `year`, `journal`, `doi`, `pmid`, `citekey` | paper metadata; empty values stay empty (`doi:`) |
+| `status` | deepest reading level reached (`abstract` … `thorough`), `dismissed`, or empty |
+| `rating` | 1–5 stars or empty |
+| `tags` | your library labels (spaces → `-`); tags you add are kept, litresearch never removes a tag |
+| `updated` | last time litresearch wrote the file (ISO 8601) |
+| `format` | `litresearch-note/1` |
+
+litresearch rewrites only these keys and only when a value changed; keys,
+comments and order you add stay. The **body** (everything after the front
+matter) is written only when you save the note or add a note while logging a
+reading (then your entry goes below the file's current text). Windows line
+endings are converted to LF. Invalid front matter is left as it is and
+reported. Changing `status` or `rating` in the file has no effect: set them
+in litresearch.
+
+**Links.** `[[citation-key]]`, `[[file-name]]`, `[[key|text]]` link to the
+paper's page in the preview (Obsidian resolves them by file name). Unknown
+keys are shown as text with `(?)`. Raw HTML is shown as text; images are
+shown as links (nothing is loaded from other sites).
+
+**Template.** A new note starts from `note_template.md` in the notes
+folder, if there is one, else from a short built-in outline (`## Summary`,
+`## Notes`). Placeholders: `{title}`, `{authors}` (separated by `;`),
+`{year}`, `{journal}`, `{doi}`, `{pmid}`, `{citekey}`, `{date}` (today,
+`YYYY-MM-DD`); other braces stay as they are.
+
+**Sync and conflicts.** The file is the source of truth; the database keeps a
+copy for search, Read papers, XP and backups. The copy is refreshed when you
+open a paper, Read papers, Settings → **🔄 Sync notes**, `notes sync`, and
+before backups and exports. litresearch remembers the version both had at
+the last sync:
+
+- only the file changed → its text is taken over (notes bonus if it is now
+  long enough, once per paper as before);
+- only litresearch's copy changed (log dialog, progress import, restore) →
+  the file is updated;
+- both changed → **conflict**: nothing is overwritten. The paper page shows
+  both versions side by side: **Keep file**, **Keep litresearch's** (or
+  **Keep mine** after an edit), or edit the merged text and **Save merged**.
+- The editor remembers the version it was opened from; if the file changed
+  meanwhile (e.g. in Obsidian), saving shows the same conflict view.
+
+A missing file is written again from the copy; a renamed or moved file is
+found by its `litresearch_id`. Existing notes from before 0.5 become files on
+first use (opening a paper, a backup or `notes sync`); a file with different
+text is a conflict, never overwritten. Nothing is deleted automatically.
+
+```bash
+litresearch notes sync          # import edits, write missing files, list conflicts and orphans
+litresearch notes check         # the same as a report only; exit code 1 on conflicts or problems
+litresearch notes path q1       # the file of a paper
+```
+
+*Orphans* are files that match no paper (by `litresearch_id`, DOI, PMID,
+citation key or file name); *waiting* files belong to a paper you have not
+logged yet: log a reading and they are linked.
 
 #### Read papers
 
@@ -553,7 +661,7 @@ login protects your data. Never open the port to the internet directly.
 | | ⚙️ **Settings** | topics, excluded terms, every recommendation and queue setting; data & backups |
 | | 📖 **Documentation** | this documentation |
 | (chip) | 🎮 **Profile** | locked rules and fingerprint; save, download, compare profiles; switch or create one |
-| | 📄 **Paper** | abstract, TL;DR, metrics, notes, status, every recommendation of it with its evidence tree, XP earned |
+| | 📄 **Paper** | abstract, TL;DR, metrics, notes (Markdown editor with preview, [conflicts](#notes-and-obsidian)), status, every recommendation of it with its evidence tree, XP earned |
 
 Old addresses (`/ledger`, `/how`, `/paperpile`) redirect.
 
@@ -982,6 +1090,7 @@ paper counts once).
 | `next`, `show REF` | top paper / any paper with abstract, status, notes |
 | `read REF LEVEL [--rating] [--note]` | log a reading and earn XP |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant |
+| `notes sync\|check`, `notes path REF` | note files: import edits, write missing files, list conflicts and orphans (`check` changes nothing) / print a paper's file ([Notes and Obsidian](#notes-and-obsidian)) |
 | `score`, `history` | level, streak, grade, badges / reading log |
 | `read-papers [--depth LEVEL]… [--rating N] [--since DATE] [--until DATE] [--library NAME] [--notes] [--dismissed] [--search WORDS] [--sort last\|first\|depth\|rating\|xp\|title] [--limit N] [--tsv FILE]` | your reading history; `--tsv` writes all matching rows |
 | `app [--port N] [--no-browser]` | desktop mode: the web UI on this computer only, opened in your browser; Quit in the sidebar. `--no-browser` or `LITRESEARCH_NO_BROWSER=1`: do not open a browser. Also as `litresearch-app` |
@@ -1070,7 +1179,8 @@ rejected. Sections marked *(planned)* are validated but not used yet.
 | `bibtex` | `data/paperpile/library.bib` | an export file that `ingest` imports into **My library** when no library has a file yet (the set-up before 0.2); a profile uses `library.bib` in its folder unless its `settings.yaml` sets it |
 | `database` | `data/litresearch.sqlite` | database *before profiles*; a profile uses `litresearch.sqlite` in its folder |
 | `cache_dir` | `data/cache` | HTTP response cache |
-| `obsidian_vault` | `n/a` | Obsidian export target *(planned)* |
+| `obsidian_vault` | `n/a` | Obsidian vault for the note files; `n/a`: `<profile folder>/notes/` ([Notes and Obsidian](#notes-and-obsidian)) |
+| `notes_subfolder` | `litresearch` | folder inside the vault for the note files (`""` = the vault itself); only used with `obsidian_vault` |
 
 ### `topics`, `excluded_terms`, `library`
 
@@ -1181,6 +1291,7 @@ profile the command line uses.
 | **Your progress**: statuses, ratings, notes, history, queue, XP, badges, recommendations, example choices, locked rules | `data/profiles/<profile>/litresearch.sqlite` | **no**, back it up |
 | Libraries, paper metadata, metrics, embeddings | same database | yes, from the export files |
 | Uploaded export files | `data/profiles/<profile>/libraries/` | yes, export again |
+| **Your notes** (Markdown files) | `data/profiles/<profile>/notes/` or your Obsidian vault | **no**; in every backup (zip), copy in the database |
 | Topics and settings | `data/profiles/<profile>/settings.yaml` | no; in every backup |
 | Machine settings | `config/config.yaml` or the per-user config file | no; keep a copy |
 | Cached API answers (all profiles) | `data/cache/http_cache.sqlite` | yes, delete any time |
@@ -1219,11 +1330,12 @@ export/import below to move progress.
 
 ### What a backup contains
 
-Two files per backup, named with `YYYYMMDD_HHMMSS`:
+Two or three files per backup, named with `YYYYMMDD_HHMMSS`:
 
 | File | Content | Use |
 |---|---|---|
 | `litresearch_20261008_070000.sqlite` | complete database snapshot (SQLite online backup API, consistent while the server writes, integrity-checked) | `litresearch restore FILE` |
+| `litresearch_notes_20261008_070000.zip` | the note files (and `note_template.md`), if there are any | `restore` writes back the missing ones |
 | `litresearch_progress_20261008_070000.json` | the whole **profile**: rules, settings, statuses, ratings, notes, history, queue, XP, badges, recommendations, libraries, example choices (merged: the newer choice wins), enough metadata to find each paper again, and a checksum | `profile load` (new profile) or `import-progress` (merge) |
 
 The oldest files beyond `backup.keep` (default 14 of each) are deleted.
@@ -1241,7 +1353,10 @@ litresearch restore /path/to/backups/litresearch_20261008_070000.sqlite
 The current database is first saved as `…_before_restore.sqlite`, so a
 restore can be undone; these copies are rotated by time like other snapshots
 and count toward `backup.keep`. Files that are not litresearch databases, and
-paths that do not exist, are refused without changing anything.
+paths that do not exist, are refused without changing anything. Note files:
+missing ones are written back from the notes zip of the same backup (or from
+the restored copy); an existing file whose text differs from the restored
+copy is never overwritten but becomes a [conflict](#notes-and-obsidian).
 
 ### Moving to another machine, or merging two
 
@@ -1258,7 +1373,8 @@ How the merge works:
   one, and never matches a paper with a different DOI/PMID. Unknown papers
   are created from the stored metadata;
 - reading status and rating: the newer change wins; notes from both sides are
-  kept;
+  kept (paragraphs that are new are added) and written to the note files;
+  a note file changed meanwhile becomes a conflict;
 - history, XP, badges and recommendation batches are added if not present;
   queue entries are appended while there is room;
 - the profile is taken over if the target has none; otherwise both must have
@@ -1312,6 +1428,7 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `papers.py`, `search.py` | storing works and search hits without overwriting library metadata; one search query translated for Europe PMC, PubMed and the library |
 | `recommend/engine.py`, `scoring.py`, `text.py` | candidates with provenance, filters and funnel, batches with settings snapshot; eligibility, relevance, impact, timeliness, MMR, evidence tree; TF-IDF fallback |
 | `reading.py` | paper references (`r1`, `q2`, DOI …), queue, reading log, notes, drop penalty |
+| `notes.py` | notes as Markdown files: names, front matter (ruamel.yaml round trip), three-way sync with the copy in `reading.notes`, conflicts, Markdown preview without raw HTML, template, notes archive |
 | `history.py` | reading history: filter, sort and aggregate in SQL, TSV export (Read papers tab, `read-papers`) |
 | `rules.py`, `profile.py`, `game.py` | `GameRules`, badge catalog, fingerprint; locking; points, anti-farming, streaks, quests, levels, badges, summaries, ledger, calendar |
 | `profiles.py` | profile folders, settings overlay, current profile, taking over old data, loading saved files |
@@ -1329,7 +1446,8 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `embedding` | `(paper, model)` → float32 vector (SPECTER2, 768 dimensions) |
 | `recommendationbatch` / `recommendation` | lists with funnel and settings snapshot; per paper rank, category, score, evidence, reason |
 | `queueitem` | the queue (position 1 = up next) and where each item came from |
-| `reading` | current status, rating and notes per paper |
+| `reading` | current status, rating and notes per paper (`notes`: copy of the note file's body) |
+| `notefile` | each note file: path in the notes folder, body hash at the last sync, size and time, front matter hash, conflict flag |
 | `statusevent` / `xpevent` | append-only logs of status changes (incl. whether the paper was on top) and of every point earned or lost |
 | `achievement` / `profile` | unlocked badges / the game profile with a locked copy of the rules and fingerprint |
 | `ingestrun` | every import: library, mode, format, time, source, file hash, counts, checks |

@@ -18,6 +18,18 @@ All notable changes are listed here. Versions follow
   (shown by `litresearch where`). Same mode from Python: `litresearch app`
   or `litresearch-app`. Builds are not signed yet. Server mode
   (`litresearch serve`) is unchanged.
+- **Notes as Markdown files, compatible with Obsidian**: one file per paper
+  (format `litresearch-note/1`: YAML front matter with id, metadata, status,
+  rating, tags; your note as the body) in `<profile>/notes/` or in an
+  Obsidian vault (`paths.obsidian_vault`, new `paths.notes_subfolder`, also
+  per profile). Editor with preview on the paper page, `[[citation-key]]`
+  links, template `note_template.md` with placeholders. Edits in either place
+  are synced; when both changed, a conflict view shows both versions and
+  nothing is overwritten. Existing notes become files on first use.
+  `litresearch notes sync|check|path`; *Sync notes* under Settings. Backups
+  add `litresearch_notes_<date>_<time>.zip`; restores, progress imports and
+  profile loads write note files without overwriting changed ones.
+
 - **Phone app (server mode)**: litresearch can be installed on a phone's
   home screen (web app manifest, icons, service worker with an offline page;
   no personal data is cached). Needs HTTPS for full installation; guide for
