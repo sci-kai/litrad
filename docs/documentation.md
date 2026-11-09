@@ -1500,8 +1500,10 @@ archive is checked:
    badge, library or library member twice; the `.bib`/`.json` copies list
    the papers of `libraries.json`; the XP `balance` and `total` add up and
    match `xp_total`; badge XP belongs to an unlocked badge; reading XP to a
-   reading; every badge exists in the rules; the rules match their
-   fingerprint; all dates parse; the settings are valid.
+   reading; every badge exists in the rules; the rules are valid; all
+   dates parse; the settings are valid. A rules fingerprint that differs
+   from the one computed here is only a note (rules added by later versions
+   change it).
 
 Problems are listed by file and record, e.g.
 `readings.json[12]: paper p77 not in papers.json`, and nothing is imported
