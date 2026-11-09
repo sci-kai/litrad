@@ -1,6 +1,6 @@
 # litrad documentation
 
-litrad is a personal literature radar built on your reference-manager
+**litrad, the Literature Radar Game** (called litresearch before 0.3), is a personal literature radar built on your reference-manager
 libraries (Paperpile, Zotero, Mendeley, EndNote …). On request it proposes
 **up to 5 papers**, ranked by similarity to your library (SPECTER2
 embeddings), your topics, paper impact and timeliness (very recent *or* a
@@ -140,8 +140,8 @@ there `config/config.yaml` is found, and `data/` lives next to `config/`.
 and why ([lookup order](#9-configuration)).
 
 **With Docker** (server mode for a Pi, NAS or lab server; the image runs on
-ARM and x86). The image is named after the GitHub repository,
-`ghcr.io/<owner>/litrad` below:
+ARM and x86). The image is `ghcr.io/<owner>/litrad` (`<owner>`: the GitHub
+account of the repository):
 
 ```bash
 docker run --rm -it -v litrad:/data ghcr.io/<owner>/litrad litrad set-password   # once
@@ -162,6 +162,51 @@ with `docker volume inspect litrad`.
 the same volume. The port is plain HTTP: keep
 it in your home network or behind a VPN, as described in
 [Web UI](#using-it-from-your-laptop-local-network).
+
+#### Renamed from litresearch
+
+litrad was called **litresearch** before 0.3. An installation of litresearch
+keeps working after the update; nothing has to be done by hand:
+
+- **Commands:** `litrad` and `litrad-app`. `litresearch` and
+  `litresearch-app` still work for a while and print a note.
+- **Environment variables:** `LITRAD_CONFIG`, `LITRAD_NO_BROWSER`; the old
+  `LITRESEARCH_CONFIG` and `LITRESEARCH_NO_BROWSER` still count (the new
+  name wins if both are set).
+- **Per-user folders** (desktop app, package installs): on the first start,
+  litrad moves `~/.config/litresearch` and `~/.local/share/litresearch`
+  (Windows `%LOCALAPPDATA%\litresearch`, macOS
+  `~/Library/Application Support/litresearch`) to the litrad folders (on
+  another drive: copies them), points the absolute paths in `config.yaml`,
+  in the profiles' `settings.yaml` and of the libraries' files to the new
+  place, and leaves a `MOVED-TO-litrad.txt` in the old place. An existing
+  litrad folder is never overwritten: it is used, and `litrad where` lists
+  the old folder so you can move what you need.
+- **Git installation** (`config/` and `data/` in the repository folder):
+  stays where it is. Run `git pull && python3 install.py` as for every
+  update: it replaces the old package in `.venv`; with `--service` it also
+  replaces `litresearch.service` by `litrad.service` (until then the old
+  service keeps running with the `litresearch` command).
+- **Docker:** keep your volume, e.g. `-v litresearch:/data`, and switch to
+  the image `ghcr.io/<owner>/litrad`; the container's `/data` is unchanged.
+- **Databases:** each profile's `litresearch.sqlite` is renamed to
+  `litrad.sqlite` the first time the profile is opened. A database named in
+  your configuration (`paths.database`, e.g. `data/litresearch.sqlite`) is
+  used under that name; without the setting, an existing
+  `data/litresearch.sqlite` is used where it is.
+- **Backups and files:** new files start with `litrad_`
+  (`litrad_backup_*.zip`, `litrad_*.sqlite`, `litrad_export_*.zip`,
+  `litrad_profile_*`). Files named `litresearch_*` are still listed,
+  restored, loaded and rotated with them, so old backups age out normally.
+- **Formats:** archives (`litresearch-export`), progress and profile files
+  (`litresearch-progress`) and note files (`litresearch-note/1`,
+  `litresearch_id`) from before the rename are read as they are, forever.
+  Note files are not rewritten for the new names; when litrad updates a
+  note's front matter anyway, `litresearch_id` becomes `litrad_id` in place
+  and your own keys stay. The notes folder in an Obsidian vault stays
+  `litresearch` if your configuration does not name another one.
+- **Library exports** with reading status now add the keywords
+  `litrad-read`, `litrad-rating-4`, … (before: `litresearch-…`).
 
 ### 2. Export your library from your reference manager
 
@@ -1313,7 +1358,7 @@ Planned: PubMed as a recommendation source and PubMed Central full texts
 the choice):
 
 1. `-c/--config PATH`;
-2. the environment variable `LITRAD_CONFIG` (a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
+2. the environment variable `LITRAD_CONFIG` (or the old `LITRESEARCH_CONFIG`; a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
 3. `config/config.yaml` in the current folder (a git installation);
 4. your per-user config file ([Setup](#1-install)). If it does not exist
    yet, the first command creates it from the example, with the data in your
@@ -1336,10 +1381,10 @@ rejected. Sections marked *(planned)* are validated but not used yet.
 | `base_dir` | `n/a` | folder relative paths start from (see above); a new per-user config sets it to your per-user data folder |
 | `profiles_dir` | `data/profiles` | one folder per profile |
 | `bibtex` | `data/paperpile/library.bib` | an export file that `ingest` imports into **My library** when no library has a file yet (the set-up before 0.2); a profile uses `library.bib` in its folder unless its `settings.yaml` sets it |
-| `database` | `data/litrad.sqlite` | database *before profiles*; a profile uses `litrad.sqlite` in its folder |
+| `database` | `data/litrad.sqlite` | database *before profiles* (not set: an existing `data/litresearch.sqlite` from before the rename is used); a profile uses `litrad.sqlite` in its folder |
 | `cache_dir` | `data/cache` | HTTP response cache |
 | `obsidian_vault` | `n/a` | Obsidian vault for the note files; `n/a`: `<profile folder>/notes/` ([Notes and Obsidian](#notes-and-obsidian)) |
-| `notes_subfolder` | `litrad` | folder inside the vault for the note files (`""` = the vault itself); only used with `obsidian_vault` |
+| `notes_subfolder` | `litrad` | folder inside the vault for the note files (`""` = the vault itself; not set: an existing `litresearch` folder from before the rename is used); only used with `obsidian_vault` |
 
 ### `topics`, `excluded_terms`, `library`
 
@@ -1693,6 +1738,11 @@ Still read, so nothing written by an earlier version is lost:
   still takes the note files from them.
 - **Databases** of every version since 0.1.0-alpha.1 (upgraded as above).
 - **Notes in the database** (before 0.5): they become note files.
+- **Names from before the rename to litrad** (0.3): files named
+  `litresearch_*`, the formats `litresearch-export` and
+  `litresearch-progress`, note files with `format: litresearch-note/1` and
+  `litresearch_id`, and profile databases named `litresearch.sqlite`
+  ([Renamed from litresearch](#renamed-from-litresearch)).
 
 The test suite keeps a small profile database and the files written by each
 released version (`tests/data/compat/`) and checks that they open, upgrade,

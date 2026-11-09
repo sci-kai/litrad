@@ -12,6 +12,11 @@ never overwrites an existing ``config/config.yaml``. It checks the system
 first and the result at the end, so a broken installation never says "Done".
 Only the standard library is used, so it runs on any Python >= 3.11 (Linux;
 tested on a Raspberry Pi).
+
+Renamed from litresearch: an installation from before the rename loses the
+old ``litresearch`` package of its virtual environment (the ``litresearch``
+command stays as an alias of ``litrad``), and ``--service`` replaces an old
+``litresearch.service`` with ``litrad.service``.
 """
 
 import argparse
@@ -28,6 +33,9 @@ VENV = HERE / ".venv"
 CONFIG = HERE / "config" / "config.yaml"
 EXAMPLE = HERE / "config" / "config.example.yaml"
 SERVICE = Path.home() / ".config" / "systemd" / "user" / "litrad.service"
+# the names before the rename to litrad
+OLD_SERVICE = SERVICE.with_name("litresearch.service")
+OLD_DISTRIBUTION = "litresearch"
 MINIMUM = (3, 11)
 
 UNIT = """\
@@ -88,9 +96,23 @@ def install_package(python: Path, dev: bool, repair: bool = False) -> None:
     step("Installing litrad and its dependencies (a few minutes on a Raspberry Pi)")
     fresh = ["--force-reinstall", "--no-cache-dir"] if repair else []
     run(str(python), "-m", "pip", "install", "--quiet", "--upgrade", "pip")
+    remove_old_distribution(python)
     # editable: `git pull` updates the code without reinstalling
     target = f"{HERE}[dev]" if dev else str(HERE)
     run(str(python), "-m", "pip", "install", "--quiet", *fresh, "--editable", target)
+
+
+def remove_old_distribution(python: Path) -> None:
+    """Uninstall the package from before the rename (it points to src/litresearch)."""
+    try:
+        found = subprocess.run(
+            [str(python), "-m", "pip", "show", "--quiet", OLD_DISTRIBUTION], capture_output=True
+        )
+    except OSError:
+        return  # no interpreter yet: nothing to remove
+    if found.returncode == 0:
+        step(f"Removing the old package {OLD_DISTRIBUTION} (litrad replaces it)")
+        run(str(python), "-m", "pip", "uninstall", "--quiet", "--yes", OLD_DISTRIBUTION)
 
 
 def expected_version() -> str:
@@ -126,10 +148,21 @@ def create_config() -> None:
     shutil.copyfile(EXAMPLE, CONFIG)
 
 
+def remove_old_service() -> None:
+    """Stop, disable and delete ``litresearch.service`` (the name before the rename)."""
+    if not OLD_SERVICE.exists():
+        return
+    step(f"Removing the old service {OLD_SERVICE.name} (litresearch is now litrad)")
+    subprocess.run(["systemctl", "--user", "disable", "--now", OLD_SERVICE.name], check=False)
+    OLD_SERVICE.unlink()
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+
+
 def install_service() -> None:
     if shutil.which("systemctl") is None:
         print("systemd is not available here; start the web UI with `litrad serve`.")
         return
+    remove_old_service()
     step(f"Installing the systemd user service {SERVICE}")
     SERVICE.parent.mkdir(parents=True, exist_ok=True)
     SERVICE.write_text(UNIT.format(home=HERE, venv=VENV), encoding="utf-8")
@@ -141,6 +174,7 @@ def install_service() -> None:
 
 
 def remove_service() -> None:
+    remove_old_service()
     if not SERVICE.exists():
         print("No litrad service is installed.")
         return
@@ -219,6 +253,11 @@ def main() -> int:
         return 1
 
     next_steps(args.service)
+    if OLD_SERVICE.exists() and not args.service:
+        print(
+            f"Your old {OLD_SERVICE.name} still runs (with the litresearch alias); "
+            "replace it with: python3 install.py --service"
+        )
     if not args.service:
         offer_start()
     return 0

@@ -1,6 +1,6 @@
-# Roadmap
+# Roadmap of litrad, the Literature Radar Game
 
-Where litrad is going and in which order. The order is a proposal:
+Where litrad (called litresearch before 0.3) is going and in which order. The order is a proposal:
 **feedback from testing decides** what comes first, changes or is dropped.
 Each milestone is a GitHub milestone with its issues.
 

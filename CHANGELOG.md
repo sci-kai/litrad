@@ -5,11 +5,47 @@ All notable changes are listed here. Versions follow
 
 ## Unreleased
 
+### Changed
+
+- **Renamed to litrad, the Literature Radar Game** (before 1.0, so that
+  the compatibility promise starts with the final name), with a new logo: a
+  rat with a mortarboard. Renamed: the command `litrad` (and `litrad-app`),
+  the Python package and the PyPI and Docker names (`litrad`,
+  `ghcr.io/<owner>/litrad`), the environment variables `LITRAD_CONFIG` and
+  `LITRAD_NO_BROWSER`, the per-user folders (e.g. `~/.config/litrad`,
+  `~/.local/share/litrad`), the files the app writes (`litrad.sqlite`,
+  `litrad_backup_*.zip`, `litrad_*.sqlite`, `litrad_export_*.zip`,
+  `litrad_profile_*`), the systemd unit `litrad.service`, the formats
+  `litrad-export`, `litrad-progress` and `litrad-note/1` with the note key
+  `litrad_id`, and the reading-status keywords of library exports
+  (`litrad-read`, `litrad-rating-4`). Nothing has to be done by hand:
+  - the `litresearch` and `litresearch-app` commands still work for a while
+    (with a note); `LITRESEARCH_CONFIG` and `LITRESEARCH_NO_BROWSER` still
+    count (the new names win);
+  - the litresearch per-user folders are moved to the litrad ones on the
+    first start (copied if they are on another drive), with absolute paths
+    in `config.yaml`, profile settings and libraries pointed to the new
+    place and a `MOVED-TO-litrad.txt` left behind; existing litrad folders
+    are never overwritten (`litrad where` then shows the old ones);
+  - a profile's `litresearch.sqlite` becomes `litrad.sqlite` the first time
+    the profile is opened; a database named in `config.yaml` (e.g.
+    `data/litresearch.sqlite` of a git installation) stays where it is;
+  - `litresearch_*` backups, snapshots, exports and saved profiles are
+    listed, restored, loaded and rotated together with the new files;
+  - archives, progress and profile files and note files from before the
+    rename are read as they are (`litresearch-export`,
+    `litresearch-progress`, `litresearch-note/1`, `litresearch_id`); note
+    files are not rewritten for the new names alone;
+  - `python3 install.py` removes the old package from `.venv`, and
+    `--service` replaces `litresearch.service` with `litrad.service`;
+  - logins and the chosen profile of the web UI survive.
+  The data format and database schema versions are unchanged.
+
 ### Added
 
-- **Read earlier**: log papers you read before using litresearch with the
+- **Read earlier**: log papers you read before using litrad with the
   🕰️ checkbox (and an optional date) in the *Log reading* dialog,
-  `litresearch read REF LEVEL --earlier [--date YYYY-MM-DD]`, or *Mark as
+  `litrad read REF LEVEL --earlier [--date YYYY-MM-DD]`, or *Mark as
   read earlier* for the selected papers of a library page. They earn the
   base points (new rule `backlog_share`, default 1.0) and count for papers
   read, depth, topics, badges of counts and levels, but not for streaks,
@@ -27,15 +63,15 @@ All notable changes are listed here. Versions follow
   format version (`1`) independent of the app version, and a database schema
   version (`PRAGMA user_version`): profile databases are upgraded by
   numbered, tested steps, with a copy in `<profile>/upgrade-backups/`
-  first; a database of a newer litresearch is refused instead of opened.
-- **Export everything**: `litresearch export-all [FILE.zip]` and
+  first; a database of a newer litrad is refused instead of opened.
+- **Export everything**: `litrad export-all [FILE.zip]` and
   *📦 Export everything* on the Profile page write one archive per profile:
   `manifest.json` (versions, counts, SHA-256 of every file), a generated
   `README.md`, papers, libraries (also as BibTeX and CSL-JSON), readings,
   reading log, XP ledger, badges, queue, recommendations with evidence,
   example choices, profile with locked rules, settings, the note files, TSV
   tables, and a JSON Schema for every JSON file.
-- **Import an archive**: `litresearch import-all FILE.zip [--new NAME |
+- **Import an archive**: `litrad import-all FILE.zip [--new NAME |
   --into PROFILE] [--dry-run] [--partial]` and *Import an archive* on the
   welcome screen and the Profile page. Checked before anything changes
   (checksums, JSON Schema, consistency between the files, problems listed by
@@ -46,7 +82,7 @@ All notable changes are listed here. Versions follow
   `tools/make_compat_fixtures.py`) that every version must open, upgrade,
   export and import.
 
-- **Desktop app (the default way to run litresearch)**: downloads on GitHub
+- **Desktop app (the default way to run litrad)**: downloads on GitHub
   Releases for Windows (per-user installer, no administrator rights; the
   uninstaller keeps your data), macOS (`.dmg`, Apple silicon) and Linux
   (AppImage, x86_64 and ARM), built and smoke-tested for every tag. It
@@ -54,22 +90,22 @@ All notable changes are listed here. Versions follow
   opens your browser when ready, runs once per user (a second start opens
   the running one) and stops with **⏻ Quit** in the sidebar. A configured
   password is still required. Log file `logs/app.log` in the data folder
-  (shown by `litresearch where`). Same mode from Python: `litresearch app`
-  or `litresearch-app`. Builds are not signed yet. Server mode
-  (`litresearch serve`) is unchanged.
+  (shown by `litrad where`). Same mode from Python: `litrad app`
+  or `litrad-app`. Builds are not signed yet. Server mode
+  (`litrad serve`) is unchanged.
 - **Notes as Markdown files, compatible with Obsidian**: one file per paper
-  (format `litresearch-note/1`: YAML front matter with id, metadata, status,
+  (format `litrad-note/1`: YAML front matter with id, metadata, status,
   rating, tags; your note as the body) in `<profile>/notes/` or in an
   Obsidian vault (`paths.obsidian_vault`, new `paths.notes_subfolder`, also
   per profile). Editor with preview on the paper page, `[[citation-key]]`
   links, template `note_template.md` with placeholders. Edits in either place
   are synced; when both changed, a conflict view shows both versions and
   nothing is overwritten. Existing notes become files on first use.
-  `litresearch notes sync|check|path`; *Sync notes* under Settings. Backups
-  add `litresearch_notes_<date>_<time>.zip`; restores, progress imports and
+  `litrad notes sync|check|path`; *Sync notes* under Settings. Backups
+  add `litrad_notes_<date>_<time>.zip`; restores, progress imports and
   profile loads write note files without overwriting changed ones.
 
-- **Phone app (server mode)**: litresearch can be installed on a phone's
+- **Phone app (server mode)**: litrad can be installed on a phone's
   home screen (web app manifest, icons, service worker with an offline page;
   no personal data is cached). Needs HTTPS for full installation; guide for
   the home network and Tailscale in the documentation. Icons are drawn by
@@ -78,12 +114,12 @@ All notable changes are listed here. Versions follow
   with deepest depth, last and first reading, rating, notes, XP and source;
   sort, filter (depth, rating, period, library, notes, not relevant), search
   in title, authors and notes, 50 per page, **Export TSV** of all matching
-  rows; same as `litresearch read-papers [--tsv FILE]`.
+  rows; same as `litrad read-papers [--tsv FILE]`.
 - **Docker image and PyPI package.** `Dockerfile` for server mode (ARM and
   x86, non-root, data and `config.yaml` in the volume `/data`, built and
   pushed to GitHub's container registry for every tag); the package is
   published on PyPI for releases (Trusted Publishing), so `pipx install
-  litresearch` works. `LITRESEARCH_CONFIG` pointing at a missing file now
+  litrad` works. `LITRAD_CONFIG` pointing at a missing file now
   creates it on the first run (data next to it); `set-password
   --password-file FILE` sets the password without a prompt. The
   documentation inside the package is a real file instead of a symlink
@@ -98,19 +134,19 @@ All notable changes are listed here. Versions follow
   New settings `selection.s2_positive_rules`, `s2_positive_count`,
   `s2_negative_rules`, `s2_negative_count` (the defaults keep the previous
   choice, except that a paper you marked not relevant is no longer also a
-  positive example); command `litresearch examples`. Your choices are part
+  positive example); command `litrad examples`. Your choices are part
   of profile files and backups; the evidence tree names the number of
   examples used.
 - **Choose the libraries used for recommendations** with checkboxes on the
   Libraries page (and on the positive examples' page) or with
-  `litresearch library use NAME… [--off]`; a warning when none is used.
-- **Runs from any folder and as an installed package.** litresearch looks
-  for its configuration in `--config`, `LITRESEARCH_CONFIG`,
+  `litrad library use NAME… [--off]`; a warning when none is used.
+- **Runs from any folder and as an installed package.** litrad looks
+  for its configuration in `--config`, `LITRAD_CONFIG`,
   `config/config.yaml` in the current folder (git installations: unchanged),
   then in your per-user config folder; if there is none, the first command
   creates one from the example with the data in your per-user data folder
   (Linux, macOS, Windows; new dependency `platformdirs`). New command
-  `litresearch where` shows the files and folders in use and why.
+  `litrad where` shows the files and folders in use and why.
 
 ### Changed
 
@@ -127,7 +163,7 @@ All notable changes are listed here. Versions follow
 - Relative paths in the configuration (`paths.*`, `backup.dir`, a profile's
   `paths.bibtex`) no longer depend on the folder you run a command in: they
   start from the folder that contains `config/` (as before when run from the
-  litresearch folder), else from the config file's folder, or from the new
+  litrad folder), else from the config file's folder, or from the new
   setting `paths.base_dir`. `~` is expanded.
 
 ### Changed
@@ -146,15 +182,15 @@ All notable changes are listed here. Versions follow
   *Compare*) are checked against a JSON Schema and for consistency before
   anything changes; problems are listed by record. They are now *legacy
   formats*: always read, written by `export-progress` and *Download*.
-- **Backups and *Save profile* write the archive** (`litresearch_backup_*.zip`,
-  `litresearch_profile_*.zip`) instead of the progress JSON and notes zip;
+- **Backups and *Save profile* write the archive** (`litrad_backup_*.zip`,
+  `litrad_profile_*.zip`) instead of the progress JSON and notes zip;
   `profile load`, `profile compare`, `import-progress` and the web UI take
   both. Old and new backups are rotated together.
 - The **game-rules fingerprint is stable across versions**: a rule added
   later counts only with a non-default value; merges and comparisons
   recompute it from the rules. Existing fingerprints are unchanged.
 - Copies in `<profile>/upgrade-backups/` are rotated (newest 3 kept);
-  `litresearch where` shows the folder.
+  `litrad where` shows the folder.
 - `restore` checks the snapshot's schema version and references before
   replacing anything; `check` shows the schema version.
 - Merging a file keeps identical history and XP entries it contains twice

@@ -1,4 +1,6 @@
-# litrad
+<p align="center"><img src="src/litrad/web/static/favicon.svg" width="112" height="112" alt="litrad logo: a rat wearing a mortarboard"></p>
+
+# litrad · The Literature Radar Game
 
 A personal literature radar built on your reference-manager libraries
 (Paperpile, Zotero, Mendeley, EndNote …). Whenever you ask (with a weekly
@@ -65,6 +67,12 @@ Everything also works on the command line:
 ```
 
 Update with `git pull && python3 install.py`; `config/` and `data/` stay.
+
+**Renamed from litresearch:** litrad was called litresearch before 0.3.
+Existing installations keep working: folders, databases and backups are
+taken over automatically, old files stay readable, and the `litresearch`
+command remains for a while. Details:
+[Renamed from litresearch](docs/documentation.md#renamed-from-litresearch).
 
 ## Documentation
 

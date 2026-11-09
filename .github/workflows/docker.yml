@@ -1,5 +1,5 @@
 # Build the Docker image (linux/amd64 and linux/arm64) and push it to
-# ghcr.io/<owner>/<repo>. Tags: the version of every v* tag; "latest" only for
+# ghcr.io/<owner>/litrad. Tags: the version of every v* tag; "latest" only for
 # releases, not for pre-releases such as v0.2.0-dev. A manual run builds
 # the selected ref and tags it with the branch name.
 name: Docker image
@@ -28,7 +28,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository_owner }}/litrad
           tags: |
             type=semver,pattern={{version}}
             type=ref,event=branch

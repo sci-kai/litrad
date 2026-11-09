@@ -1,4 +1,4 @@
-# litrad in server mode: the web UI on port 8080, all data in the volume /data.
+# litrad (the Literature Radar Game) in server mode: web UI on port 8080, data in /data.
 #
 #   docker build -t litrad .
 #   docker run --rm -it -v litrad:/data litrad litrad set-password   # once
@@ -15,7 +15,7 @@ RUN python -m build --wheel --outdir /dist
 # --- stage 2: runtime (no compilers; all dependencies come as binary wheels) --------
 FROM python:3.13-slim
 LABEL org.opencontainers.image.title="litrad" \
-      org.opencontainers.image.description="Personal literature recommender (server mode)" \
+      org.opencontainers.image.description="litrad, the Literature Radar Game (server mode)" \
       org.opencontainers.image.licenses="LicenseRef-MIT-Commons-Clause"
 
 RUN useradd --create-home --uid 10001 litrad \

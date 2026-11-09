@@ -21,11 +21,12 @@
 #endif
 
 [Setup]
-AppId={{05EC8161-C270-4A6F-817F-2014D25A8047}
+AppId={{AF6B4D58-0AEA-4134-BA16-B9C87183DD76}
 AppName=litrad
 AppVersion={#AppVersion}
 AppVerName=litrad {#AppVersion}
 AppPublisher=Kai Horny
+AppComments=litrad, the Literature Radar Game
 DefaultDirName={localappdata}\Programs\litrad
 DefaultGroupName=litrad
 DisableProgramGroupPage=yes

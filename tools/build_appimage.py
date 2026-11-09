@@ -24,8 +24,8 @@ from pathlib import Path
 DESKTOP_ENTRY = """[Desktop Entry]
 Type=Application
 Name=litrad
-GenericName=Literature recommender
-Comment=Personal literature radar: paper recommendations and a reading queue
+GenericName=The Literature Radar Game
+Comment=Paper recommendations, a reading queue and a reading game
 Exec=litrad
 Icon=litrad
 Terminal=false

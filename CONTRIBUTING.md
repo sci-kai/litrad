@@ -115,12 +115,15 @@ Two more workflows run for every `v*` tag:
   skipped, and a tag that differs from the version in `pyproject.toml`
   fails. "Run workflow" uploads to TestPyPI instead.
 - **`docker.yml`** builds the image for `linux/amd64` and `linux/arm64` and
-  pushes it to `ghcr.io/<owner>/<repository>` (tag = version; `latest` only
+  pushes it to `ghcr.io/<owner>/litrad` (tag = version; `latest` only
   for releases). Docker is not needed locally; to try it:
   `docker build -t litrad .`
 
 One-time set-up (repository owner):
 
+0. Name the repositories `litrad` (GitHub and GitLab@HHU; renamed from
+   `litresearch`, GitHub redirects the old URL) and update the `origin`
+   URLs of existing clones (`git remote set-url`).
 1. PyPI: *Your projects → Publishing → Add a pending publisher* with the
    project name `litrad`, this repository, workflow `publish-pypi.yml`
    and environment `pypi`. Do the same on test.pypi.org with environment
