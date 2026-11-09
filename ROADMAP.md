@@ -12,7 +12,7 @@ Each milestone is a GitHub milestone with its issues.
 | 0.4 | Your reading history | planned |
 | 0.5 | Notes as Markdown, compatible with Obsidian | planned |
 | 0.6 | **Stable, open data formats** and a complete export of everything | planned |
-| 0.7 / 1.0 | Beta (feature freeze), then 1.0 with a compatibility promise | planned |
+| 0.7 / 1.0 | Beta (feature freeze), code provenance check, then 1.0 with a compatibility promise | planned |
 | 1.1 | PubMed and PubMed Central; summaries by a local LLM; reference managers: write-back and automatic updates | after 1.0 |
 
 ## Principles
@@ -106,6 +106,15 @@ exports of earlier versions without breaking them. New features only add
 (optional fields, new tables, new files); renaming or removing anything
 would need 2.0. This is what lets the features below arrive as minor
 versions.
+
+**Code provenance check (before 1.0).** litresearch is written with an AI
+assistant, so before 1.0 an external scanner checks whether any code matches
+existing public code: [SCANOSS](https://www.scanoss.com) compares file and
+snippet fingerprints (not the code itself) with its knowledge base of public
+open-source projects, including GitHub. The maintainer reviews the report
+before anything is decided; each match is then rewritten, removed, or kept
+with attribution and a compatible license. The scan runs again for every
+release (CI) and its summary is published with the release.
 
 **1.1 · More sources and helpers** (after 1.0, without breaking data):
 
