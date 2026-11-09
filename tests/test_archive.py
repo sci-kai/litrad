@@ -663,3 +663,164 @@ def test_settings_of_the_profile_are_exported(base, exported):
     slug, path = exported
     cfg = profiles.profile_config(base, slug)
     assert yaml.safe_load(members(path)["settings.yaml"]) == profile_settings(cfg)
+
+
+# --- web UI ----------------------------------------------------------------------------------
+
+
+def test_web_export_everything_and_import(config_path, base, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from litresearch.web.app import create_app
+
+    build_profile(base)
+    profiles.set_current(base, "source")
+    with TestClient(create_app(config_path)) as client:
+        client.post("/welcome/select", data={"slug": "source"})
+        page = client.get("/profile").text
+        assert "Export everything" in page and "/profile/import-all" in page
+        download = client.get("/profile/export-all")
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "application/zip"
+        assert "litresearch_export_source_" in download.headers["content-disposition"]
+        archive_file = tmp_path / "web.zip"
+        archive_file.write_bytes(download.content)
+        assert archive.read_archive(archive_file).manifest["profile"] == "Source"
+
+        assert "/welcome/import-all" in client.get("/welcome").text
+        created = client.post(
+            "/welcome/import-all",
+            data={"name": "Web copy"},
+            files={"file": ("all.zip", download.content, "application/zip")},
+            follow_redirects=True,
+        )
+        assert "Imported profile Web copy" in created.text
+        merged = client.post(
+            "/profile/import-all",
+            files={"file": ("all.zip", download.content, "application/zip")},
+            follow_redirects=True,
+        )
+        assert "Merged: 0 readings added" in merged.text
+
+        broken = rewrite(
+            archive_file,
+            tmp_path / "broken.zip",
+            edit_json("readings.json", lambda d: d["readings"][0].update(paper="p999")),
+        )
+        refused = client.post(
+            "/welcome/import-all",
+            data={"name": "Broken"},
+            files={"file": ("b.zip", broken.read_bytes(), "application/zip")},
+        )
+        assert refused.status_code == 422
+        assert "readings.json[0]: paper p999 not in papers.json" in refused.text
+        partial = client.post(
+            "/welcome/import-all",
+            data={"name": "Broken", "partial": "1"},
+            files={"file": ("b.zip", broken.read_bytes(), "application/zip")},
+            follow_redirects=True,
+        )
+        assert "inconsistent records skipped" in partial.text
+        empty = client.post("/welcome/import-all", data={}, follow_redirects=True)
+        assert "Choose an archive" in empty.text
+    assert {i.name for i in profiles.list_profiles(base)} == {"Source", "Web copy", "Broken"}
+
+
+# --- scale -----------------------------------------------------------------------------------
+
+
+def large_profile(base, n_papers=5000, n_read=1500) -> str:
+    """A profile of years of use, built with bulk inserts (fast to set up)."""
+    from sqlmodel import insert
+
+    from litresearch.db import Library
+
+    slug = profiles.create_profile(base, "Large")
+    cfg = profiles.profile_config(base, slug)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        session.exec(
+            insert(Paper),
+            params=[
+                {
+                    "title": f"Paper {i} about tumour evolution and fibroblasts",
+                    "doi": f"10.5/{i}",
+                    "pmid": str(10_000 + i),
+                    "bibtex_key": f"Key{i}",
+                    "authors": ["Doe, Jane", "Roe, Richard", "Poe, Edgar"],
+                    "year": 2000 + i % 25,
+                    "venue": "Journal of Things",
+                    "abstract": "An abstract. " * 30,
+                    "topics": ["Evolution", "Cancer"],
+                    "in_library": True,
+                }
+                for i in range(n_papers)
+            ],
+        )
+        library = Library(name="My library")
+        session.add(library)
+        session.commit()
+        session.exec(
+            insert(LibraryPaper),
+            params=[
+                {"library_id": library.id, "paper_id": i + 1, "citation_key": f"Key{i}"}
+                for i in range(n_papers)
+            ],
+        )
+        start = datetime(2024, 1, 1, 8, 0)
+        session.exec(
+            insert(Reading),
+            params=[
+                {
+                    "paper_id": i + 1,
+                    "status": "read",
+                    "rating": 1 + i % 5,
+                    "notes": "",
+                    "updated_at": start + timedelta(hours=i),
+                }
+                for i in range(n_read)
+            ],
+        )
+        session.exec(
+            insert(StatusEvent),
+            params=[
+                {"paper_id": i + 1, "status": "read", "at": start + timedelta(hours=i)}
+                for i in range(n_read)
+            ],
+        )
+        session.exec(
+            insert(XpEvent),
+            params=[
+                {
+                    "paper_id": i + 1,
+                    "points": 40,
+                    "kind": "read",
+                    "reason": f"read: Paper {i}",
+                    "at": start + timedelta(hours=i),
+                }
+                for i in range(n_read)
+            ],
+        )
+        session.commit()
+    engine.dispose()
+    return slug
+
+
+def test_large_profile_export_and_import_in_acceptable_time(base, tmp_path):
+    """5000 papers, 1500 readings: on a Raspberry Pi 5 well under a minute each way."""
+    import time
+
+    slug = large_profile(base)
+    started = time.monotonic()
+    path = export(base, slug, tmp_path / "large.zip")
+    exported_in = time.monotonic() - started
+    started = time.monotonic()
+    result = import_new(base, path, "Large copy")
+    imported_in = time.monotonic() - started
+    started = time.monotonic()
+    again = import_into(profiles.profile_config(base, result.slug), path, backup=False)
+    merged_in = time.monotonic() - started
+    assert result.merge.papers_created == 5000 and again.merge.papers_created == 0
+    assert again.merge.readings_added == 0
+    print(f"export {exported_in:.1f} s, import {imported_in:.1f} s, merge {merged_in:.1f} s")
+    assert exported_in < 120 and imported_in < 180 and merged_in < 180

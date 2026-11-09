@@ -53,7 +53,13 @@ class Item:
 def library_items(session: Session, library: Library) -> list[Item]:
     readings = {r.paper_id: r for r in session.exec(select(Reading)).all()}
     return [
-        Item(paper, link.citation_key, list(link.folders), list(link.tags), readings.get(paper.id))
+        Item(
+            paper,
+            link.citation_key,
+            list(link.folders or []),
+            list(link.tags or []),
+            readings.get(paper.id),
+        )
         for paper, link in members(session, library)
     ]
 

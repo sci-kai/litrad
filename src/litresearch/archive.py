@@ -108,6 +108,7 @@ NAMING = {section: name for name, (_, _, section) in JSON_FILES.items()} | {
     "xp_total": "xp_ledger.json.total"
 }
 LIBRARY_KINDS_EXPORTED = ("imported", "recommended")
+LIST_FIELDS = ("authors", "topics", "folders", "tags")
 # limits against damaged or hostile archives
 MAX_MEMBER = 512 * 2**20
 MAX_TOTAL = 2 * 2**30
@@ -158,6 +159,8 @@ def _paper_record(paper: Paper) -> dict:
         if name == "id":
             continue
         value = getattr(paper, name)
+        if value is None and name in LIST_FIELDS:
+            value = []  # rows of old databases or bulk inserts may hold NULL
         record[name] = _iso(value) if hasattr(value, "isoformat") else value
     return record
 
@@ -238,8 +241,8 @@ def collect(session: Session, cfg: Config, settings_text: str | None = None) -> 
                     {
                         "paper": key(m.paper_id),
                         "citation_key": m.citation_key,
-                        "folders": m.folders,
-                        "tags": m.tags,
+                        "folders": m.folders or [],
+                        "tags": m.tags or [],
                         "added_at": _iso(m.added_at),
                     }
                     for m in members.get(lib.id, [])

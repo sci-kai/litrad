@@ -76,6 +76,18 @@
         <div><button>📂 Load profile</button></div>
       </form>
     </section>
+    <section class="card">
+      <h2>📦 Import an archive</h2>
+      <p class="muted">An archive from <i>Export everything</i> becomes a new profile. It is checked first: nothing is created unless all of it is consistent.</p>
+      <form method="post" action="/welcome/import-all" enctype="multipart/form-data" class="grid" style="gap:.6rem">
+        <div class="field" style="margin:0"><label for="archive-file">Archive (.zip)</label>
+        <input type="file" id="archive-file" name="file" accept=".zip,application/zip" required></div>
+        <div class="field" style="margin:0"><label for="archive-name">Name <small class="muted">(optional; default: the archive's name)</small></label>
+        <input type="text" id="archive-name" name="name" maxlength="80"></div>
+        <label><input type="checkbox" name="partial" value="1"> Only the consistent part <small class="muted">(skips records with problems)</small></label>
+        <div><button>📦 Import archive</button></div>
+      </form>
+    </section>
   </div>
   {% if desktop %}<form method="post" action="/app/quit" class="row" style="justify-content:center;margin-top:1rem"><button class="small ghost" title="Stop litresearch on this computer">⏻ Quit</button></form>{% endif %}
 </main>

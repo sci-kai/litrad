@@ -56,7 +56,7 @@ from sqlalchemy import case, func
 from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from litresearch import __version__, examples, export, history, libraries, profiles
+from litresearch import __version__, archive, examples, export, history, libraries, profiles
 from litresearch import notes as note_files
 from litresearch.backup import (
     BackupError,
@@ -169,6 +169,7 @@ CURRENT_PROFILE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
 MAX_UPLOAD = 50 * 2**20  # bytes
+MAX_ARCHIVE_UPLOAD = 1024 * 2**20  # "export everything" archives (with notes)
 LIBRARY_PAGE = 50
 MAX_WEEKS = 104  # weekly reports on the dashboard: how far back they go
 WEEKS_PER_PAGE = 4
@@ -624,6 +625,77 @@ def create_app(
                 "points": 0,
                 "sparkle": True,
                 "message": f"Loaded profile {info.name} ({info.xp} XP).",
+            },
+        )
+
+    async def archive_upload(request: Request) -> tuple[Path, dict]:
+        """The uploaded archive as a temporary file (the caller deletes it) and the form."""
+        form = await request.form()
+        upload = next((f for f in form.getlist("file") if hasattr(f, "read")), None)
+        if upload is None or not upload.filename:
+            raise BackupError("Choose an archive (.zip) written by Export everything")
+        fd, name = tempfile.mkstemp(prefix="litresearch-import-", suffix=".zip")
+        size = 0
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                while chunk := await upload.read(2**20):
+                    size += len(chunk)
+                    if size > MAX_ARCHIVE_UPLOAD:
+                        raise BackupError(
+                            f"{upload.filename} is larger than {MAX_ARCHIVE_UPLOAD // 2**20} MB"
+                        )
+                    handle.write(chunk)
+        except BaseException:
+            Path(name).unlink(missing_ok=True)
+            raise
+        finally:
+            await upload.close()
+        return Path(name), dict(form)
+
+    def archive_problems(request: Request, exc: "archive.ArchiveError"):
+        report = exc.report
+        problems = [str(p) for p in report.errors[:200]]
+        if len(report.errors) > 200:
+            problems.append(f"... and {len(report.errors) - 200} more")
+        if not problems:
+            return None
+        return error_page(
+            request,
+            422,
+            "The archive was not imported",
+            "Nothing was changed. Fix these problems, or import only the consistent part "
+            "(tick “Only the consistent part”).",
+            problems,
+        )
+
+    @app.post("/welcome/import-all")
+    async def welcome_import_all(request: Request):
+        """An "export everything" archive becomes a new profile."""
+        base = base_config()
+        path = None
+        try:
+            path, form = await archive_upload(request)
+            name = str(form.get("name", "")).strip() or None
+            result = archive.import_new(base, path, name, partial=bool(form.get("partial")))
+        except archive.ArchiveError as exc:
+            return archive_problems(request, exc) or error("/welcome", f"Not imported: {exc}")
+        except (BackupError, ProfilesError) as exc:
+            return error("/welcome", f"Not imported: {friendly_error(exc)}")
+        finally:
+            if path is not None:
+                path.unlink(missing_ok=True)
+        info = profiles.describe(base, result.slug)
+        skipped = len(result.report.skipped)
+        return enter(
+            result.slug,
+            {
+                "kind": "success",
+                "events": [],
+                "points": 0,
+                "sparkle": True,
+                "message": f"Imported profile {info.name} ({info.xp} XP)"
+                + (f"; {skipped} inconsistent records skipped" if skipped else "")
+                + ".",
             },
         )
 
@@ -1949,6 +2021,63 @@ def create_app(
             )
         finally:
             engine.dispose()
+
+    @app.get("/profile/export-all")
+    def profile_export_all():
+        """Everything of this profile as one zip archive (see Data formats)."""
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                note_files.refresh_quietly(session, cfg)
+                settings = cfg.paths.database.parent / "settings.yaml"
+                profile = get_profile(session)
+                filename = archive.archive_name(profile.name if profile else "profile")
+                with tempfile.TemporaryDirectory() as folder:
+                    result = archive.export_archive(
+                        session,
+                        cfg,
+                        Path(folder) / filename,
+                        settings.read_text("utf-8") if settings.is_file() else None,
+                    )
+                    data = result.path.read_bytes()
+            return Response(
+                data,
+                media_type="application/zip",
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
+            )
+        finally:
+            engine.dispose()
+
+    @app.post("/profile/import-all")
+    async def profile_import_all(request: Request):
+        """Merge an archive into this profile (idempotent; a backup is made first)."""
+        cfg = current_cfg()
+        path = None
+        try:
+            path, form = await archive_upload(request)
+            result = archive.import_into(cfg, path, partial=bool(form.get("partial")))
+        except archive.ArchiveError as exc:
+            return archive_problems(request, exc) or error("/profile", f"Not imported: {exc}")
+        except BackupError as exc:
+            return error("/profile", f"Not imported: {friendly_error(exc)}")
+        finally:
+            if path is not None:
+                path.unlink(missing_ok=True)
+        merged = result.merge
+        skipped = len(result.report.skipped)
+        return back(
+            "/profile",
+            {
+                "kind": "success",
+                "events": [],
+                "points": 0,
+                "message": f"Merged: {merged.readings_added} readings added, "
+                f"{merged.readings_updated} updated, {merged.papers_created} new papers, "
+                f"{result.notes_written} note files"
+                + (f"; {skipped} inconsistent records skipped" if skipped else "")
+                + ".",
+            },
+        )
 
     async def read_upload(request: Request, field_name: str = "file") -> list[dict]:
         form = await request.form()
