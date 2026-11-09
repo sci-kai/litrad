@@ -8,9 +8,9 @@ from rich.console import Console
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
-from litresearch.rules import GameRules
 import litresearch.cli_reading as cli_reading
 from conftest import SAMPLE_BIB, FakeApis, make_work
+from litresearch.rules import GameRules
 
 runner = CliRunner()
 

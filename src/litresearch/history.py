@@ -86,6 +86,7 @@ class HistoryRow:
     rating: int | None
     xp: int
     title: str
+    earlier: bool = False  # logged as read before litresearch
 
 
 @dataclass
@@ -119,6 +120,7 @@ def _event_summary():
             func.max(_depth_case(StatusEvent.status)).label("deepest"),
             func.min(case((StatusEvent.status.in_(reading_levels), StatusEvent.at))).label("first"),
             func.max(StatusEvent.at).label("last"),
+            func.max(StatusEvent.earlier).label("earlier"),
         )
         .group_by(StatusEvent.paper_id)
         .subquery()
@@ -169,6 +171,7 @@ def rows(session: Session, f: HistoryFilter) -> list[HistoryRow]:
             Reading.rating,
             points,
             Paper.title,
+            func.coalesce(events.c.earlier, False),
         )
         .join(Paper, Paper.id == Reading.paper_id)
         .join(events, events.c.paper_id == Reading.paper_id, isouter=True)
@@ -203,8 +206,8 @@ def rows(session: Session, f: HistoryFilter) -> list[HistoryRow]:
         "title": [func.lower(Paper.title)],
     }[f.sort if f.sort in SORTS else "last"]
     result = [
-        HistoryRow(pid, d, bool(dis), fi, la, rating, int(pts), title)
-        for pid, d, dis, fi, la, rating, pts, title in session.exec(
+        HistoryRow(pid, d, bool(dis), fi, la, rating, int(pts), title, bool(early))
+        for pid, d, dis, fi, la, rating, pts, title, early in session.exec(
             query.order_by(*order, Reading.paper_id)
         ).all()
     ]

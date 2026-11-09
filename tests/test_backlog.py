@@ -238,6 +238,8 @@ def test_web_dialog_and_bulk_action(tmp_path, cfg):
     )
     assert response.status_code == 200
     assert "3 marked as read earlier" in response.text and "1 already read" in response.text
+    page = client.get("/read")
+    assert page.text.count('title="read earlier, before litresearch"') == 4
     client.close()
     engine = init_db(profile_cfg(config).paths.database)
     with Session(engine) as session:

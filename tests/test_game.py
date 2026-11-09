@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
+from conftest import format1_rules
 from litresearch.config import Config
 from litresearch.db import (
     Achievement,
@@ -34,7 +35,6 @@ from litresearch.game import (
     weeks_of_history,
 )
 from litresearch.reading import queue_add, record_reading
-from conftest import format1_rules
 from litresearch.rules import GameRules
 
 MONDAY = datetime(2026, 10, 5, 9, 0, 0)

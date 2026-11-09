@@ -43,7 +43,7 @@
     <tr>
       <td><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br><small class="muted">{{ paper.authors | authors }} · {{ paper.year or "n.d." }}{% if paper.venue %} · {{ paper.venue }}{% endif %}</small></td>
       {% set name = "dismissed" if not row.deepest else depths[row.deepest - 1] %}
-      <td style="white-space:nowrap"><span title="{{ name }}">{{ status_icons[name] }}</span> {{ name if name != "dismissed" else "not relevant" }}</td>
+      <td style="white-space:nowrap"><span title="{{ name }}">{{ status_icons[name] }}</span> {{ name if name != "dismissed" else "not relevant" }}{% if row.earlier %} <span title="read earlier, before litresearch">🕰️</span>{% endif %}</td>
       <td style="white-space:nowrap">{{ row.last.date().isoformat() }}</td>
       <td style="white-space:nowrap">{{ row.first.date().isoformat() }}</td>
       <td style="white-space:nowrap">{% if row.rating %}<span style="color: var(--gold)" title="{{ row.rating }} of 5">{{ "★" * row.rating }}</span><span class="sr-only">{{ row.rating }} of 5</span>{% else %}<span class="muted">n/a</span>{% endif %}</td>

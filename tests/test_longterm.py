@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
+from conftest import format1_rules
 from litresearch.db import (
     Achievement,
     Category,
@@ -34,9 +35,7 @@ from litresearch.game import (
 from litresearch.profile import start_profile
 from litresearch.reading import ReadingError, drop_from_queue, queue_add, record_reading
 from litresearch.recommend.engine import exclusion_sets
-from conftest import format1_rules
 from litresearch.rules import GameRules
-
 
 # checked with the numbers of rules format 1 (see test_game.py)
 V1 = format1_rules()

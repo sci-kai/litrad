@@ -5,6 +5,7 @@ import pytest
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
+from conftest import format1_rules
 from litresearch.backup import (
     BackupError,
     export_progress,
@@ -39,7 +40,6 @@ from litresearch.profile import (
     start_profile,
 )
 from litresearch.reading import drop_from_queue, queue_add, record_reading
-from conftest import format1_rules
 from litresearch.rules import BADGE_CATALOG, FORMAT2_FIELDS, GameRules, LevelDef
 
 MONDAY = datetime(2026, 10, 5, 10, 0, 0)
