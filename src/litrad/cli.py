@@ -6,7 +6,6 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-import click
 import typer
 from rich.console import Console
 from sqlmodel import Session, func, select
@@ -436,7 +435,12 @@ def choose_network(cfg: Config, config: Path) -> str:
     if not cfg.web.password_hash:
         console.print("  [dim]Network access needs a password: litrad set-password[/dim]")
     default = [name for name, _ in options].index(current) + 1
-    picked = typer.prompt("Choose a number", type=click.IntRange(1, len(options)), default=default)
+    # a plain int prompt: newer typer versions no longer accept click's IntRange
+    while True:
+        picked = typer.prompt("Choose a number", type=int, default=default)
+        if 1 <= picked <= len(options):
+            break
+        console.print(f"[red]Choose a number from 1 to {len(options)}.[/red]")
     spec = options[picked - 1][0]
     if spec != current and typer.confirm(
         f"Make '{spec}' the default (web.host in {config})?", default=True

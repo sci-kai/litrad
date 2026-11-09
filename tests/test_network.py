@@ -209,6 +209,15 @@ def test_choose_and_save(tmp_path, server, plain_console, monkeypatch):
     assert "Make" not in result.stdout
 
 
+def test_choose_asks_again_for_a_number_out_of_range(tmp_path, server, plain_console, monkeypatch):
+    monkeypatch.setattr(cli, "interactive", lambda: True)
+    config = write_config(tmp_path, password_hash=hash_password("lab-meeting-42"))
+    result = runner.invoke(cli.app, ["serve", "-c", config], input="9\n0\n2\nn\n")
+    assert result.exit_code == 0, result.stdout
+    assert result.stdout.count("Choose a number from 1 to 4") == 2
+    assert server["host"] == "0.0.0.0"
+
+
 def test_no_question_with_network_option_or_without_terminal(
     tmp_path, server, plain_console, monkeypatch
 ):
