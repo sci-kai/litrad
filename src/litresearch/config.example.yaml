@@ -18,7 +18,10 @@ paths:
   bibtex: data/paperpile/library.bib
   database: data/litresearch.sqlite
   cache_dir: data/cache
+  # notes as Markdown files: n/a = <profile folder>/notes; or an Obsidian vault
   obsidian_vault: n/a
+  # folder inside the vault for the note files
+  notes_subfolder: litresearch
 
 library:
   # Paperpile labels without topical meaning (case-insensitive)

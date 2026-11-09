@@ -133,6 +133,27 @@ class Reading(SQLModel, table=True):
     updated_at: NaiveDatetime = Field(default_factory=now)
 
 
+class NoteFile(SQLModel, table=True):
+    """The Markdown file that holds a paper's notes (see ``notes.py``).
+
+    ``Reading.notes`` is a copy of the file's body; ``sha256`` is the body
+    both had at the last sync, so a change on either side can be told apart
+    from a change on both (a conflict, which never overwrites anything).
+    """
+
+    paper_id: int = Field(foreign_key="paper.id", primary_key=True)
+    # relative to the notes folder, "/" as separator
+    path: str
+    # SHA-256 of the body at the last sync ("" = unknown: differing sides are a conflict)
+    sha256: str = ""
+    mtime_ns: int = 0
+    size: int = 0
+    # hash of the front matter values litresearch last wrote
+    meta: str = ""
+    conflict: bool = False
+    synced_at: NaiveDatetime = Field(default_factory=now)
+
+
 class StatusEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     paper_id: int = Field(foreign_key="paper.id", index=True)

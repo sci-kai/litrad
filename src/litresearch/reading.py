@@ -11,7 +11,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
-from litresearch import libraries
+from litresearch import libraries, notes
 from litresearch.config import Config
 from litresearch.db import (
     Paper,
@@ -341,6 +341,19 @@ def append_note(reading: Reading, text: str, at: datetime) -> None:
     reading.notes = f"{reading.notes}\n\n{entry}" if reading.notes else entry
 
 
+def _pull_note(session: Session, cfg: Config, paper: Paper, at: datetime) -> None:
+    """Take over edits made in the note file before appending to the note."""
+    notes.refresh_paper(session, cfg, paper, metadata=False, award=False, commit=False, at=at)
+
+
+def _push_note(session: Session, cfg: Config, paper: Paper) -> None:
+    """Write the note, status and rating into the note file (never fails the reading)."""
+    try:
+        notes.refresh_paper(session, cfg, paper, award=False)
+    except Exception:  # the reading is saved; the file follows at the next sync
+        session.rollback()
+
+
 def record_reading(
     session: Session,
     cfg: Config,
@@ -366,6 +379,9 @@ def record_reading(
     reading.status = status
     if rating is not None:
         reading.rating = rating
+    session.add(reading)
+    session.flush()
+    _pull_note(session, cfg, paper, at)
     if note:
         append_note(reading, note, at)
     reading.updated_at = at
@@ -400,6 +416,7 @@ def record_reading(
             session.flush()
             award.level_after = level_for(total_xp(session), rules)
     session.commit()
+    _push_note(session, cfg, paper)
     session.refresh(reading)
     return ReadingOutcome(reading, previous, left_queue, award)
 
@@ -410,6 +427,7 @@ def add_note(session: Session, cfg: Config, paper: Paper, text: str, at: datetim
     reading = session.get(Reading, paper.id)
     if reading is None:
         raise ReadingError("Mark the paper first (e.g. 'read <ref> abstract'), then add notes")
+    _pull_note(session, cfg, paper, at)
     append_note(reading, text, at)
     reading.updated_at = at
     session.add(reading)
@@ -428,4 +446,5 @@ def add_note(session: Session, cfg: Config, paper: Paper, text: str, at: datetim
     )
     award.profile_started = started
     session.commit()
+    _push_note(session, cfg, paper)
     return award

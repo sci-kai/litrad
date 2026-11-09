@@ -40,7 +40,18 @@ class Paths(_Base):
     # one folder per profile: database, Paperpile export, settings
     profiles_dir: Path = Path("data/profiles")
     cache_dir: Path = Path("data/cache")
+    # notes: Markdown files in <profile folder>/notes, or in this Obsidian vault
     obsidian_vault: Path | None = None
+    # folder inside the vault for the note files ("" = the vault itself)
+    notes_subfolder: str = "litresearch"
+
+    @field_validator("notes_subfolder")
+    @classmethod
+    def _relative_subfolder(cls, value: str) -> str:
+        value = (value or "").strip().strip("/")
+        if Path(value).is_absolute() or ".." in Path(value).parts or "\\" in value:
+            raise ValueError("use a folder inside the vault, e.g. 'litresearch'")
+        return value
 
 
 class Topic(_Base):
