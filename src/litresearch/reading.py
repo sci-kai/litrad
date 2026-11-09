@@ -14,6 +14,7 @@ from sqlmodel import Session, select
 from litresearch import libraries, notes
 from litresearch.config import Config
 from litresearch.db import (
+    NoteFile,
     Paper,
     QueueItem,
     Reading,
@@ -341,13 +342,21 @@ def append_note(reading: Reading, text: str, at: datetime) -> None:
     reading.notes = f"{reading.notes}\n\n{entry}" if reading.notes else entry
 
 
-def _pull_note(session: Session, cfg: Config, paper: Paper, at: datetime) -> None:
+def _has_note(session: Session, paper: Paper) -> bool:
+    reading = session.get(Reading, paper.id)
+    return bool(reading and reading.notes) or session.get(NoteFile, paper.id) is not None
+
+
+def _pull_note(session: Session, cfg: Config, paper: Paper, at: datetime, adding: bool) -> None:
     """Take over edits made in the note file before appending to the note."""
-    notes.refresh_paper(session, cfg, paper, metadata=False, award=False, commit=False, at=at)
+    if adding or _has_note(session, paper):
+        notes.refresh_paper(session, cfg, paper, metadata=False, award=False, commit=False, at=at)
 
 
 def _push_note(session: Session, cfg: Config, paper: Paper) -> None:
     """Write the note, status and rating into the note file (never fails the reading)."""
+    if not _has_note(session, paper):
+        return  # no note: nothing to write (a file made elsewhere is linked on sync)
     try:
         notes.refresh_paper(session, cfg, paper, award=False)
     except Exception:  # the reading is saved; the file follows at the next sync
@@ -381,7 +390,7 @@ def record_reading(
         reading.rating = rating
     session.add(reading)
     session.flush()
-    _pull_note(session, cfg, paper, at)
+    _pull_note(session, cfg, paper, at, bool(note))
     if note:
         append_note(reading, note, at)
     reading.updated_at = at
@@ -427,7 +436,7 @@ def add_note(session: Session, cfg: Config, paper: Paper, text: str, at: datetim
     reading = session.get(Reading, paper.id)
     if reading is None:
         raise ReadingError("Mark the paper first (e.g. 'read <ref> abstract'), then add notes")
-    _pull_note(session, cfg, paper, at)
+    _pull_note(session, cfg, paper, at, True)
     append_note(reading, text, at)
     reading.updated_at = at
     session.add(reading)
