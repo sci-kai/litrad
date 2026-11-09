@@ -456,6 +456,8 @@ class NoteState:
 
     available: bool = True
     problem: str | None = None
+    # not blocking, e.g. invalid front matter (the body is still used)
+    warning: str | None = None
     folder: Path | None = None
     path: Path | None = None
     exists: bool = False
@@ -607,27 +609,28 @@ def refresh_paper(
             state.actions.append("exported")
 
         text = note.text
-        if body is not None or (metadata and (row is None or row.meta != vhash)):
-            if note.error and body is None:
-                state.problem = f"{_rel(folder, path)}: {note.error}; front matter not updated"
-            else:
-                try:
-                    front, meta_changed = update_front_matter(
-                        None if note.error else note.front, values, at, touch=body is not None
-                    )
-                except (NotesError, RuamelError) as exc:
-                    state.problem = f"{_rel(folder, path)}: {exc}"
-                    front, meta_changed = None, False
-                if front is not None and (meta_changed or body is not None):
-                    raw = note.raw_body if body is None else body
-                    if body is None:
-                        text = f"---\n{front}---\n" + (
-                            raw if note.front is not None else "\n" + raw
-                        )
-                    else:
-                        text = compose(front, body)
-                    if body is None and meta_changed:
-                        state.actions.append("metadata")
+        meta_done = False
+        rel = _rel(folder, path)
+        if note.error:
+            state.warning = f"{rel}: {note.error}; front matter not updated"
+            if body is not None:  # the front matter stays as you wrote it
+                text = f"---\n{note.front}---\n" + (f"\n{body}\n" if body else "")
+        elif body is not None or (metadata and (row is None or row.meta != vhash)):
+            try:
+                front, meta_changed = update_front_matter(
+                    note.front, values, at, touch=body is not None
+                )
+                meta_done = True
+            except (NotesError, RuamelError) as exc:
+                state.warning = f"{rel}: {exc}; front matter not updated"
+                front, meta_changed = None, False
+            if front is not None and (meta_changed or body is not None):
+                if body is not None:
+                    text = compose(front, body)
+                else:
+                    raw = note.raw_body if note.front is not None else "\n" + note.raw_body
+                    text = f"---\n{front}---\n" + raw
+                    state.actions.append("metadata")
         stat = note.stat
         if text != note.text and not dry_run:
             stat = _write(path, text, expect=note.stat)
@@ -650,7 +653,7 @@ def refresh_paper(
                     else (row.sha256 if state.conflict else body_hash(state.file_body)),
                     mtime_ns=stat[0],
                     size=stat[1],
-                    meta=vhash if state.problem is None else (row.meta if row else ""),
+                    meta=vhash if meta_done else (row.meta if row else ""),
                     conflict=state.conflict,
                 )
             )
@@ -689,8 +692,7 @@ class SyncReport:
         if state.conflict:
             rel = _rel(folder, state.path) if state.path else "?"
             self.conflicts.append((paper.id, paper.title, rel))
-        if state.problem:
-            self.problems.append(state.problem)
+        self.problems += [p for p in (state.problem, state.warning) if p]
 
     def lines(self) -> list[str]:
         out = [f"Notes folder: {self.folder or self.problem}"]
@@ -884,10 +886,11 @@ def save(
     try:
         if state.exists:
             note = read_note(state.path)
-            front, _ = update_front_matter(
-                None if note.error else note.front, values, at, touch=True
-            )
-            stat = _write(state.path, compose(front, body), expect=note.stat)
+            if note.error:  # keep the front matter as you wrote it
+                text = f"---\n{note.front}---\n" + (f"\n{body}\n" if body else "")
+            else:
+                text = compose(update_front_matter(note.front, values, at, touch=True)[0], body)
+            stat = _write(state.path, text, expect=note.stat)
         elif body:
             stat = _write(state.path, compose(new_front_matter(values, at), body))
         else:

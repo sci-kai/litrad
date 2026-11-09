@@ -24,7 +24,7 @@
       <h2>✍️ Notes</h2>
       <p class="muted"><small>File: {% if note.path %}<code>{{ note.path }}</code>{{ "" if note.exists else " (created when you save)" }}{% else %}<span class="neg">{{ note.problem }}</span>{% endif %}
         · <a href="/docs/2-the-weekly-loop#notes-and-obsidian">Notes and Obsidian</a></small></p>
-      {% if note.available and note.problem %}<p class="neg"><small>{{ note.problem }}</small></p>{% endif %}
+      {% for message in [note.problem if note.available else none, note.warning] if message %}<p class="neg"><small>{{ message }}</small></p>{% endfor %}
       {% set conflict = note_conflict or (note.conflict and not note_preview) %}
       {% if conflict %}
       {% set theirs = note_conflict.theirs if note_conflict else note.file_body %}
