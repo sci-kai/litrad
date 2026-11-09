@@ -198,7 +198,8 @@ def test_long_note_later_earns_reflection_bonus_once(db):
     cfg, session, papers = db
     record_reading(session, cfg, papers[0], ReadStatus.read, at=AT)
     award = add_note(session, cfg, papers[0], "y" * 200, at=AT)
-    assert [e.kind for e in award.events] == ["reflection"]
+    assert [e.kind for e in award.events if e.kind != "badge"] == ["reflection"]
+    assert [b.code for b in award.badges] == ["note_taker"]  # its first-tier badge
     assert add_note(session, cfg, papers[0], "z" * 200, at=AT).points == 0
 
 

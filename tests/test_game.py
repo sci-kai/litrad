@@ -34,13 +34,20 @@ from litresearch.game import (
     weeks_of_history,
 )
 from litresearch.reading import queue_add, record_reading
+from conftest import format1_rules
 from litresearch.rules import GameRules
 
 MONDAY = datetime(2026, 10, 5, 9, 0, 0)
 
 
+# the mechanics below are checked with the numbers of rules format 1 (a profile
+# locked by litresearch 1.0 or earlier); the defaults of new profiles: test_backlog.py
+V1 = format1_rules()
+
+
 @pytest.fixture
 def db(cfg):
+    cfg.game = V1
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         yield cfg, session
@@ -61,14 +68,26 @@ def kinds(award) -> dict[str, int]:
 # --- levels and streaks -------------------------------------------------------
 
 
-def test_levels():
-    assert level_for(0).number == 1 and level_for(0).title == "Curious Undergrad"
-    assert level_for(59).number == 1 and level_for(60).number == 2
-    assert level_for(100).progress(100) == pytest.approx(0.5)  # 60 -> 140
-    assert level_for(0).next_title == "Bachelor Student" and level_for(0).icon == "🎓"
-    top = level_for(10**6)
-    assert top.number == len(GameRules().levels) == 20
+def test_levels_of_rules_format_1():
+    assert level_for(0, V1).number == 1 and level_for(0, V1).title == "Curious Undergrad"
+    assert level_for(59, V1).number == 1 and level_for(60, V1).number == 2
+    assert level_for(100, V1).progress(100) == pytest.approx(0.5)  # 60 -> 140
+    assert level_for(0, V1).next_title == "Bachelor Student" and level_for(0, V1).icon == "🎓"
+    top = level_for(10**6, V1)
+    assert top.number == len(V1.levels) == 20
     assert top.title == "Hallmarks Author" and top.next_floor is None and top.progress(10**6) == 1
+
+
+def test_levels_of_the_default_rules():
+    levels = GameRules().levels
+    second, third = levels[1].xp, levels[2].xp
+    assert level_for(0).title == levels[0].title and level_for(0).next_title == levels[1].title
+    assert level_for(second - 1).number == 1 and level_for(second).number == 2
+    middle = (second + third) // 2
+    assert level_for(middle).progress(middle) == pytest.approx((middle - second) / (third - second))
+    top = level_for(10**6)
+    assert top.number == len(levels) and top.title == levels[-1].title == "Hallmarks Author"
+    assert top.next_floor is None
 
 
 def test_streaks():

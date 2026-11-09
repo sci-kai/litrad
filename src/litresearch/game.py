@@ -347,6 +347,7 @@ def stats(session: Session, today: date, rules=None) -> dict:
     return {
         "xp": total_xp(session),
         "papers_read": len(read_ids),
+        "papers_seen": len(deepest),
         "deep_reads": sum(d >= 3 for d in deepest.values()),
         "thorough": sum(d >= 4 for d in deepest.values()),
         "frogs": frogs,
@@ -362,6 +363,7 @@ def stats(session: Session, today: date, rules=None) -> dict:
         "dismissed": sum(r.status == ReadStatus.dismissed for r in readings),
         "streak": current,
         "best_streak": best,
+        "active_weeks": len(weeks),
         "comebacks": comebacks,
         "quests": _count_kind(session, "quest"),
         "a_weeks": grades["A"] + grades["S"],

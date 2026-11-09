@@ -1,3 +1,4 @@
+import re
 import shutil
 from datetime import date
 
@@ -7,6 +8,7 @@ from rich.console import Console
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
+from litresearch.rules import GameRules
 import litresearch.cli_reading as cli_reading
 from conftest import SAMPLE_BIB, FakeApis, make_work
 
@@ -125,7 +127,7 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     code, out = invoke("read", "q1", "read", "--rating", "4", "--note", "useful", "-c", config)
     assert code == 0 and "Ate the frog" in out
     assert "game has started" in out  # first read starts the game with the config rules
-    assert "LEVEL UP! You are now a Bachelor Student" in out
+    assert re.search(r"LEVEL UP! You are now an? \w", out)
     assert "Badge unlocked: First Steps" in out and "Up next: q1 A collective" in out
 
     code, out = invoke("note", "Cheung2016-vl", "x", "-c", config)
@@ -138,7 +140,8 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert "Status: abstract" in out and "a thought" in out
 
     code, out = invoke("score", "-c", config)
-    assert code == 0 and "📘 Level 2 · Bachelor Student" in out and "Badges 1/44" in out
+    assert code == 0 and re.search(r"Level \d+ · \w", out)
+    assert re.search(rf"Badges \d+/{len(GameRules().badges())}\b", out)
     assert "Reading Impact Factor" in out and "This week" in out
 
     code, out = invoke("history", "-c", config)

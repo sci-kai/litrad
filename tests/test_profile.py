@@ -39,7 +39,8 @@ from litresearch.profile import (
     start_profile,
 )
 from litresearch.reading import drop_from_queue, queue_add, record_reading
-from litresearch.rules import BADGE_CATALOG, GameRules, LevelDef
+from conftest import format1_rules
+from litresearch.rules import BADGE_CATALOG, FORMAT2_FIELDS, GameRules, LevelDef
 
 MONDAY = datetime(2026, 10, 5, 10, 0, 0)
 runner = CliRunner()
@@ -69,7 +70,10 @@ def with_game(cfg: Config, **rules) -> Config:
 
 def test_default_rules_are_rich():
     rules = GameRules()
-    assert len(rules.levels) == 20 and len(rules.badges()) == len(BADGE_CATALOG) >= 40
+    assert rules.rules_format == 2
+    assert len(rules.levels) == 60 and len(rules.badges()) == len(BADGE_CATALOG) >= 120
+    old = format1_rules()  # as profiles locked by 1.0 and earlier keep them
+    assert len(old.levels) == 20 and len(old.badges()) == 44
     assert rules.levels[0].title == "Curious Undergrad"
     assert rules.levels[-1].title == "Hallmarks Author"
     codes = [b.code for b in rules.badges()]
@@ -94,10 +98,6 @@ def test_invalid_rules(values, message):
         GameRules.model_validate(values)
 
 
-# rules added after rules format 1 (with a default: they leave fingerprints unchanged)
-LATER_RULES = {"backlog_share"}
-
-
 def test_fingerprint():
     assert GameRules().fingerprint() == GameRules().fingerprint()
     assert GameRules(xp_read=41).fingerprint() != GameRules().fingerprint()
@@ -109,7 +109,7 @@ def _fingerprint_until_0_6(rules: GameRules) -> str:
     """The fingerprint algorithm of 0.1 to 0.6 (hash of the complete dump)."""
     import hashlib
 
-    data = rules.model_dump(mode="json", exclude=LATER_RULES)
+    data = rules.model_dump(mode="json", exclude=set(FORMAT2_FIELDS))
     data["badge_targets"] = {badge.code: badge.target for badge in rules.badges()}
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -124,8 +124,17 @@ def _fingerprint_until_0_6(rules: GameRules) -> str:
     ],
 )
 def test_fingerprint_is_unchanged_for_existing_rules(values):
-    rules = GameRules.model_validate(values)
+    rules = GameRules.model_validate({**_stored_v1(), **values})
+    assert rules.rules_format == 1
     assert rules.fingerprint() == _fingerprint_until_0_6(rules)
+
+
+def _stored_v1() -> dict:
+    """The default rules as litresearch 1.0 and earlier stored them (without later rules)."""
+    data = format1_rules().model_dump(mode="json")
+    for name in FORMAT2_FIELDS:
+        data.pop(name)
+    return data
 
 
 def test_fingerprint_survives_a_rule_added_later():
@@ -144,8 +153,8 @@ def test_fingerprint_survives_a_rule_added_later():
             default_factory=lambda: [FutureLevel(xp=0, title="Start")]
         )
 
-    locked = GameRules(xp_read=50, levels=[LevelDef(xp=0, title="Start")])
-    stored = locked.model_dump(mode="json")  # as an older version locked it
+    stored = {**_stored_v1(), "xp_read": 50, "levels": [{"xp": 0, "title": "Start", "icon": "⭐"}]}
+    locked = GameRules.model_validate(stored)  # as an older version locked it
     future = FutureRules.model_validate(stored)
     assert future.fingerprint() == locked.fingerprint()
     # setting the new rule to something else is a real difference
@@ -157,15 +166,15 @@ def test_fingerprint_survives_a_rule_added_later():
 
     # a badge added to the catalogue later counts only with a non-default target
     extra = BadgeDef("future", "Future", "x", "papers_read", 7, "🔮", "Reading")
-    catalogue, targets = rules_module.BADGE_CATALOG, rules_module._CATALOG_TARGETS
+    catalogue, targets = rules_module.BADGE_CATALOG, rules_module._CATALOG
     try:
         rules_module.BADGE_CATALOG = [*catalogue, extra]
-        rules_module._CATALOG_TARGETS = {**targets, "future": 7}
+        rules_module._CATALOG = {**targets, "future": extra}
         assert locked.fingerprint() == _fingerprint_until_0_6_without("future", locked)
         changed = locked.model_copy(update={"badge_targets": {"future": 8}})
         assert changed.fingerprint() != locked.fingerprint()
     finally:
-        rules_module.BADGE_CATALOG, rules_module._CATALOG_TARGETS = catalogue, targets
+        rules_module.BADGE_CATALOG, rules_module._CATALOG = catalogue, targets
 
 
 def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
@@ -173,19 +182,19 @@ def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
 
     from litresearch.rules import BADGE_CODES_V1
 
-    data = rules.model_dump(mode="json", exclude=LATER_RULES)
+    data = rules.model_dump(mode="json", exclude=set(FORMAT2_FIELDS))
     data["badge_targets"] = {b.code: b.target for b in rules.badges() if b.code in BADGE_CODES_V1}
     assert code not in data["badge_targets"]
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def test_fingerprint_baseline_covers_every_current_rule():
-    """Every rule of format 1 is in the baseline; new rules must not be added to it."""
-    from litresearch.rules import BADGE_CODES, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
+    """Every rule is in the baseline of format 1 or 2; later rules must not be added to them."""
+    from litresearch.rules import BADGE_CATALOG, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
 
-    assert FINGERPRINT_FIELDS[GameRules] == set(GameRules.model_fields) - LATER_RULES
+    assert FINGERPRINT_FIELDS[GameRules] | FORMAT2_FIELDS == set(GameRules.model_fields)
     assert FINGERPRINT_FIELDS[LevelDef] == set(LevelDef.model_fields)
-    assert BADGE_CODES_V1 == BADGE_CODES
+    assert BADGE_CODES_V1 == {b.code for b in BADGE_CATALOG if b.since == 1}
 
 
 @pytest.mark.parametrize("version", ["0.1.0-alpha.1", "0.2.0-dev", "dev-20261109"])
@@ -247,7 +256,7 @@ def test_custom_rules_are_used(db):
     award = record_reading(session, cfg, add(session), ReadStatus.read, at=MONDAY).award
     kinds = {e.kind: e.points for e in award.events}
     assert kinds["read"] == 100 and "badge" not in kinds  # badges unlock without XP
-    assert [b.code for b in award.badges] == ["first_read"]
+    assert {"first_read", "first_glance", "close_reader"} == {b.code for b in award.badges}
     paper = add(session, "Picked")
     queue_add(session, cfg, paper, source="recommendation")
     assert drop_from_queue(session, cfg, paper, at=MONDAY).points == -33

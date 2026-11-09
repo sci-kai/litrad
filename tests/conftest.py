@@ -298,6 +298,20 @@ def make_work(
 # --- profiles ------------------------------------------------------------------------
 
 
+def format1_rules():
+    """The default rules of rules format 1 (litresearch 0.1 to 1.0), as old profiles locked them.
+
+    Tests of the game mechanics written for those numbers use them; they also
+    show that a profile locked by an older version keeps playing by its rules.
+    """
+    from litresearch.rules import GameRules
+
+    data = json.loads((DATA / "compat" / "dev-20261109" / "profile.json").read_text("utf-8"))
+    rules = GameRules.model_validate(data["profile"]["rules"])
+    assert rules.rules_format == 1
+    return rules
+
+
 def rules_form(rules=None) -> dict:
     """The fields of the rules form, filled with ``rules`` (default rules)."""
     from litresearch.rules import GameRules
