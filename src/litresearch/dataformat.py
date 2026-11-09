@@ -335,11 +335,12 @@ def check_data(
         else:
             stated = profile.get("fingerprint")
             if stated and stated != rules.fingerprint():
-                error(
+                # a note, not an error: a rule added by a later version (with its
+                # default) changes the fingerprint of rules locked earlier
+                note(
                     naming.at("profile", None, ".fingerprint"),
-                    f"{stated} does not match the rules ({rules.fingerprint()}): "
-                    "the rules were changed after they were locked",
-                    ("profile", None),
+                    f"{stated} differs from the fingerprint of the rules here "
+                    f"({rules.fingerprint()})",
                 )
         when("profile", None, profile, "created_at", record=("profile", None))
 

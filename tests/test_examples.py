@@ -374,6 +374,7 @@ def test_old_database_gets_the_new_table(cfg):
     init_db(cfg.paths.database).dispose()
     with closing(sqlite3.connect(cfg.paths.database)) as connection:
         connection.execute("DROP TABLE examplechoice")
+        connection.execute("PRAGMA user_version = 0")  # as written before schema versions
         connection.commit()
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:

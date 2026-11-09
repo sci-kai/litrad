@@ -846,7 +846,7 @@ def check(archive: Archive, base: Config | None = None, partial: bool = False) -
 
     checked = Checked(report, data)
     for name in sorted(n for n in files if n.startswith(NOTES) and n.endswith(".md")):
-        if name not in listed:
+        if name not in listed or (partial and name in damaged):
             continue
         rel = name.removeprefix(NOTES)
         if rel == "note_template.md":
@@ -925,7 +925,7 @@ def _drop_partially(checked: Checked, naming: Naming) -> None:
                 pass  # a duplicate key: the first record stays
         problems = check_data(data, naming, "papers.json")
         pending = [p for p in problems if p.level == "error"]
-        for note in checked.notes:
+        for note in list(checked.notes):
             if note.paper is not None and note.paper not in data["papers"]:
                 checked.notes.remove(note)
                 report.skipped.append(
@@ -1001,7 +1001,12 @@ def _stage_notes(
     """Write the note files into ``staging`` and record them; returns (moves, kept)."""
     from litresearch import notes
 
-    folder = notes.notes_dir(cfg, create=staging is not None)
+    try:
+        folder = notes.notes_dir(cfg, create=staging is not None)
+    except notes.NotesUnavailable as exc:
+        if checked.notes:
+            checked.report.add(Problem("notes/", f"not written: {exc}", "note"))
+        return [], len(checked.notes)
     rows = {r.paper_id: r for r in session.exec(select(NoteFile)).all()}
     taken = {r.path for r in rows.values()}
     moves, kept = [], 0
