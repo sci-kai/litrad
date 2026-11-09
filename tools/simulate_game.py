@@ -439,6 +439,23 @@ def milestone_gaps(result: dict) -> tuple[list[int], float, int]:
     return marks, float(median), max(gaps)
 
 
+def reading_week_gap(result: dict) -> int:
+    """The longest run of reading weeks (weeks with XP) without a level-up or badge.
+
+    Unlike ``milestone_gaps`` this ignores holidays and busy weeks: it counts
+    the weeks you read and got nothing new for it, plus the next one.
+    """
+    timeline, weeks = result["timeline"], result["weeks"]
+    marks, _, _ = milestone_gaps(result)
+    active = [w for w in range(1, weeks + 1) if timeline[w][0] != timeline.get(w - 1, (0,))[0]]
+    longest, run = 0, 0
+    for week in active:
+        run += 1
+        if week in marks:
+            longest, run = max(longest, run), 0
+    return max(longest, run)
+
+
 def _active(sim: Sim, week: int) -> bool:
     if week == 1:
         return sim.timeline[1][0] > 0
@@ -496,7 +513,8 @@ def markdown(result: dict) -> str:
         f"| Drop penalties | {result['penalties']} ({result['penalty_xp']} XP, "
         f"{result['penalties'] * 52 / weeks:.1f} per year) |",
         "| Weeks with a level-up or badge | "
-        f"{len(marks)} of {weeks} (median gap {median:g} weeks, longest {longest}) |",
+        f"{len(marks)} of {weeks} (median gap {median:g} weeks, longest {longest}; "
+        f"longest in reading weeks {reading_week_gap(result)}) |",
         f"| Papers read (skimmed+) | {result['stats']['papers_read']} |",
         f"| Deep reads (read+) | {result['stats']['deep_reads']} |",
         f"| Best streak (weeks) | {result['stats']['best_streak']} |",
@@ -510,9 +528,9 @@ def summary_table(results: list[dict]) -> str:
     head = (
         "| Persona | "
         + " | ".join(f"w{w}" for w in weeks)
-        + " | Badges 1y | Badges 2y | Gap median | Gap max |"
+        + " | Badges 1y | Badges 2y | Gap median | Gap max | Gap max (reading weeks) |"
     )
-    lines = [head, "|---|" + "---:|" * (len(weeks) + 4)]
+    lines = [head, "|---|" + "---:|" * (len(weeks) + 5)]
     for r in results:
         cells = [f"L{r['timeline'][w][1]} ({r['timeline'][w][0]})" for w in weeks]
         b1 = sum(1 for week, _ in r["badges"] if week <= 52)
@@ -521,7 +539,8 @@ def summary_table(results: list[dict]) -> str:
         lines.append(
             f"| {r['persona'].name} | "
             + " | ".join(cells)
-            + f" | {b1}/{r['n_badges']} | {b2}/{r['n_badges']} | {median:g} | {longest} |"
+            + f" | {b1}/{r['n_badges']} | {b2}/{r['n_badges']} | {median:g} | {longest}"
+            + f" | {reading_week_gap(r)} |"
         )
     return "\n".join(lines) + "\n"
 
