@@ -36,7 +36,6 @@ class Paths(_Base):
     base_dir: Path | None = None
     # used when no profile is selected (and as the source of "existing data")
     bibtex: Path = Path("data/paperpile/library.bib")
-    # not set and only data/litresearch.sqlite exists (before the rename): that one
     database: Path = Path("data/litrad.sqlite")
     # one folder per profile: database, Paperpile export, settings
     profiles_dir: Path = Path("data/profiles")
@@ -44,7 +43,6 @@ class Paths(_Base):
     # notes: Markdown files in <profile folder>/notes, or in this Obsidian vault
     obsidian_vault: Path | None = None
     # folder inside the vault for the note files ("" = the vault itself)
-    # not set and the vault has only a "litresearch" folder (before the rename): that one
     notes_subfolder: str = "litrad"
 
     @field_validator("notes_subfolder")
@@ -234,35 +232,9 @@ class Config(_Base):
             for name in fields
             if getattr(self.paths, name) is not None
         }
-        updates.update(_legacy_defaults(self.paths, updates))
         self.paths = self.paths.model_copy(update=updates)
         self.backup = self.backup.model_copy(update={"dir": resolve_path(base, self.backup.dir)})
         return self
-
-
-LEGACY_NAME = "litresearch"  # the app's name before the rename to litrad
-
-
-def _legacy_defaults(paths: Paths, resolved: dict) -> dict:
-    """Default names from before the rename, for configs that do not set them.
-
-    A config that names ``paths.database`` or ``paths.notes_subfolder`` keeps
-    exactly that. Without the setting, an existing ``data/litresearch.sqlite``
-    (and no ``data/litrad.sqlite``) and an existing ``litresearch`` notes
-    folder in the vault (and no ``litrad`` one) are used where they are.
-    """
-    out = {}
-    if "database" not in paths.model_fields_set:
-        new = resolved["database"]
-        old = new.with_name(f"{LEGACY_NAME}.sqlite")
-        if not new.exists() and old.exists():
-            out["database"] = old
-    vault = resolved.get("obsidian_vault")
-    if "notes_subfolder" not in paths.model_fields_set and vault is not None:
-        vault = Path(vault).expanduser()
-        if not (vault / paths.notes_subfolder).exists() and (vault / LEGACY_NAME).is_dir():
-            out["notes_subfolder"] = LEGACY_NAME
-    return out
 
 
 class ConfigError(ValueError):

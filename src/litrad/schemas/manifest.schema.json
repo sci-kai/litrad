@@ -6,8 +6,7 @@
   "type": "object",
   "properties": {
     "format": {
-      "description": "litrad-export; litresearch-export in files written before the rename to litrad",
-      "enum": ["litrad-export", "litresearch-export"]
+      "const": "litrad-export"
     },
     "format_version": {
       "type": "string",

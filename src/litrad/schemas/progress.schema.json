@@ -6,8 +6,8 @@
   "type": "object",
   "properties": {
     "format": {
-      "description": "litrad-progress; litresearch-progress in files written before the rename to litrad",
-      "enum": ["litrad-progress", "litresearch-progress"]
+      "description": "litrad-progress",
+      "const": "litrad-progress"
     },
     "format_version": {
       "type": "integer",

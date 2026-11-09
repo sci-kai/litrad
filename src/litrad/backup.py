@@ -19,10 +19,6 @@ Two complementary files are written into ``backup.dir`` per backup:
 Before 1.0 the second file was the progress JSON (``litrad_progress_*.json``,
 format ``litrad-progress`` 2) plus ``litrad_notes_*.zip``; both are
 still read and rotated.
-
-Renamed from litresearch: files written before the rename start with
-``litresearch_`` (format ``litresearch-progress``). They are read, listed,
-restored and rotated together with the new ones (by time stamp, not by name).
 """
 
 import hashlib
@@ -64,35 +60,21 @@ from litrad.db import (
 from litrad.rules import GameRules
 
 FORMAT = "litrad-progress"
-# accepted when reading: the format name before the rename to litrad
-FORMATS = (FORMAT, "litresearch-progress")
 FORMAT_VERSION = 2  # 2: profile with locked rules, recommendations, checksum
 SNAPSHOT_PREFIX = "litrad_"
 PROGRESS_PREFIX = "litrad_progress_"
 NOTES_PREFIX = "litrad_notes_"
 BACKUP_ARCHIVE_PREFIX = "litrad_backup_"
-# file names start with the app name; before the rename to litrad it was litresearch
-APP_PREFIX = "litrad_"
-LEGACY_APP_PREFIX = "litresearch_"
 _STAMP = re.compile(r"(\d{8}_\d{6})")
 
 
-def legacy_name(prefix: str) -> str:
-    """The prefix as files written before the rename have it."""
-    return LEGACY_APP_PREFIX + prefix.removeprefix(APP_PREFIX)
-
-
 def files_with(directory: Path, prefix: str, suffix: str) -> list[Path]:
-    """Files ``<prefix>*<suffix>`` in ``directory``, also with the litresearch prefix."""
-    return [
-        path
-        for start in (prefix, legacy_name(prefix))
-        for path in Path(directory).glob(f"{start}*{suffix}")
-    ]
+    """Files ``<prefix>*<suffix>`` in ``directory``."""
+    return list(Path(directory).glob(f"{prefix}*{suffix}"))
 
 
 def stamp_order(path: Path) -> tuple[str, str]:
-    """Sort key: the file's time stamp, then its name (old and new prefixes mixed)."""
+    """Sort key: the file's time stamp, then its name."""
     found = _STAMP.search(path.name)
     return (found.group(1) if found else "", path.name)
 
@@ -328,12 +310,11 @@ def restore_notes(cfg: Config, source: Path) -> None:
     from litrad.db import init_db
 
     name = source.name.removesuffix(".sqlite")
-    moment = name.removeprefix(SNAPSHOT_PREFIX).removeprefix(LEGACY_APP_PREFIX)
-    # the archive of the same backup (new or old name), else the notes zip from before 1.0
+    moment = name.removeprefix(SNAPSHOT_PREFIX)
+    # the archive of the same backup, else the notes zip from before 1.0
     candidates = [
-        (source.with_name(f"{start}{moment}.zip"), inside)
+        (source.with_name(f"{prefix}{moment}.zip"), inside)
         for prefix, inside in ((BACKUP_ARCHIVE_PREFIX, "notes/"), (NOTES_PREFIX, ""))
-        for start in (prefix, legacy_name(prefix))
     ]
     archive, prefix = next(
         ((path, inside) for path, inside in candidates if path.is_file()), candidates[0]
@@ -691,7 +672,7 @@ def check_file(data: dict, allow_modified: bool = False):
     """
     from litrad.dataformat import check_progress
 
-    if not isinstance(data, dict) or data.get("format") not in FORMATS:
+    if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise BackupError("Not a litrad progress export")
     version = data.get("format_version", 0)
     if not isinstance(version, int) or version > FORMAT_VERSION:
@@ -1162,7 +1143,7 @@ def save_profile_archive(
 
 EXPORT_PREFIX = "litrad_export_"
 SAVED_PATTERNS = tuple(
-    f"{start}*{suffix}"
+    f"{prefix}*{suffix}"
     for prefix, suffix in (
         (PROFILE_PREFIX, ".zip"),
         (BACKUP_ARCHIVE_PREFIX, ".zip"),
@@ -1170,7 +1151,6 @@ SAVED_PATTERNS = tuple(
         (PROFILE_PREFIX, ".json"),
         (PROGRESS_PREFIX, ".json"),
     )
-    for start in (prefix, legacy_name(prefix))
 )
 
 

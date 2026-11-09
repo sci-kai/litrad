@@ -15,7 +15,6 @@ from pathlib import Path
 
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
 COOKIE = "litrad_session"
-LEGACY_COOKIE = "litresearch_session"  # before the rename: still signs you in
 SESSION_DAYS = 30
 
 

@@ -31,8 +31,6 @@ from importlib import resources
 
 DATA_FORMAT_VERSION = "1"
 ARCHIVE_FORMAT = "litrad-export"
-# accepted when reading: the format name before the rename to litrad (0.3)
-ARCHIVE_FORMATS = (ARCHIVE_FORMAT, "litresearch-export")
 PAPER_KEY = "p{}"
 STATUSES = ("abstract", "skimmed", "read", "thorough", "dismissed")
 DEPTHS = {"abstract": 1, "skimmed": 2, "read": 3, "thorough": 4}

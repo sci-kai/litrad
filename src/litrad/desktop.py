@@ -48,9 +48,7 @@ log = logging.getLogger("litrad.desktop")
 HOST = "127.0.0.1"
 PREFERRED_PORT = 47290
 ENV_NO_BROWSER = "LITRAD_NO_BROWSER"
-LEGACY_ENV_NO_BROWSER = "LITRESEARCH_NO_BROWSER"  # the name before the rename
-# what /app/ping answers; an instance from before the rename answers "litresearch"
-APP_IDS = ("litrad", "litresearch")
+APP_ID = "litrad"  # what /app/ping answers
 LOCK_NAME = "app-instance.json"
 LOG_FOLDER = "logs"
 LOG_NAME = "app.log"
@@ -190,7 +188,7 @@ def answers(port: int, pid: int | None = None, timeout: float = 1.0) -> bool:
             data = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError):
         return False
-    return data.get("app") in APP_IDS and (pid is None or data.get("pid") == pid)
+    return data.get("app") == APP_ID and (pid is None or data.get("pid") == pid)
 
 
 def running_instance(path: Path, grace: float = STARTUP_GRACE) -> Instance | None:
@@ -248,13 +246,8 @@ def bind(port: int | None = None) -> socket.socket:
 
 
 def browser_wanted(flag: bool = True) -> bool:
-    """False with --no-browser or LITRAD_NO_BROWSER=1 (tests, CI).
-
-    The old name LITRESEARCH_NO_BROWSER counts when the new one is not set.
-    """
-    value = os.environ.get(ENV_NO_BROWSER)
-    if value is None:
-        value = os.environ.get(LEGACY_ENV_NO_BROWSER, "")
+    """False with --no-browser or LITRAD_NO_BROWSER=1 (tests, CI)."""
+    value = os.environ.get(ENV_NO_BROWSER, "")
     return flag and value.lower() not in ("1", "true", "yes")
 
 
@@ -391,19 +384,8 @@ def run(config: Path | None = None, port: int | None = None, browser: bool = Tru
     from litrad.config import ConfigError
 
     browser = browser_wanted(browser)
-    try:  # before anything is written into the new per-user folders
-        moves, move_error = locations.migrate_user_dirs(), None
-    except OSError as error:
-        moves, move_error = [], error
     handlers = setup_logging(log_file())
     try:
-        for move in moves:
-            log.info("%s", move.message())
-        if move_error is not None:
-            raise DesktopError(
-                f"Could not move your litresearch folders to the litrad ones: {move_error}. "
-                "Move them yourself ('litrad where' shows both), then start again."
-            )
         return _start(config, port, browser)
     except KeyboardInterrupt:
         log.info("Stopped with Ctrl+C")
@@ -418,13 +400,6 @@ def run(config: Path | None = None, port: int | None = None, browser: bool = Tru
         return 1
     finally:
         teardown_logging(handlers)
-
-
-def main_legacy(argv: list[str] | None = None) -> None:
-    """``litresearch-app``: the program name before the rename, kept for a while."""
-    if sys.stderr is not None:
-        print("Note: litresearch is now called litrad; use 'litrad-app'.", file=sys.stderr)
-    main(argv)
 
 
 def main(argv: list[str] | None = None) -> None:

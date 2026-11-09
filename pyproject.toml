@@ -47,17 +47,12 @@ dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
 
 [project.scripts]
 litrad = "litrad.cli:run"
-# the names before the rename (0.3); they print a note and will be removed later
-litresearch = "litrad.cli:run_legacy"
 
 [project.gui-scripts]
 litrad-app = "litrad.desktop:main"
-litresearch-app = "litrad.desktop:main_legacy"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-# src/litresearch only serves old editable installs after `git pull` (see its docstring)
-exclude = ["litresearch*"]
 
 [tool.setuptools.package-data]
 "litrad" = ["config.example.yaml"]

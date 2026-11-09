@@ -12,11 +12,6 @@ search, history, XP and backups; ``NoteFile`` remembers the body both had at
 the last sync. A change on one side is copied to the other; a change on both
 sides is a *conflict*: nothing is overwritten until you choose a version.
 
-Renamed from litresearch: notes written before the rename have
-``litresearch_id`` and ``format: litresearch-note/1``. They are read as they
-are and not rewritten for the names alone; when litrad updates their front
-matter anyway, the key is renamed in place (``migrate_names``) and user keys stay.
-
 Folder: ``<profile folder>/notes``, or ``<paths.obsidian_vault>/<paths.notes_subfolder>``.
 File name: the paper's citation key, made safe for file names (``a-z A-Z 0-9
 - _ .``), else ``doi-<doi>`` or ``paper-<id>``; Obsidian ``[[key]]`` links
@@ -63,9 +58,6 @@ from litrad.db import (
 
 FORMAT = "litrad-note/1"
 ID_KEY = "litrad_id"
-# the names before the rename to litrad: read forever, replaced when the front matter is updated
-LEGACY_FORMAT = "litresearch-note/1"
-LEGACY_ID_KEY = "litresearch_id"
 DEFAULT_FOLDER = "notes"
 TEMPLATE_FILE = "note_template.md"
 # front matter keys litrad writes, in this order
@@ -226,14 +218,10 @@ def update_front_matter(
                 else:
                     data["tags"] = list(current) + missing
                 changed = True
-        elif not _same_as_written(data, key, value):
-            if key == ID_KEY and ID_KEY not in data and LEGACY_ID_KEY in data:
-                data[LEGACY_ID_KEY] = value  # renamed by migrate_names below
-            else:
-                data[key] = value
+        elif not (key in data and data[key] == value):
+            data[key] = value
             changed = True
     if changed or touch or "updated" not in data:
-        migrate_names(data)
         data["updated"] = at.replace(microsecond=0).isoformat()
         changed = True
     out = io.StringIO()
@@ -242,34 +230,8 @@ def update_front_matter(
 
 
 def note_id(meta: dict | None):
-    """The paper id in a note's front matter (``litrad_id``, or ``litresearch_id``)."""
-    meta = meta or {}
-    value = meta.get(ID_KEY)
-    return meta.get(LEGACY_ID_KEY) if value is None else value
-
-
-def _same_as_written(data, key: str, value) -> bool:
-    """Is ``value`` already in the front matter, possibly under its name before the rename?"""
-    if key == ID_KEY and ID_KEY not in data and LEGACY_ID_KEY in data:
-        return data[LEGACY_ID_KEY] == value
-    if key == "format" and value == FORMAT:
-        return data.get("format") in (FORMAT, LEGACY_FORMAT)
-    return key in data and data[key] == value
-
-
-def migrate_names(data) -> None:
-    """Rename ``litresearch_id`` to ``litrad_id`` in place (same position, user keys stay)
-    and set the new format name; for a front matter that is written anyway."""
-    if LEGACY_ID_KEY in data and ID_KEY not in data:
-        keys = list(data)
-        position = keys.index(LEGACY_ID_KEY)
-        value = data.pop(LEGACY_ID_KEY)
-        if hasattr(data, "insert"):
-            data.insert(position, ID_KEY, value)
-        else:
-            data[ID_KEY] = value
-    if data.get("format") == LEGACY_FORMAT:
-        data["format"] = FORMAT
+    """The paper id in a note's front matter (``litrad_id``)."""
+    return (meta or {}).get(ID_KEY)
 
 
 def compose(front: str, body: str) -> str:
@@ -402,17 +364,7 @@ def managed_values(session: Session, paper: Paper, reading: Reading | None) -> d
 
 
 def values_hash(values: dict) -> str:
-    """Hash of the managed values, as stored in ``NoteFile.meta``.
-
-    Computed with the names from before the rename to litrad, so the hashes
-    stored by litresearch still match and no note is rewritten for the new
-    names alone.
-    """
-    values = dict(values)
-    if ID_KEY in values:
-        values[LEGACY_ID_KEY] = values.pop(ID_KEY)
-    if values.get("format") == FORMAT:
-        values["format"] = LEGACY_FORMAT
+    """Hash of the managed values, as stored in ``NoteFile.meta``."""
     return hashlib.sha256(json.dumps(values, sort_keys=True, default=str).encode()).hexdigest()
 
 

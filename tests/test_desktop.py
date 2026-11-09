@@ -407,7 +407,7 @@ def pyproject() -> dict:
 def test_gui_script_entry():
     scripts = pyproject()["project"]["gui-scripts"]
     assert scripts["litrad-app"] == "litrad.desktop:main"
-    assert scripts["litresearch-app"] == "litrad.desktop:main_legacy"  # the old name
+    assert set(scripts) == {"litrad-app"}
     entry = (ROOT / "packaging" / "desktop_entry.py").read_text(encoding="utf-8")
     assert "from litrad.desktop import main" in entry
 

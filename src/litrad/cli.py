@@ -104,32 +104,6 @@ def run() -> None:
         raise SystemExit(2) from None
 
 
-def run_legacy() -> None:
-    """The ``litresearch`` command: the name before the rename, kept for a while."""
-    import sys
-
-    if sys.stderr is not None:
-        print("Note: litresearch is now called litrad; use the command 'litrad'.", file=sys.stderr)
-    run()
-
-
-def migrate_user_dirs() -> None:
-    """Move the per-user folders of litresearch to litrad's (first start after the rename)."""
-    from litrad import locations
-    from litrad.config import ConfigError
-
-    try:
-        moves = locations.migrate_user_dirs()
-    except OSError as error:
-        raise ConfigError(
-            f"Could not move your litresearch folders to the litrad ones: {error}. "
-            "Move them yourself ('litrad where' shows both), then start again."
-        ) from error
-    for move in moves:
-        if move.action != "kept":
-            typer.echo(move.message(), err=True)
-
-
 @app.callback()
 def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show HTTP retries etc."),
@@ -139,7 +113,6 @@ def main(
 ):
     state["profile"] = profile
     logging.basicConfig(level=logging.INFO if verbose else logging.WARNING, format="%(message)s")
-    migrate_user_dirs()
 
 
 @app.command()
@@ -198,11 +171,6 @@ def where(
         f"Per-user folders:     config {locations.user_config_dir()}, "
         f"data {locations.user_data_dir()}"
     )
-    for old in locations.leftover_legacy_dirs():
-        typer.echo(
-            f"{'Old litresearch:':<22}{old}\n{'':<22}(not used: the litrad folder exists; "
-            "move what you need, then delete it)"
-        )
 
 
 @app.command()

@@ -12,14 +12,8 @@ to ``backup.dir/<slug>``.
 
 A database from before profiles existed (``paths.database``) is "legacy data";
 ``adopt_legacy`` turns it into the first profile without losing anything.
-
-Before the rename to litrad the profile database was ``litresearch.sqlite``;
-it is renamed to ``litrad.sqlite`` (with its journal files) the first time the
-profile is listed or opened (``profile_db``).
 """
 
-import logging
-import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -39,8 +33,6 @@ from litrad.rules import GameRules
 from litrad.yamlfile import deep_merge, update_yaml
 
 PROFILE_DB = "litrad.sqlite"
-LEGACY_PROFILE_DB = "litresearch.sqlite"  # the name before the rename to litrad
-SQLITE_SIDE_FILES = ("-journal", "-wal", "-shm")
 PROFILE_BIB = "library.bib"
 PROFILE_SETTINGS = "settings.yaml"
 CURRENT_FILE = ".current"
@@ -51,40 +43,13 @@ OVERLAY_KEYS = ("topics", "excluded_terms", "selection", "sources", "queue", "li
 META_KEYS = ("onboarding",)
 
 
-log = logging.getLogger(__name__)
-
-
 class ProfilesError(ValueError):
     pass
 
 
 def profile_db(home: Path) -> Path:
-    """The database of the profile folder ``home``.
-
-    A folder from before the rename has only ``litresearch.sqlite``: it is
-    renamed to ``litrad.sqlite`` here, journal/WAL files first so SQLite
-    still finds them. If that is not possible (e.g. read-only), the old file
-    is used where it is.
-    """
-    database = home / PROFILE_DB
-    legacy = home / LEGACY_PROFILE_DB
-    if database.exists() or not legacy.exists():
-        return database
-    try:
-        for suffix in SQLITE_SIDE_FILES:
-            side = home / (LEGACY_PROFILE_DB + suffix)
-            if side.exists():
-                os.replace(side, home / (PROFILE_DB + suffix))
-        os.replace(legacy, database)
-    except OSError as error:
-        log.warning("Could not rename %s to %s: %s", legacy, database, error)
-        for suffix in SQLITE_SIDE_FILES:  # undo: the side files belong to the old name
-            side = home / (PROFILE_DB + suffix)
-            if side.exists() and not database.exists():
-                os.replace(side, home / (LEGACY_PROFILE_DB + suffix))
-        return legacy
-    log.info("Renamed %s to %s", legacy, database)
-    return database
+    """The database of the profile folder ``home``."""
+    return home / PROFILE_DB
 
 
 def profiles_dir(base: Config) -> Path:
@@ -217,8 +182,7 @@ def list_profiles(base: Config) -> list[ProfileInfo]:
     home = profiles_dir(base)
     if not home.exists():
         return []
-    found = {p.parent for name in (PROFILE_DB, LEGACY_PROFILE_DB) for p in home.glob(f"*/{name}")}
-    slugs = sorted(p.name for p in found if profile_db(p).exists())
+    slugs = sorted(p.parent.name for p in home.glob(f"*/{PROFILE_DB}"))
     infos = [describe(base, slug) for slug in slugs]
     return sorted(
         infos, key=lambda i: i.last_activity or i.created_at or datetime.min, reverse=True

@@ -142,7 +142,6 @@ from litrad.search import search as literature_search
 from litrad.web import pwa
 from litrad.web.auth import (
     COOKIE,
-    LEGACY_COOKIE,
     SESSION_DAYS,
     check_session,
     load_secret,
@@ -166,7 +165,6 @@ from litrad.web.settings import (
 
 HERE = Path(__file__).parent
 PROFILE_COOKIE = "litrad_profile"
-LEGACY_PROFILE_COOKIE = "litresearch_profile"  # set before the rename; still read
 # the profile of the current request (set by the middleware)
 CURRENT_PROFILE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "litrad_profile", default=None
@@ -333,7 +331,7 @@ def create_app(
         return f"{slug}.{sign_value(secret(), 'profile:' + slug)}"
 
     def profile_from_cookie(request: Request) -> str | None:
-        value = request.cookies.get(PROFILE_COOKIE) or request.cookies.get(LEGACY_PROFILE_COOKIE)
+        value = request.cookies.get(PROFILE_COOKIE)
         slug, _, signature = (value or "").partition(".")
         if not slug or not hmac.compare_digest(signature, sign_value(secret(), "profile:" + slug)):
             return None
@@ -348,7 +346,7 @@ def create_app(
         open_paths = open_paths or path.startswith("/static/") or path in desktop_open
         password_hash = base.web.password_hash
         if password_hash and not open_paths:
-            session_cookie = request.cookies.get(COOKIE) or request.cookies.get(LEGACY_COOKIE)
+            session_cookie = request.cookies.get(COOKIE)
             if not check_session(session_cookie, secret(), password_hash):
                 if request.method == "GET":
                     target = path + (f"?{request.url.query}" if request.url.query else "")
@@ -561,7 +559,6 @@ def create_app(
     def logout():
         response = RedirectResponse("/login", status_code=303)
         response.delete_cookie(COOKIE)
-        response.delete_cookie(LEGACY_COOKIE)
         return response
 
     # --- profile selection (shown before anything else) -----------------------------
@@ -756,7 +753,6 @@ def create_app(
     def welcome_leave():
         response = RedirectResponse("/welcome", status_code=303)
         response.delete_cookie(PROFILE_COOKIE)
-        response.delete_cookie(LEGACY_PROFILE_COOKIE)
         return response
 
     # --- pages -------------------------------------------------------------------

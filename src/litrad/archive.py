@@ -59,7 +59,6 @@ from litrad.backup import (
 from litrad.config import Config
 from litrad.dataformat import (
     ARCHIVE_FORMAT,
-    ARCHIVE_FORMATS,
     DATA_FORMAT_VERSION,
     CheckReport,
     Naming,
@@ -595,7 +594,7 @@ def read_archive(path: Path) -> Archive:
         info = json.loads(files[MANIFEST])
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ArchiveError(f"{MANIFEST} is not valid JSON ({exc})") from exc
-    if not isinstance(info, dict) or info.get("format") not in ARCHIVE_FORMATS:
+    if not isinstance(info, dict) or info.get("format") != ARCHIVE_FORMAT:
         raise ArchiveError(f"{path.name} is not a litrad export (format)")
     version = str(info.get("format_version", ""))
     if not version.isdigit():
@@ -984,11 +983,8 @@ class ImportResult:
 
 
 def _rewrite_id(text: str, paper_id: int) -> str:
-    """The note with ``litrad_id`` set to this installation's paper id.
-
-    A note from before the rename (``litresearch_id``) gets the new key name.
-    """
-    from litrad.notes import ID_KEY, _yaml, migrate_names, note_id, split
+    """The note with ``litrad_id`` set to this installation's paper id."""
+    from litrad.notes import ID_KEY, _yaml, note_id, split
 
     front, body = split(text)
     if front is None:
@@ -1000,7 +996,6 @@ def _rewrite_id(text: str, paper_id: int) -> str:
         return text
     if not hasattr(data, "__setitem__") or note_id(data) is None:
         return text
-    migrate_names(data)
     data[ID_KEY] = paper_id
     out = io.StringIO()
     handler.dump(data, out)

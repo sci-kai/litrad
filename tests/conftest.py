@@ -38,7 +38,8 @@ def pytest_collection_modifyitems(config, items):
 # right now: a fixed calibration task is timed before and after the measured block,
 # so a busy or slower machine gets a proportionally larger budget.
 
-CALIBRATION_REFERENCE = 0.16  # seconds for ``_calibration`` on an idle Raspberry Pi 5
+# seconds for ``_calibration`` on an idle reference machine (a small ARM board)
+CALIBRATION_REFERENCE = 0.16
 
 
 def _calibration() -> float:
@@ -77,10 +78,8 @@ def within(seconds: float, label: str = "block"):
 
 
 # the real per-user folders, looked up before any test can redirect them
-# (litresearch: the names before the rename, whose folders are moved on the first start)
 REAL_USER_DIRS = [
-    Path(folder(app, appauthor=False))
-    for app in ("litrad", "litresearch")
+    Path(folder("litrad", appauthor=False))
     for folder in (platformdirs.user_config_dir, platformdirs.user_data_dir)
 ]
 
@@ -102,8 +101,7 @@ def isolated(tmp_path, monkeypatch):
     touches the real per-user folders fails.
     """
     monkeypatch.chdir(tmp_path)
-    for variable in ("LITRAD_CONFIG", "LITRESEARCH_CONFIG"):
-        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv("LITRAD_CONFIG", raising=False)
     user_home = tmp_path / "user-home"
     for variable, folder in (("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data")):
         monkeypatch.setenv(variable, str(user_home / folder))

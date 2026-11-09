@@ -44,7 +44,7 @@ def test_git_folder_wins_over_the_user_config(tmp_path):
     write(tmp_path / "config" / "config.yaml")
     write(locations.user_config_file())
     choice = locations.find_config(env={})
-    assert choice == locations.ConfigChoice(tmp_path / "config" / "config.yaml", "legacy")
+    assert choice == locations.ConfigChoice(tmp_path / "config" / "config.yaml", "git")
 
 
 def test_user_config_last(tmp_path):
@@ -156,7 +156,7 @@ def test_profile_settings_paths_use_the_same_base(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "config, explicit, expected, rule",
     [
-        ("C:/Users/ada/litrad/config/config.yaml", None, "C:/Users/ada/litrad", "legacy"),
+        ("C:/Users/ada/litrad/config/config.yaml", None, "C:/Users/ada/litrad", "git"),
         ("C:/Users/ada/AppData/Local/litrad/config.yaml", None,
          "C:/Users/ada/AppData/Local/litrad", "config"),
         ("C:/x/config.yaml", "D:/data", "D:/data", "explicit"),
@@ -178,7 +178,7 @@ def test_base_dir_with_windows_paths(config, explicit, expected, rule):
 def test_base_dir_with_posix_paths():
     assert locations.base_dir(PurePosixPath("/srv/lit/config/config.yaml")) == (
         PurePosixPath("/srv/lit"),
-        "legacy",
+        "git",
     )
 
 

@@ -243,15 +243,7 @@ def rotate_upgrade_backups(folder: Path, keep: int = UPGRADE_BACKUPS_KEEP) -> li
     """Delete all but the newest ``keep`` copies made before upgrades."""
     from litrad.backup import stamp_order
 
-    # before the rename to litrad the copies were called litresearch_*
-    copies = sorted(
-        (
-            path
-            for start in ("litrad_", "litresearch_")
-            for path in Path(folder).glob(f"{start}*_before-schema-*.sqlite")
-        ),
-        key=stamp_order,
-    )
+    copies = sorted(Path(folder).glob("litrad_*_before-schema-*.sqlite"), key=stamp_order)
     removed = copies[: max(len(copies) - keep, 0)]
     for old in removed:
         old.unlink(missing_ok=True)

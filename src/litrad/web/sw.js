@@ -25,9 +25,7 @@ async function prepare() {
 
 async function forgetOldReleases() {
   for (const name of await caches.keys()) {
-    // litresearch-*: the caches from before the rename to litrad
-    const ours = name.startsWith("litrad-") || name.startsWith("litresearch-");
-    if (ours && name !== CACHE) await caches.delete(name);
+    if (name.startsWith("litrad-") && name !== CACHE) await caches.delete(name);
   }
   await self.clients.claim();
 }
