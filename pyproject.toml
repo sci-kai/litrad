@@ -32,6 +32,7 @@ dependencies = [
     "ruamel.yaml>=0.18",
     "uvicorn>=0.29",
     "httpx>=0.27",
+    "jsonschema>=4.18",
     "numpy>=1.26",
     "platformdirs>=4.0",
     "pydantic>=2.6",
@@ -55,6 +56,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "litresearch" = ["config.example.yaml"]
+"litresearch.schemas" = ["*.schema.json"]
 "litresearch.web" = ["templates/*.html", "static/*", "documentation.md", "sw.js"]
 
 [tool.pytest.ini_options]

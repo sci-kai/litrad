@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://litresearch.example/schemas/1/example_choices.schema.json",
+  "title": "litresearch example choices",
+  "description": "Papers you added to or removed from the example lists for Semantic Scholar",
+  "type": "object",
+  "properties": {
+    "example_choices": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
+  },
+  "required": [
+    "example_choices"
+  ],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "properties": {
+        "paper": {
+          "type": "string",
+          "pattern": "^p[1-9][0-9]*$",
+          "description": "Export key of a paper in papers.json"
+        },
+        "kind": {
+          "enum": [
+            "positive",
+            "negative"
+          ]
+        },
+        "action": {
+          "enum": [
+            "include",
+            "exclude"
+          ]
+        },
+        "at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?$",
+          "description": "ISO 8601 date and time, local time, no offset (YYYY-MM-DDTHH:MM:SS)"
+        }
+      },
+      "required": [
+        "paper",
+        "kind",
+        "action"
+      ]
+    }
+  }
+}

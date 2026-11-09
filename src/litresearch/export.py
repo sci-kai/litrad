@@ -1,12 +1,15 @@
 """Exporting a library (or the reading queue) as BibTeX or RIS.
 
 Both formats can be imported by every common reference manager: BibTeX by
-Paperpile, Zotero, Mendeley, JabRef and Citavi; RIS also by EndNote. With
+Paperpile, Zotero, Mendeley, JabRef and Citavi; RIS also by EndNote.
+CSL-JSON (Zotero, Pandoc, citeproc) is written for the "export everything"
+archive. With
 ``with_status`` each entry carries your reading status and rating as extra
 keywords (``litresearch-read``, ``litresearch-rating-4``), which become
 labels/tags in the reference manager.
 """
 
+import json
 import re
 from dataclasses import dataclass, field
 
@@ -16,6 +19,16 @@ from litresearch.db import Library, LibraryPaper, Paper, Reading
 from litresearch.libraries import members
 
 FORMATS = {"bibtex": ("BibTeX", "bib"), "ris": ("RIS", "ris")}
+# BibTeX entry type → CSL item type
+CSL_TYPE = {
+    "article": "article-journal",
+    "book": "book",
+    "incollection": "chapter",
+    "inbook": "chapter",
+    "inproceedings": "paper-conference",
+    "phdthesis": "thesis",
+    "techreport": "report",
+}
 # BibTeX entry type → RIS reference type
 RIS_TYPE = {
     "article": "JOUR",
@@ -148,6 +161,54 @@ def to_ris(items: list[Item], with_status: bool = False) -> str:
         lines.append("ER  - ")
         records.append("\n".join(lines))
     return "\n\n".join(records) + ("\n" if records else "")
+
+
+def _csl_name(author: str) -> dict:
+    family, comma, given = author.partition(",")
+    if comma and family.strip():
+        return (
+            {"family": family.strip(), "given": given.strip()}
+            if given.strip()
+            else {"family": family.strip()}
+        )
+    return {"literal": author.strip()}
+
+
+def to_csl_json(items: list[Item], with_status: bool = False) -> str:
+    """CSL-JSON (a list of items), the format of Zotero, Pandoc and citeproc."""
+    used: set[str] = set()
+    records = []
+    for item in items:
+        paper = item.paper
+        record = {
+            "id": _key(item, used),
+            "type": CSL_TYPE.get(paper.entry_type or "article", "article-journal"),
+            "title": paper.title,
+        }
+        if paper.authors:
+            record["author"] = [_csl_name(a) for a in paper.authors if a.strip()]
+        year = paper.year or (paper.pub_date.year if paper.pub_date else None)
+        if paper.pub_date:
+            record["issued"] = {
+                "date-parts": [[paper.pub_date.year, paper.pub_date.month, paper.pub_date.day]]
+            }
+        elif year:
+            record["issued"] = {"date-parts": [[year]]}
+        for name, value in (
+            ("container-title", paper.venue),
+            ("DOI", paper.doi),
+            ("PMID", paper.pmid),
+            ("PMCID", paper.pmcid),
+            ("URL", paper.url),
+            ("abstract", paper.abstract),
+        ):
+            if value:
+                record[name] = value
+        keywords = _keywords(item, with_status)
+        if keywords:
+            record["keyword"] = ";".join(keywords)
+        records.append(record)
+    return json.dumps(records, indent=1, ensure_ascii=False) + "\n"
 
 
 def render(items: list[Item], fmt: str, with_status: bool = False) -> str:

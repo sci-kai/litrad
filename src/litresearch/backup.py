@@ -545,15 +545,41 @@ def _merge_notes(local: str, incoming: str) -> str:
     return "\n\n".join(entries)
 
 
-def check_file(data: dict, allow_modified: bool = False) -> None:
+class ConsistencyError(BackupError):
+    """The file failed the schema or consistency check; ``report`` lists why."""
+
+    def __init__(self, report, what: str = "Invalid progress file"):
+        self.report = report
+        lines = [str(p) for p in report.errors[:20]]
+        more = len(report.errors) - len(lines)
+        super().__init__(
+            f"{what} (nothing was changed):\n  "
+            + "\n  ".join(lines)
+            + (f"\n  ... and {more} more" if more > 0 else "")
+        )
+
+
+def check_file(data: dict, allow_modified: bool = False):
+    """Format, version, checksum, JSON Schema and consistency of a progress file.
+
+    Returns the check report (notes); raises ``BackupError`` before anything
+    is changed. Files of format version 1 (no checksum) are still accepted.
+    """
+    from litresearch.dataformat import check_progress
+
     if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise BackupError("Not a litresearch progress export")
-    if data.get("format_version", 0) > FORMAT_VERSION:
+    version = data.get("format_version", 0)
+    if not isinstance(version, int) or version > FORMAT_VERSION:
         raise BackupError("This export was made by a newer litresearch version")
     if verify_checksum(data) is False and not allow_modified:
         raise BackupError(
             "The file was modified outside litresearch (checksum mismatch); refusing to load it"
         )
+    report = check_progress(data)
+    if report.errors:
+        raise ConsistencyError(report)
+    return report
 
 
 def import_progress(
@@ -574,6 +600,53 @@ def import_progress(
     Nothing is written if the file is invalid.
     """
     check_file(data, allow_modified)
+    return merge(session, cfg, data, allow_different_rules, commit)
+
+
+def _value(name: str, value):
+    """A paper field from JSON as the model stores it."""
+    if value is None:
+        return None
+    if name == "pub_date":
+        return date.fromisoformat(value)
+    if name in ("enriched_at", "created_at", "updated_at"):
+        return datetime.fromisoformat(value)
+    return value
+
+
+# copied from a file into a new paper; in_library, folders and tags follow the libraries
+NEW_PAPER_FIELDS = tuple(
+    name for name in Paper.model_fields if name not in ("id", "in_library", "bibtex_key")
+)
+
+
+def _new_paper(key: str, info: dict, index: "_PaperIndex") -> Paper:
+    values = {name: _value(name, info.get(name)) for name in NEW_PAPER_FIELDS if name in info}
+    values = {name: value for name, value in values.items() if value is not None}
+    values["title"] = info.get("title") or "(untitled)"
+    doi = values.get("doi")
+    if doi and doi in index.by["doi"]:
+        raise BackupError(
+            f"paper {key}: its DOI {doi} belongs to a paper here whose PMID or year differs; "
+            "correct one of them first"
+        )
+    paper = Paper(**values)
+    key_value = info.get("bibtex_key")
+    if key_value and key_value not in index.by["bibtex_key"]:
+        paper.bibtex_key = key_value  # unique: only when no other paper has it
+    return paper
+
+
+def merge(
+    session: Session,
+    cfg: Config,
+    data: dict,
+    allow_different_rules: bool = False,
+    commit: bool = True,
+) -> ImportReport:
+    """The merge of ``import_progress`` for checked data (see there)."""
+    from collections import Counter
+
     report = ImportReport()
     try:
         incoming_profile = data.get("profile")
@@ -606,19 +679,7 @@ def import_progress(
         for key, info in data.get("papers", {}).items():
             ref = index.find(info)
             if ref is None:
-                ref = Paper(
-                    title=info.get("title") or "(untitled)",
-                    doi=info.get("doi"),
-                    pmid=info.get("pmid"),
-                    authors=info.get("authors") or [],
-                    year=info.get("year"),
-                    pub_date=date.fromisoformat(info["pub_date"]) if info.get("pub_date") else None,
-                    venue=info.get("venue"),
-                    url=info.get("url"),
-                    citation_percentile=info.get("citation_percentile"),
-                    topics=info.get("topics") or [],
-                    folders=info.get("folders") or [],
-                )
+                ref = _new_paper(key, info, index)
                 session.add(ref)
                 index.add(ref, info)
                 report.papers_created += 1
@@ -656,15 +717,21 @@ def import_progress(
                 report.readings_updated += 1
             session.add(local)
 
-        present = {
+        # identical rows can exist (two clicks within a second): count them, so that a
+        # file adds what is missing and a second import adds nothing
+        present = Counter(
             (e.paper_id, e.at, str(e.status)) for e in session.exec(select(StatusEvent)).all()
-        }
+        )
+        # per entry of the file: two entries that are one paper here count once
+        incoming = Counter()
         rows = []
         for item in data.get("status_events", []):
             paper_id, at = ids[item["paper"]], _dt(item["at"])
             status = ReadStatus(item["status"])
-            if (paper_id, at, str(status)) not in present:
-                present.add((paper_id, at, str(status)))
+            identity = (paper_id, at, str(status))
+            incoming[(item["paper"], identity)] += 1
+            if incoming[(item["paper"], identity)] > present[identity]:
+                present[identity] += 1
                 rows.append(
                     {
                         "paper_id": paper_id,
@@ -677,10 +744,11 @@ def import_progress(
             session.exec(insert(StatusEvent), params=rows)
         report.events_added = len(rows)
 
-        present = {
+        present = Counter(
             (e.at, e.kind, e.points, e.reason, e.paper_id)
             for e in session.exec(select(XpEvent)).all()
-        }
+        )
+        incoming = Counter()
         rows = []
         for item in data.get("xp_events", []):
             paper_id = ids.get(item["paper"]) if item.get("paper") else None
@@ -692,8 +760,9 @@ def import_progress(
                 "at": _dt(item["at"]),
             }
             identity = (row["at"], row["kind"], row["points"], row["reason"], paper_id)
-            if identity not in present:
-                present.add(identity)
+            incoming[(item.get("paper"), identity)] += 1
+            if incoming[(item.get("paper"), identity)] > present[identity]:
+                present[identity] += 1
                 rows.append(row)
         if rows:
             session.exec(insert(XpEvent), params=rows)
@@ -854,6 +923,7 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
                 format=entry.get("format"),
                 use_for_recommendations=entry.get("use_for_recommendations", True),
                 created_at=_dt(entry.get("created_at")) or now(),
+                updated_at=_dt(entry.get("updated_at")) or _dt(entry.get("created_at")) or now(),
             )
             session.add(library)
             session.flush()
@@ -871,6 +941,7 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
                     citation_key=member.get("key"),
                     folders=member.get("folders") or [],
                     tags=member.get("tags") or [],
+                    added_at=_dt(member.get("added_at")) or now(),
                 )
             )
             touched.add(paper_id)
@@ -907,7 +978,7 @@ def load_profile(session: Session, cfg: Config, data: dict, allow_modified: bool
     check_file(data, allow_modified)
     try:
         reset_progress(session, commit=False)
-        report = import_progress(session, cfg, data, allow_modified=allow_modified, commit=False)
+        report = merge(session, cfg, data, commit=False)
         session.commit()
     except BaseException:
         session.rollback()
@@ -968,7 +1039,7 @@ def summarize(data: dict, cfg: Config, label: str = "") -> dict:
     engine = memory_engine()
     try:
         with Session(engine) as session:
-            import_progress(session, cfg, data, allow_modified=True)
+            merge(session, cfg, data)
             moment = _dt(data.get("exported_at")) or now()
             return summarize_session(session, cfg, moment, label, verify_checksum(data))
     finally:
