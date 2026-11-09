@@ -103,6 +103,90 @@ def import_progress_cmd(
     console.print("\n".join(report.lines()))
 
 
+@app.command("export-all")
+def export_all_cmd(
+    target: Path = typer.Argument(
+        None, help="Zip file to write (default: a new file in backup.dir)"
+    ),
+    config: Path = ConfigOpt,
+):
+    """Export everything of the profile into one documented zip archive."""
+    from litresearch.archive import archive_name, export_archive
+    from litresearch.db import Profile
+
+    cfg = load_cfg(config)
+    settings = cfg.paths.database.parent / "settings.yaml"
+    engine = init_db(cfg.paths.database)
+    try:
+        with Session(engine) as session:
+            notes.refresh_quietly(session, cfg)
+            if target is None:
+                profile = session.exec(select(Profile)).first()
+                target = cfg.backup.dir / archive_name(profile.name if profile else "profile")
+            result = export_archive(
+                session,
+                cfg,
+                target,
+                settings.read_text("utf-8") if settings.is_file() else None,
+            )
+    finally:
+        engine.dispose()
+    counts = result.counts
+    console.print(
+        f"Exported {counts.get('papers', 0)} papers, {counts.get('readings', 0)} readings, "
+        f"{counts.get('xp_ledger', 0)} XP transactions, {counts.get('libraries', 0)} libraries "
+        f"and {counts.get('notes', 0)} note files to {result.path} "
+        f"({result.size // 1024 + 1} KB)"
+    )
+
+
+@app.command("import-all")
+def import_all_cmd(
+    source: Path = typer.Argument(..., help="Zip archive written by export-all"),
+    new: str = typer.Option(
+        None, "--new", help="Create a new profile with this name (default: the archive's name)"
+    ),
+    into: str = typer.Option(None, "--into", help="Merge into this existing profile"),
+    dry_run: bool = typer.Option(False, help="Check and show what would change, write nothing"),
+    partial: bool = typer.Option(
+        False, help="Import only the consistent records and list what was skipped"
+    ),
+    config: Path = ConfigOpt,
+):
+    """Import an archive from export-all: checked first, then all or nothing."""
+    from litresearch.archive import ArchiveError, import_into, import_new
+    from litresearch.migrations import SchemaTooNew
+
+    base = load_config(config)
+    if new and into:
+        _fail("Use either --new or --into, not both.")
+    try:
+        if into:
+            slug = profiles.find(base, into)
+            result = import_into(
+                profiles.profile_config(base, slug), source, dry_run=dry_run, partial=partial
+            )
+        else:
+            result = import_new(base, source, new, dry_run=dry_run, partial=partial)
+    except ArchiveError as error:
+        lines = error.report.lines() if error.report.errors else []
+        console.print(f"[red]{error if not lines else 'Not imported; nothing was changed.'}[/red]")
+        for line in lines:
+            console.print(line, markup=False, highlight=False)
+        if lines:
+            console.print(
+                "Fix the files, or import only the consistent part with --partial.",
+                markup=False,
+            )
+        raise typer.Exit(code=1) from None
+    except (BackupError, profiles.ProfilesError, SchemaTooNew) as error:
+        _fail(str(error))
+    for line in result.lines():
+        console.print(line, markup=False, highlight=False)
+    if result.slug and not dry_run:
+        console.print(f"Created profile '{profiles.describe(base, result.slug).name}'.")
+
+
 @app.command("restore")
 def restore_cmd(
     snapshot_file: Path = typer.Argument(..., help="A litresearch_*.sqlite snapshot"),
