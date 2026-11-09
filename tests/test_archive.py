@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litresearch.cli as cli
+from conftest import within
 from litresearch import archive, examples, libraries, notes, profiles
 from litresearch.archive import ArchiveError, export_archive, import_into, import_new
 from litresearch.backup import profile_settings
@@ -847,19 +848,13 @@ def large_profile(base, n_papers=5000, n_read=1500) -> str:
 
 def test_large_profile_export_and_import_in_acceptable_time(base, tmp_path):
     """5000 papers, 1500 readings: on a Raspberry Pi 5 well under a minute each way."""
-    import time
-
     slug = large_profile(base)
-    started = time.monotonic()
-    path = export(base, slug, tmp_path / "large.zip")
-    exported_in = time.monotonic() - started
-    started = time.monotonic()
-    result = import_new(base, path, "Large copy")
-    imported_in = time.monotonic() - started
-    started = time.monotonic()
-    again = import_into(profiles.profile_config(base, result.slug), path, backup=False)
-    merged_in = time.monotonic() - started
+    # budgets scaled by the machine's current speed (conftest.within)
+    with within(120, "export"):
+        path = export(base, slug, tmp_path / "large.zip")
+    with within(180, "import"):
+        result = import_new(base, path, "Large copy")
+    with within(180, "merge"):
+        again = import_into(profiles.profile_config(base, result.slug), path, backup=False)
     assert result.merge.papers_created == 5000 and again.merge.papers_created == 0
     assert again.merge.readings_added == 0
-    print(f"export {exported_in:.1f} s, import {imported_in:.1f} s, merge {merged_in:.1f} s")
-    assert exported_in < 120 and imported_in < 180 and merged_in < 180

@@ -313,3 +313,18 @@ def test_ranking_ties_are_deterministic():
 
     assert ranked(range(10, 20)) == ranked(range(10, 20))
     assert ranked(range(10, 20)) == list(range(10, 15))  # equal scores keep the input order
+
+
+def test_time_budgets_scale_with_the_machine(monkeypatch):
+    """conftest.within: a slower (busy) machine gets a proportionally larger budget."""
+    import time
+
+    import conftest
+
+    monkeypatch.setattr(conftest, "slowness", lambda: 1.0)
+    with pytest.raises(AssertionError, match="budget"):
+        with conftest.within(0.01, "idle"):
+            time.sleep(0.05)
+    monkeypatch.setattr(conftest, "slowness", lambda: 10.0)
+    with conftest.within(0.01, "busy"):
+        time.sleep(0.05)

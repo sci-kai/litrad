@@ -1,4 +1,8 @@
+import hashlib
 import json
+import sqlite3
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -25,6 +29,51 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "network" in item.keywords:
             item.add_marker(skip)
+
+
+# --- time bounds that do not depend on machine load ---------------------------------------
+#
+# Performance tests bound the work first (number of queries, rows loaded). Where a
+# wall-clock bound is still useful, ``within`` scales it by how slow this machine is
+# right now: a fixed calibration task is timed before and after the measured block,
+# so a busy or slower machine gets a proportionally larger budget.
+
+CALIBRATION_REFERENCE = 0.16  # seconds for ``_calibration`` on an idle Raspberry Pi 5
+
+
+def _calibration() -> float:
+    """A small fixed CPU task (SQLite and Python bytecode, like the app); its duration."""
+    started = time.perf_counter()
+    connection = sqlite3.connect(":memory:")
+    connection.execute("CREATE TABLE t (i INTEGER, s TEXT)")
+    connection.executemany(
+        "INSERT INTO t VALUES (?, ?)",
+        ((i, hashlib.sha1(str(i).encode()).hexdigest()) for i in range(12_000)),
+    )
+    connection.execute("SELECT count(*), max(s) FROM t WHERE s LIKE '%ab%'").fetchone()
+    connection.close()
+    total = 0
+    for i in range(100_000):
+        total += i % 7
+    return time.perf_counter() - started
+
+
+def slowness() -> float:
+    """How many times slower than the reference this machine is right now (at least 1)."""
+    return max(1.0, _calibration() / CALIBRATION_REFERENCE)
+
+
+@contextmanager
+def within(seconds: float, label: str = "block"):
+    """Assert that the block takes less than ``seconds`` times the current slowness."""
+    before = slowness()
+    started = time.perf_counter()
+    yield
+    elapsed = time.perf_counter() - started
+    factor = max(before, slowness())
+    assert elapsed < seconds * factor, (
+        f"{label}: {elapsed:.2f} s, budget {seconds} s x slowness {factor:.1f}"
+    )
 
 
 # the real per-user folders, looked up before any test can redirect them

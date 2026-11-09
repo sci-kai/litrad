@@ -8,7 +8,6 @@ step.
 
 import random
 import threading
-import time
 from datetime import date, datetime, timedelta
 
 import httpx
@@ -22,7 +21,7 @@ from typer.testing import CliRunner
 import litresearch.cli as cli
 import litresearch.reading as reading_module
 import litresearch.web.app as web
-from conftest import FakeApis, enter_profile, make_work, profile_cfg
+from conftest import FakeApis, enter_profile, make_work, profile_cfg, within
 from litresearch.backup import export_progress, import_progress
 from litresearch.config import Config, ConfigError, load_config
 from litresearch.db import (
@@ -429,16 +428,15 @@ def test_ranking_scales_to_a_large_library():
         )
         for i in range(400)
     ]
-    start = time.perf_counter()
-    result = rank_candidates(
-        candidates,
-        library,
-        {"t": 1.0},
-        Config.model_validate({"paths": {"bibtex": "x"}}).selection,
-        date(2026, 10, 7),
-    )
+    with within(60, "ranking 400 candidates"):
+        result = rank_candidates(
+            candidates,
+            library,
+            {"t": 1.0},
+            Config.model_validate({"paths": {"bibtex": "x"}}).selection,
+            date(2026, 10, 7),
+        )
     assert len(result.picks) == 5
-    assert time.perf_counter() - start < 60
 
 
 # --- long randomised session ----------------------------------------------------------------

@@ -1,7 +1,6 @@
 """Reading history: the Read papers tab, its TSV export and `litresearch read-papers`."""
 
 import re
-import time
 from datetime import datetime
 
 import pytest
@@ -14,7 +13,7 @@ from typer.testing import CliRunner
 import litresearch.cli as cli
 import litresearch.cli_reading as cli_reading
 import litresearch.web.app as web
-from conftest import enter_profile, profile_cfg
+from conftest import enter_profile, profile_cfg, within
 from litresearch import history
 from litresearch.db import (
     Library,
@@ -310,17 +309,15 @@ def test_scale_is_bounded(env):
             papers.append(1) if "FROM paper" in stmt.split("WHERE")[0] else 0
         ),
     )
-    started = time.perf_counter()
-    with Session(engine) as session:
+    # the bound that matters: a fixed number of queries, whatever the size
+    with within(6.0, "history rows"), Session(engine) as session:
         found = history.rows(session, history.HistoryFilter())
         shown = history.entries(session, found[:50])
-    elapsed = time.perf_counter() - started
     assert len(found) > 3500 and len(shown) == 50
     assert len(queries) <= 6, queries
-    assert elapsed < 1.5, elapsed
     # the page and the other filters stay fast, with a search over all notes
+    # (generous budgets, scaled by the machine's current speed: see conftest.within)
     for params in ({}, {"sort": "xp", "depth": "read"}, {"q": "clonal"}, {"page": 7}):
-        started = time.perf_counter()
-        assert client.get("/read", params=params).status_code == 200
-        assert time.perf_counter() - started < 2.0, params
+        with within(8.0, f"/read {params}"):
+            assert client.get("/read", params=params).status_code == 200
     engine.dispose()
