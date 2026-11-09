@@ -5,7 +5,7 @@
 {% block heading %}Good to see you, {{ profile.name if profile else "reader" }} 👋{% endblock %}
 {% block content %}
 {% if header.reminder %}
-<div class="notice">✨ {% if header.since_batch is none %}No recommendations yet.{% else %}Recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">Get new ones →</a></div>
+<div class="notice">✨ {% if header.since_batch is none %}No recommendations yet.{% else %}Recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">{{ "Get recommendations" if header.since_batch is none else "Get new ones" }} →</a></div>
 {% endif %}
 {% if waiting is not none and waiting >= nudge_days %}
 <div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>: read or remove it.</div>
