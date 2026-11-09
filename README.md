@@ -25,8 +25,16 @@ Pi). Please [test it](TESTING.md) and report what breaks.
 
 ## Install and first steps
 
-Needs Linux with Python ≥ 3.11 and git (Debian, Ubuntu, Raspberry Pi OS:
-`sudo apt install git python3-venv`).
+**Desktop app (default):** download the file for your system from the
+latest GitHub release: Windows installer (`.exe`), macOS (`.dmg`) or Linux
+AppImage. Double-click it; litresearch starts on this computer only and opens
+in your browser. Quit with **⏻ Quit** in the sidebar. The builds are
+unsigned: Windows *More info → Run anyway*, macOS right-click → *Open*,
+Linux `chmod +x`. Details: [Desktop app](docs/documentation.md#desktop-app).
+
+**Server mode** (Raspberry Pi, NAS, lab server; reachable from your other
+devices with a password) needs Linux with Python ≥ 3.11 and git (Debian,
+Ubuntu, Raspberry Pi OS: `sudo apt install git python3-venv`):
 
 ```bash
 git clone <repository-url> litresearch && cd litresearch
@@ -36,7 +44,7 @@ python3 install.py                 # checks, installs, offers to start the web U
 
 Options: `--service` (start the web UI automatically), `--repair` (if
 litresearch does not start), `--remove-service`. Details:
-[Setup](docs/documentation.md#1-setup).
+[Server mode](docs/documentation.md#server-mode).
 
 In the browser:
 

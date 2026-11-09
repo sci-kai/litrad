@@ -7,6 +7,17 @@ All notable changes are listed here. Versions follow
 
 ### Added
 
+- **Desktop app (the default way to run litresearch)**: downloads on GitHub
+  Releases for Windows (per-user installer, no administrator rights; the
+  uninstaller keeps your data), macOS (`.dmg`, Apple silicon) and Linux
+  (AppImage, x86_64 and ARM), built and smoke-tested for every tag. It
+  starts on this computer only (`127.0.0.1`, port 47290 or a free one),
+  opens your browser when ready, runs once per user (a second start opens
+  the running one) and stops with **⏻ Quit** in the sidebar. A configured
+  password is still required. Log file `logs/app.log` in the data folder
+  (shown by `litresearch where`). Same mode from Python: `litresearch app`
+  or `litresearch-app`. Builds are not signed yet. Server mode
+  (`litresearch serve`) is unchanged.
 - **Phone app (server mode)**: litresearch can be installed on a phone's
   home screen (web app manifest, icons, service worker with an offline page;
   no personal data is cached). Needs HTTPS for full installation; guide for
