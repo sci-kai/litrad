@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, findings with context %}
+{% from "macros.html" import paper_meta, findings, icon_link with context %}
 {% set active = "library" %}
 {% block title %}{{ library.name }}{% endblock %}
 {% block heading %}{{ "✨" if library.kind == "recommended" else "🗂️" }} {{ library.name }}{% endblock %}
@@ -13,7 +13,7 @@
     <div style="flex: 1 1 320px">
       <p style="margin:0">{{ library.description or "No description." }}</p>
       <p class="muted" style="margin:.4rem 0 0">
-        <b>{{ n_library }}</b> paper{{ 's' if n_library != 1 }} · <b>{{ n_read }}</b> read in litrad
+        <b>{{ n_library }}</b> paper{{ 's' if n_library != 1 }} · <b>{{ n_read }}</b> read
         {% if library.use_for_recommendations %}· 🎯 used for recommendations{% else %}· not used for recommendations{% endif %}
         {% if last_run %}· last import {{ last_run.at.date().isoformat() }} ({{ formats.get(last_run.format or library.format, "?") }}){% endif %}
       </p>
@@ -22,12 +22,12 @@
     <div class="row">
       {% if library.kind == "imported" %}<a class="button primary" href="/library/import?to={{ library.id }}">⬆️ Import file</a>{% endif %}
       {% if library.source_path and file_modified %}
-      <form method="post" action="/library/{{ library.id }}/reimport" data-loading="Updating the library from its file (about a minute)…"><button title="read the library's file again (e.g. after rclone synced a new export)">🔄 Update from file</button></form>
+      <form method="post" action="/library/{{ library.id }}/reimport" data-loading="Updating from the file (about a minute)…"><button title="read the library's file again">🔄 Update from file</button></form>
       {% endif %}
     </div>
   </div>
-  {% if age is not none and age >= stale_days and library.kind == "imported" %}<div class="notice warn" style="margin:.6rem 0 0">⏳ Last updated {{ age }} days ago: export it again and import it.</div>{% endif %}
-  {% if last_run and file_modified and file_modified > last_run.at %}<div class="notice warn" style="margin:.6rem 0 0">📥 The file changed after the last import: use “Update from file”.</div>{% endif %}
+  {% if age is not none and age >= stale_days and library.kind == "imported" %}<div class="notice warn" style="margin:.6rem 0 0">⏳ Last updated {{ age }} days ago.</div>{% endif %}
+  {% if last_run and file_modified and file_modified > last_run.at %}<div class="notice warn" style="margin:.6rem 0 0">📥 The file changed after the last import.</div>{% endif %}
 
   <div class="grid two" style="margin-top:.8rem">
     <div class="sub-card">
@@ -37,14 +37,13 @@
         <label class="row" title="adds keywords such as litrad-read and litrad-rating-4 (labels in your reference manager)"><input type="checkbox" name="status" value="true" style="width:auto"> with reading status</label>
         <button class="small">⬇️ Export {{ n_library }} papers</button>
       </form>
-      <small class="muted">BibTeX: Paperpile, Zotero, Mendeley, JabRef · RIS: EndNote, Citavi</small>
     </div>
     <details class="sub-card">
       <summary><h3 style="display:inline">✏️ Edit</h3></summary>
       <form method="post" action="/library/{{ library.id }}/edit" class="grid" style="gap:.5rem; margin-top:.5rem">
         <input type="text" name="name" value="{{ library.name }}" maxlength="80" required aria-label="Library name">
         <textarea name="description" placeholder="What is in this library?" aria-label="Library description">{{ library.description }}</textarea>
-        <label class="row" style="font-weight:400"><input type="checkbox" name="use_for_recommendations" value="true" {{ "checked" if library.use_for_recommendations }} style="width:auto"> 🎯 use for recommendations (similarity to your library)</label>
+        <label class="row" style="font-weight:400"><input type="checkbox" name="use_for_recommendations" value="true" {{ "checked" if library.use_for_recommendations }} style="width:auto"> 🎯 use for recommendations</label>
         <div><button class="primary small">💾 Save</button></div>
       </form>
       <form method="post" action="/library/{{ library.id }}/delete" class="row" style="margin-top:.8rem">
@@ -113,7 +112,7 @@
 
 {% if runs %}
 <details class="card" style="margin-top:1rem">
-  <summary><h2 style="display:inline">🕑 Import history</h2> <small class="muted">checks of every import · <a href="{{ requirements }}">what an export must contain</a></small></summary>
+  <summary><h2 style="display:inline">🕑 Import history</h2> {{ icon_link(requirements, "?", "What an export must contain", "help") }}</summary>
   {% if last_run.check %}<h3 style="margin-top:.8rem">Checks of the last import</h3>{{ findings(last_run.check) }}{% endif %}
   <table style="margin-top:.6rem">
     <thead><tr><th>When</th><th>How</th><th>File</th><th class="num">Entries</th><th class="num">New / removed</th><th>Warnings</th></tr></thead>

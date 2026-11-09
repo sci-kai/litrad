@@ -1,12 +1,11 @@
 {% extends "base.html" %}
-{% from "macros.html" import topics_editor %}
+{% from "macros.html" import topics_editor, icon_link %}
 {% set active = "settings" %}
 {% block title %}Settings{% endblock %}
 {% block heading %}⚙️ Settings{% endblock %}
 {% block content %}
-<p class="muted"><small>Profile <b>{{ profile.name if profile }}</b> · <code>{{ settings_file }}</code> · applies to the next recommendations ·
-  <a href="/recommendations#how">how they are used</a> · <a href="/docs/9-configuration">all keys</a><br>
-  Machine settings and defaults for new profiles: <code>{{ config_path }}</code> · game rules: <a href="/profile">profile</a> (locked)</small></p>
+<p class="muted"><small>Profile <b>{{ profile.name if profile }}</b>: <code>{{ settings_file }}</code> · defaults: <code>{{ config_path }}</code> · game rules: <a href="/profile">profile</a>
+  {{ icon_link("/docs/9-configuration", "?", "All settings keys", "help") }}</small></p>
 <form method="post" action="/settings" class="grid">
   <div class="card" id="topics-card">
     <h2>🏷️ Topics</h2>
@@ -43,8 +42,7 @@
   <table>
     <tr><td>Profile folder</td><td><code>{{ settings_file.parent.resolve() }}</code></td></tr>
     <tr><td>Database (your progress lives here)</td><td><code>{{ cfg.paths.database.resolve() }}</code></td></tr>
-    <tr><td>Libraries</td><td><a href="/library">Libraries</a></td></tr>
-    <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · automatic every {{ cfg.backup.interval_hours | round(1) }} h while the server runs</td></tr>
+    <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · every {{ cfg.backup.interval_hours | round(1) }} h while running</td></tr>
     <tr id="notes"><td>Notes</td><td>{% if notes_status.folder %}<code>{{ notes_status.folder }}</code> · {{ notes_status.files }} file{{ "s" if notes_status.files != 1 }} · {% if notes_status.conflicts %}<span class="neg">{{ notes_status.conflicts | length }} conflict{{ "s" if notes_status.conflicts | length > 1 }}:</span>{% for pid, title in notes_status.conflicts %} <a href="/papers/{{ pid }}#notes">{{ title | truncate(40) }}</a>{{ "," if not loop.last }}{% endfor %}{% else %}no conflicts{% endif %}{% else %}<span class="neg">{{ notes_status.problem }}</span>{% endif %}
       <form class="inline" method="post" action="/notes/sync"><button class="small">🔄 Sync notes</button></form></td></tr>
     <tr><td>Last backup</td><td>{% if last_backup %}{{ last_backup.isoformat() }}{% else %}<span class="neg">none yet</span>{% endif %}</td></tr>
@@ -53,6 +51,6 @@
     <form method="post" action="/backup"><button class="primary">🗄️ Back up now</button></form>
     <a class="button" href="/progress.json">⬇ Download progress (JSON)</a>
   </div>
-  <p class="muted" style="margin-top:.6rem"><small>Tip: <code>backup.dir</code> in a cloud-synced folder, database local · restore: <code>litrad restore</code> · merge: <code>litrad import-progress</code> · <a href="/docs/10-your-data-and-backups">Your data and backups</a></small></p>
+  <p class="muted" style="margin-top:.6rem"><small>Restore: <code>litrad restore</code> · <a href="/docs/10-your-data-and-backups">📖 Your data and backups</a></small></p>
 </div>
 {% endblock %}

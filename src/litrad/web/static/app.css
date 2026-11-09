@@ -137,7 +137,7 @@ button:active { transform: scale(.97); }
 .small { padding: .25rem .6rem; font-size: .85rem; border-radius: 8px; }
 .ghost { background: transparent; border-color: transparent; }
 form.inline { display: inline; }
-input[type=text], input[type=number], input[type=search], textarea, select {
+input[type=text], input[type=url], input[type=number], input[type=search], textarea, select {
   font: inherit; color: var(--text); background: var(--surface);
   border: 1px solid var(--border); border-radius: 10px; padding: .45rem .65rem; width: 100%;
 }
@@ -572,3 +572,8 @@ a.library-card:hover { text-decoration: none; border-color: var(--accent); }
 .note-editor > summary { cursor: pointer; color: var(--accent); margin-top: .6rem; }
 .note-conflict { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; }
 .note-conflict textarea { width: 100%; }
+
+/* icon-only links (→ open, ⚙️ settings, ? docs); the label is aria-label and title */
+.icon-link { display: inline-flex; align-items: center; justify-content: center; min-width: 1.8rem; height: 1.8rem; padding: 0 .3rem; border-radius: 999px; text-decoration: none; font-size: 1rem; line-height: 1; vertical-align: middle; }
+.icon-link:hover, .icon-link:focus-visible { background: var(--accent-soft); }
+.icon-link.help { min-width: 1.3rem; height: 1.3rem; font-size: .78rem; font-weight: 700; color: var(--muted); border: 1px solid var(--border); }

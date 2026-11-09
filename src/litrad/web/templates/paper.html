@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree with context %}
+{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree, icon_link with context %}
 {% block title %}{{ paper.title | truncate(40) }}{% endblock %}
 {% block heading %}📄 Paper{% endblock %}
 {% block content %}
@@ -22,15 +22,15 @@
 
     <div class="card" id="notes">
       <h2>✍️ Notes</h2>
-      <p class="muted"><small>File: {% if note.path %}<code>{{ note.path }}</code>{{ "" if note.exists else " (created when you save)" }}{% else %}<span class="neg">{{ note.problem }}</span>{% endif %}
-        · <a href="/docs/2-the-weekly-loop#notes-and-obsidian">Notes and Obsidian</a></small></p>
+      <p class="muted"><small>File: {% if note.path %}<code>{{ note.path }}</code>{% else %}<span class="neg">{{ note.problem }}</span>{% endif %}
+        {{ icon_link("/docs/2-the-weekly-loop#notes-and-obsidian", "?", "Notes and Obsidian", "help") }}</small></p>
       {% for message in [note.problem if note.available else none, note.warning] if message %}<p class="neg"><small>{{ message }}</small></p>{% endfor %}
       {% set conflict = note_conflict or (note.conflict and not note_preview) %}
       {% if conflict %}
       {% set theirs = note_conflict.theirs if note_conflict else note.file_body %}
       {% set mine = note_conflict.mine if note_conflict else note.body %}
       {% set mine_label = "Yours" if note_conflict else "litrad" %}
-      <p class="neg"><b>Conflict:</b> the file and {{ "your edit" if note_conflict else "litrad's copy" }} differ. Nothing was overwritten.</p>
+      <p class="neg"><b>Conflict:</b> the file and {{ "your edit" if note_conflict else "litrad's copy" }} differ; nothing was overwritten.</p>
       <div class="note-conflict">
         <form method="post" action="/papers/{{ paper.id }}/note">
           <h3>File</h3>
@@ -54,7 +54,7 @@
         <div class="row"><button name="action" value="save">💾 Save merged</button></div>
       </form>
       {% else %}
-      {% if note.body %}<div class="note-body">{{ note_html }}</div>{% else %}<p class="muted">No notes yet.</p>{% endif %}
+      {% if note.body %}<div class="note-body">{{ note_html }}</div>{% elif reading %}<p class="muted">No notes yet.</p>{% endif %}
       {% if reading %}
       <details class="note-editor" {{ "open" if note_preview is not none }}>
         <summary>✏️ Edit</summary>
@@ -109,14 +109,14 @@
       <h3>🧲 Example for Semantic Scholar</h3>
       {% if example_role %}{% set kind, origin = example_role %}
       <p>{{ "👍 Positive" if kind == "positive" else "👎 Negative" }} example <span class="chip">{{ "✋ " if origin == "added by you" else "⚙️ " }}{{ origin }}</span>
-        · <a href="/library/examples/{{ kind }}">see the list</a></p>
+        {{ icon_link("/library/examples/" ~ kind, "→", "Open the " ~ kind ~ " examples") }}</p>
       {% elif example_choices %}
       <p class="muted">Not an example: you removed it{% for kind, action in example_choices.items() if action == "exclude" %} from the {{ kind }} examples{{ "," if not loop.last }}{% endfor %}.</p>
-      {% else %}<p class="muted">Not an example now.</p>{% endif %}
+      {% else %}<p class="muted">Not an example.</p>{% endif %}
       {% if not paper.doi %}<p class="muted"><small>No DOI: Semantic Scholar cannot use it.</small></p>{% endif %}
       <form method="post" action="/papers/{{ paper.id }}/example" class="row">
-        {% if not example_role or example_role[0] != "positive" or example_role[1] != "added by you" %}<button class="small" name="role" value="positive">👍 Use as positive example</button>{% endif %}
-        {% if not example_role or example_role[0] != "negative" or example_role[1] != "added by you" %}<button class="small" name="role" value="negative">👎 Use as negative example</button>{% endif %}
+        {% if not example_role or example_role[0] != "positive" or example_role[1] != "added by you" %}<button class="small" name="role" value="positive">👍 Positive</button>{% endif %}
+        {% if not example_role or example_role[0] != "negative" or example_role[1] != "added by you" %}<button class="small" name="role" value="negative">👎 Negative</button>{% endif %}
         {% if example_role or "include" in example_choices.values() %}<button class="small ghost" name="role" value="none">✖ Not an example</button>{% endif %}
       </form>
     </div>

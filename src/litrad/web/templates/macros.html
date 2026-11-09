@@ -1,3 +1,14 @@
+{# a link shown as an icon only; the label is its accessible name and tooltip #}
+{% macro icon_link(href, icon, label, cls="") -%}
+<a class="icon-link {{ cls }}" href="{{ href }}" aria-label="{{ label }}" title="{{ label }}"><span aria-hidden="true">{{ icon }}</span></a>
+{%- endmacro %}
+
+{# the single add box: DOI, PubMed / PMC ID, citation key or title words #}
+{% macro add_box(id, required=True) -%}
+<label class="sr-only" for="{{ id }}">DOI, PubMed ID or title</label>
+<input type="text" id="{{ id }}" name="ref" placeholder="DOI, PubMed ID or title" {{ "required" if required }}>
+{%- endmacro %}
+
 {% macro paper_meta(paper, library_chip=True) -%}
 <div class="meta">
   {{ paper.authors | authors }}
@@ -5,7 +16,7 @@
   {% if paper.venue %}· {{ paper.venue }}{% endif %}
   {% if paper.citation_count is not none %}· {{ "{:,}".format(paper.citation_count) }} citations{% endif %}
   {% if library_chip and paper.in_library %}· <span class="chip">📁 in your library</span>{% endif %}
-  {% if paper_link(paper) %}· <a href="{{ paper_link(paper) }}" target="_blank" rel="noopener">open ↗</a>{% endif %}
+  {% if paper_link(paper) %}· <a href="{{ paper_link(paper) }}" target="_blank" rel="noopener" aria-label="Open the paper" title="Open the paper">↗</a>{% endif %}
   {% if paper.pmcid %}· <a href="https://europepmc.org/article/PMC/{{ paper.pmcid }}" target="_blank" rel="noopener" title="free full text in PubMed Central">🔓 full text ↗</a>{% endif %}
 </div>
 {%- endmacro %}
@@ -36,10 +47,9 @@
       <input type="radio" name="rating" id="{{ id }}-s{{ star }}" value="{{ star }}" aria-label="{{ star }} star{{ 's' if star > 1 }}"><label for="{{ id }}-s{{ star }}" title="{{ star }} star{{ 's' if star > 1 }}" aria-hidden="true">★</label>
       {% endfor %}
     </span>
-    <small>optional rating</small>
   </div>
   <label class="sr-only" for="{{ id }}-note">Notes</label>
-  <textarea id="{{ id }}-note" name="note" placeholder="Note, added to the note file ({{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP)"></textarea>
+  <textarea id="{{ id }}-note" name="note" placeholder="Note ({{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP)"></textarea>
   <div class="row">
     <label class="row" style="font-weight:400" title="read before you used litrad: {{ (rules.backlog_share * 100) | round | int }} % of the points, no streak, quest or bonus"><input type="checkbox" name="earlier" value="1" style="width:auto"> 🕰️ read earlier</label>
     <label class="row" style="font-weight:400"><small>on</small> <input type="date" name="read_on" aria-label="Read on (optional)" style="width:auto"></label>
@@ -159,7 +169,7 @@
 
 {% macro rules_fields(rule_groups, form_rules, levels_text, prefix="rules") -%}
 <details class="rules-box">
-  <summary><b>⚙️ Game rules</b> <small class="muted">points, penalty, levels, badges · 🔒 locked after creation · defaults work</small></summary>
+  <summary><b>⚙️ Game rules</b> <small class="muted">points, penalty, levels, badges · defaults work</small></summary>
   {% for title, intro, fields in rule_groups %}
   <h3 style="margin-top:1rem">{{ title }}</h3>
   <p class="muted" style="margin:0 0 .4rem">{{ intro }}</p>

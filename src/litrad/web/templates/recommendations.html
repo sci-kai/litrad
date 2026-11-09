@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view, topics_editor with context %}
+{% from "macros.html" import paper_meta, score_bars, evidence_tree, funnel_view, topics_editor, icon_link with context %}
 {% set active = "recommendations" %}
 {% block title %}Recommendations{% endblock %}
 {% block heading %}✨ Recommendations{% endblock %}
@@ -9,12 +9,12 @@
   <a href="/recommendations" class="active">✨ Recommendations</a>
   <a href="/read">✅ Read papers</a>
 </nav>
-{% set loading = "Searching OpenAlex and Semantic Scholar… this takes about a minute." %}
+{% set loading = "Searching OpenAlex and Semantic Scholar (about a minute)…" %}
 {% if onboarding %}
 <div class="card onboarding" id="topics">
   <h2>🏷️ What are you interested in?</h2>
   <p class="muted">Recommendations combine <b>similarity to your libraries</b> with these <b>topics</b>.
-    <a href="/docs/5-how-papers-are-recommended#1-candidates" title="How topics are used">?</a></p>
+    {{ icon_link("/docs/5-how-papers-are-recommended#1-candidates", "?", "How topics are used", "help") }}</p>
   <form method="post" action="/recommendations/topics">
     {{ topics_editor(cfg) }}
     <div class="row"><button class="primary">💾 Save topics</button></div>
@@ -29,9 +29,9 @@
     <div>
       {% if batch %}
       <b>Recommendations from {{ batch.created_at.date().isoformat() }}</b>
-      <span class="muted">· {{ batch.created_at.strftime("%H:%M") }} · {{ batch.n_candidates }} candidates checked</span>
+      <span class="muted">· {{ batch.created_at.strftime("%H:%M") }} · {{ batch.n_candidates }} candidates</span>
       {% else %}<b>No recommendations yet.</b>{% endif %}
-      {% if header.reminder and batches %}<br><span class="chip queued">⏰ {{ header.since_batch }} days old: time for new ones</span>{% endif %}
+      {% if header.reminder and batches %}<br><span class="chip queued">⏰ {{ header.since_batch }} days old</span>{% endif %}
     </div>
     <div class="row">
       {% if batches | length > 1 %}
@@ -54,7 +54,7 @@
   </div>
   {% for warning in (batch.warnings if batch else []) %}<div class="notice warn" style="margin:.6rem 0 0">⚠️ {{ warning }}</div>{% endfor %}
   <p class="muted" style="margin:.4rem 0 0"><small>⏰ reminder {% if cfg.selection.reminder_days %}after {{ cfg.selection.reminder_days }} days{% else %}off{% endif %}
-    · ↩️ unpicked papers may return after {{ cfg.selection.cooldown_weeks }} weeks · <a href="/settings">change</a></small></p>
+    · ↩️ unpicked papers return after {{ cfg.selection.cooldown_weeks }} weeks {{ icon_link("/settings", "⚙️", "Change in the settings") }}</small></p>
 </div>
 
 {% if queue_full %}<div class="notice warn">📚 Queue full ({{ cfg.queue.max_size }}/{{ cfg.queue.max_size }}): read or remove a paper first.</div>{% endif %}
@@ -110,7 +110,7 @@
     {% endfor %}
     {% endif %}
     {% if batch and not recs %}<div class="card">No eligible papers this time. Check <a href="?topics=1#topics">your topics</a>.</div>{% endif %}
-    {% if not batch %}<div class="card empty"><span class="big" aria-hidden="true">✨</span><h2 style="justify-content:center">Ready when you are</h2><p class="muted">Up to {{ cfg.selection.n_recommendations }} papers per list, ranked by score.</p>
+    {% if not batch %}<div class="card empty"><span class="big" aria-hidden="true">✨</span><h2 style="justify-content:center">Ready when you are</h2>
       <form method="post" action="/recommendations/build" data-loading="{{ loading }}"><button class="primary">✨ Get recommendations</button></form></div>{% endif %}
   </div>
 
@@ -137,7 +137,7 @@
     </div>
     {% if batch and batch.params %}
     <div class="card">
-      <h3>⚙️ Settings used</h3>
+      <div class="head"><h3>📋 Settings used</h3>{{ icon_link("/settings", "⚙️", "Adjust the settings") }}</div>
       {% set p = batch.params.selection %}
       <small>
         weights relevance {{ p.weights.relevance }} / impact {{ p.weights.impact }} / timeliness {{ p.weights.timeliness }}<br>
@@ -145,7 +145,6 @@
         diversity λ {{ p.mmr_lambda }} · floor {{ p.min_relative_score }} · cooldown {{ p.cooldown_weeks }} weeks<br>
         topics: {% for t in batch.params.topics %}{{ t.name }} ({{ t.weight }}){{ ", " if not loop.last }}{% endfor %}
       </small>
-      <p><a href="/settings">Adjust →</a></p>
     </div>
     {% endif %}
   </div>
@@ -154,7 +153,7 @@
 
 <details class="card how" id="how" style="margin-top:1rem">
   <summary><h2 style="display:inline">🔎 How recommendations are made</h2> <small class="muted">rules with your current values</small></summary>
-  <p class="muted"><a href="/docs/5-how-papers-are-recommended">Documentation, chapter 5 →</a></p>
+  <p class="muted"><a href="/docs/5-how-papers-are-recommended">📖 Chapter 5</a></p>
   {% include "_how_recommend.html" %}
 </details>
 {% endblock %}

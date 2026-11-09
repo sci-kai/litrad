@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta with context %}
+{% from "macros.html" import paper_meta, add_box, icon_link with context %}
 {% set active = "library" %}
 {% set positive = library.kind == "positive" %}
 {% block title %}{{ library.name }}{% endblock %}
@@ -9,13 +9,12 @@
 {% set url = "/library/" ~ library.id %}
 
 <div class="card library-head">
-  <p style="margin:0">{{ library.description }} <small class="muted">Rebuilt from the rules and your changes before every recommendation list. <a href="/docs/5-how-papers-are-recommended#1-candidates">How it works →</a></small></p>
+  <p style="margin:0">{{ library.description }} {{ icon_link("/docs/5-how-papers-are-recommended#1-candidates", "?", "How the examples are chosen", "help") }}</p>
   <p class="muted" style="margin:.4rem 0 0">
     <b>{{ current.papers | length }}</b>/{{ current.count }} paper{{ 's' if current.count != 1 }}
     {% if current.manual %}· <b>{{ current.manual }}</b> added by you{% endif %}
     {% if current.removed %}· {{ current.removed | length }} removed by you{% endif %}
     {% if current.without_doi %}· {{ current.without_doi }} skipped (no DOI){% endif %}
-    · never counts as your library
   </p>
   {% if not cfg.sources.semanticscholar %}<div class="notice warn" style="margin:.6rem 0 0">Semantic Scholar is off in the settings: this list is not used.</div>{% endif %}
   {% for w in current.warnings %}<div class="notice warn" style="margin:.6rem 0 0">⚠️ {{ w }}</div>{% endfor %}
@@ -24,8 +23,7 @@
     <div class="sub-card">
       <h3>➕ Add a paper</h3>
       <form method="post" action="{{ url }}/add" class="row" data-loading="Looking up the paper…">
-        <label class="sr-only" for="example-ref">DOI, pmid:N, PMCn, citation key or title words</label>
-        <input id="example-ref" class="grow" type="text" name="ref" placeholder="DOI, pmid:N, PMCn, citation key or title words" style="flex:1 1 220px" required>
+        <span class="grow" style="flex:1 1 220px">{{ add_box("example-ref") }}</span>
         <button class="primary small">➕ Add</button>
       </form>
       <small class="muted">Added papers come first and leave “{{ other.library.name }}”.</small>
@@ -37,14 +35,13 @@
         <label class="row"><input type="checkbox" name="status" value="true" style="width:auto"> with reading status</label>
         <button class="small">⬇️ Export {{ current.papers | length }} papers</button>
       </form>
-      <small class="muted">The origin is exported as a label.</small>
     </div>
   </div>
 </div>
 
 <div class="card" id="rules" style="margin-top:1rem">
   <h2>⚙️ How this list is chosen</h2>
-  <p class="muted"><small>Your additions (newest first), then the checked rules in order until full. Skipped: duplicates, papers you removed{{ ", your positive examples" if not positive else ", papers you added to the negative examples" }}.</small></p>
+  <p class="muted"><small>Your additions first, then the checked rules in order until full. Skipped: papers you removed{{ ", positive examples" if not positive else ", papers you added to the negative examples" }}.</small></p>
   <form method="post" action="{{ url }}/rules" class="grid" style="gap:.5rem">
     <table>
       <thead><tr><th>Use</th><th>Order</th><th>Rule</th></tr></thead>
@@ -52,7 +49,7 @@
       <tr>
         <td><input type="checkbox" id="rule-{{ name }}" name="rule" value="{{ name }}" {{ "checked" if on }} style="width:auto"></td>
         <td><label class="sr-only" for="order-{{ name }}">Order of the rule “{{ label }}”</label><input type="number" id="order-{{ name }}" name="order_{{ name }}" value="{{ loop.index }}" min="1" max="99" step="1" style="max-width:5rem"></td>
-        <td><label for="rule-{{ name }}"><b>{{ label }}</b> <code>{{ name }}</code><br><small class="muted">{{ help }}{% if name in library_rules %} (libraries used for recommendations){% endif %}</small></label></td>
+        <td><label for="rule-{{ name }}"><b>{{ label }}</b> <code>{{ name }}</code><br><small class="muted">{{ help }}{% if name in library_rules %} <span title="from the libraries used for recommendations">🎯</span>{% endif %}</small></label></td>
       </tr>
       {% endfor %}
     </table>
@@ -86,7 +83,7 @@
 </div>
 
 <div class="card" style="margin-top:1rem">
-  <h2>Papers <small class="muted">in the order they are used</small></h2>
+  <h2>Papers</h2>
   <div class="table-wrap"><table>
     <thead><tr><th class="num">#</th><th>Paper</th><th>Origin</th><th>Status</th><th></th></tr></thead>
     {% for paper in current.papers %}{% set reading = readings.get(paper.id) %}{% set origin = current.origins[paper.id] %}
@@ -95,7 +92,7 @@
       <td><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br>{{ paper_meta(paper, library_chip=False) }}</td>
       <td><span class="chip">{{ "✋ " if origin == "added by you" else "⚙️ " }}{{ origin }}</span></td>
       <td style="white-space:nowrap">{% if reading %}{{ status_icons[reading.status.value] }} {{ reading.status.value }}{% if reading.rating %} {{ "★" * reading.rating }}{% endif %}{% else %}<span class="muted">unread</span>{% endif %}</td>
-      <td><form class="inline" method="post" action="{{ url }}/remove/{{ paper.id }}"><button class="small ghost" aria-label="Remove {{ paper.title | truncate(40) }} from this list">✖ Remove</button></form></td>
+      <td><form class="inline" method="post" action="{{ url }}/remove/{{ paper.id }}"><button class="small ghost" aria-label="Remove {{ paper.title | truncate(40) }} from this list" title="Remove from this list">✖</button></form></td>
     </tr>
     {% else %}
     <tr><td colspan="5" class="muted">This list is empty.</td></tr>
@@ -105,7 +102,7 @@
 
 {% if current.removed %}
 <details class="card" style="margin-top:1rem">
-  <summary><h2 style="display:inline">🚫 Removed by you</h2> <small class="muted">{{ current.removed | length }} paper{{ "s" if current.removed | length != 1 }} the rules will not choose</small></summary>
+  <summary><h2 style="display:inline">🚫 Removed by you</h2> <small class="muted">{{ current.removed | length }}</small></summary>
   <table style="margin-top:.6rem">
     {% for paper, choice in current.removed %}
     <tr>

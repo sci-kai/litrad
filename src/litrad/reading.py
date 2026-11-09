@@ -41,6 +41,19 @@ class ReadingError(ValueError):
     """A user-facing problem, e.g. a full queue or an unknown reference."""
 
 
+class TitleNotFound(ReadingError):
+    """Title words that match none or several of your papers.
+
+    ``matches`` holds the ids of the matching papers (empty: none), so the
+    web UI can offer a search instead of an error.
+    """
+
+    def __init__(self, message: str, ref: str, matches: list[int]):
+        super().__init__(message)
+        self.ref = ref
+        self.matches = matches
+
+
 # --- references ------------------------------------------------------------
 
 REF_HELP = (
@@ -99,10 +112,13 @@ def find_paper(session: Session, ref: str) -> Paper | None:
     ]
     if len(matches) == 1:
         return session.get(Paper, matches[0][0])
+    ids = [paper_id for paper_id, _ in matches]
     if not matches:
-        raise ReadingError(f"Nothing matches '{ref}'. Use {REF_HELP}.")
+        raise TitleNotFound(f"Nothing matches '{ref}'. Use {REF_HELP}.", ref, ids)
     listing = "; ".join(f"#{paper_id} {title[:50]}" for paper_id, title in matches[:5])
-    raise ReadingError(f"'{ref}' matches {len(matches)} papers, be more specific: {listing}")
+    raise TitleNotFound(
+        f"'{ref}' matches {len(matches)} papers, be more specific: {listing}", ref, ids
+    )
 
 
 # --- queue -----------------------------------------------------------------
@@ -270,7 +286,7 @@ def fetch_paper(session: Session, cfg: Config, http: HttpClient, ref: str) -> Pa
             if hit is not None:
                 paper = upsert_hit(session, hit)
     if paper is None:
-        raise ReadingError(f"No database knows {doi}; add it by title instead" + _because(problems))
+        raise ReadingError(f"No database knows {doi}" + _because(problems))
     session.flush()
     return paper
 

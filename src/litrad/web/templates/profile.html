@@ -16,7 +16,7 @@
       <a class="button" href="/profile/export-all" title="One zip archive with all your data in documented, open formats">📦 Export everything</a>
     </div>
     <details style="margin-top:.8rem"><summary>📥 Import an archive into this profile</summary>
-      <p class="muted"><small>An archive from <i>Export everything</i>. It is checked first; nothing changes unless all of it is consistent. Papers you already have are matched; importing the same archive twice changes nothing. A backup is made before.</small></p>
+      <p class="muted"><small>From <i>Export everything</i>. Checked first: nothing changes unless all of it is consistent. A backup is made before.</small></p>
       <form method="post" action="/profile/import-all" enctype="multipart/form-data" class="grid" style="gap:.6rem">
         <div class="field" style="margin:0"><label for="import-file">Archive (.zip)</label>
         <input type="file" id="import-file" name="file" accept=".zip,application/zip" required></div>
@@ -27,7 +27,7 @@
   </div>
   <div class="card">
     <h2>🔁 Other profiles</h2>
-    <p class="muted"><small>Folder <code>{{ folder }}</code> · other rules need another profile</small></p>
+    <p class="muted"><small>Folder <code>{{ folder }}</code></small></p>
     {% if others %}
     <table>{% for o in others %}<tr><td>{{ o.level.icon }} <b>{{ o.name }}</b></td><td class="num">{{ o.xp }} XP</td><td class="num">{{ o.papers_read }} read</td></tr>{% endfor %}</table>
     {% endif %}

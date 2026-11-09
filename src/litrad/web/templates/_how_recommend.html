@@ -57,7 +57,6 @@
     <li><b>fresh</b>: published within <code>{{ s.fresh_window_months }}</code> months (≈ {{ (s.fresh_window_months * 30.5) | round | int }} days);</li>
     <li><b>landmark</b>: cited more than <code>{{ s.landmark_min_percentile }}</code> % of papers of the same field and year (OpenAlex percentile), at most <code>{{ s.landmark_max_age_years }}</code> years old.</li>
   </ul>
-  <p class="muted">Everything else is dropped.</p>
 </div>
 
 <div class="card">
@@ -77,7 +76,6 @@
     <li><b>landmark</b>: citation percentile ÷ 100 (OpenAlex, field- and year-normalised); without one: citations per year, log scale, <code>{{ s.citations_per_year_saturation }}</code>/year = 1.0.</li>
     <li><b>fresh</b>: journal 2-year mean citedness, log scale, <code>{{ s.top_venue_citedness }}</code> = 1.0 (unknown journal <code>{{ s.unknown_venue_impact }}</code>), plus up to <code>{{ s.early_citation_bonus }}</code> for early citations (full at <code>{{ s.early_citation_saturation }}</code>).</li>
   </ul>
-  <p class="muted">Journal citedness can be distorted (e.g. supplements of meeting abstracts), so landmarks use paper-level percentiles.</p>
 
   <h3>⏱️ Timeliness</h3>
   <ul>

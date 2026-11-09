@@ -90,7 +90,7 @@ def test_open_without_profile_or_password(tmp_path):
 def test_offline_page(locked):
     html = locked.get("/offline").text
     assert "You are offline" in html
-    assert "not stored on this device" in html
+    assert "Nothing is stored on this device" in html
 
 
 def assert_head_tags(html: str):

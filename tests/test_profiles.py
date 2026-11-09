@@ -395,7 +395,7 @@ def test_reminder_for_new_recommendations(client, config_path):
     engine.dispose()
     assert "9 days old" in client.get("/").text
     client.post("/recommendations/topics/skip")
-    assert "9 days old: time for new ones" in client.get("/recommendations").text
+    assert "⏰ 9 days old</span>" in client.get("/recommendations").text
     profiles.write_overlay(load_config(config_path), "ada", {"selection": {"reminder_days": 0}})
     assert "time for new recommendations" not in client.get("/queue").text
 

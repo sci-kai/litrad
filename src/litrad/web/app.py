@@ -117,6 +117,7 @@ from litrad.profile import ProfileError, active_rules, get_profile
 from litrad.profiles import ProfilesError
 from litrad.reading import (
     ReadingError,
+    TitleNotFound,
     add_note,
     drop_from_queue,
     drop_would_cost,
@@ -441,6 +442,27 @@ def create_app(
 
     def error(url: str, message: str) -> RedirectResponse:
         return back(url, {"kind": "error", "message": message, "events": [], "points": 0})
+
+    def pick_by_title(problem: TitleNotFound, top: bool = False, to: int | None = None):
+        """Title words of the add box without a single match: let the user pick.
+
+        Several of your papers match: Find & add lists them; none: Find & add
+        searches the databases for the title. ``to``: an example list instead
+        of the queue.
+        """
+        params = {"title": problem.ref.strip(), "add": "1"}
+        params["where"] = "library" if problem.matches else "databases"
+        if top:
+            params["top"] = "true"
+        if to is not None:
+            params["to"] = str(to)
+        n = len(problem.matches)
+        message = (
+            f"{n} of your papers match: pick one."
+            if n
+            else "Not among your papers: pick a search result."
+        )
+        return back("/search?" + urlencode(params), toast(message, "info"))
 
     # --- error pages -------------------------------------------------------------
     # unknown addresses and invalid values get a page in the app's style, not JSON
@@ -792,7 +814,7 @@ def create_app(
                     recs=recs,
                     rec_status=recommendation_status(session, recs),
                     week=progress,
-                    hints=next_goals(session, rules, today, figures),
+                    hints=next_goals(session, rules, today, figures, quest=False),
                     recent=recent,
                     waiting=queue_top_waiting_days(session, today),
                     nudge_days=QUEUE_NUDGE_DAYS,
@@ -1089,8 +1111,16 @@ def create_app(
         where: str = "",
         sort: str = "relevance",
         page: int = 1,
+        add: bool = False,
+        top: bool = False,
+        to: int | None = None,
     ):
-        """Find papers in your library, Europe PMC or PubMed and put them on the queue."""
+        """Find papers in your library, Europe PMC or PubMed and put them on the queue.
+
+        ``add``: opened by an add box with title words (offers a paper without
+        DOI); ``top``: queue at position 1; ``to``: add to that example list
+        instead of the queue.
+        """
         cfg, engine = open_session()
         query = SearchQuery(
             keywords=q,
@@ -1106,6 +1136,11 @@ def create_app(
         sort = sort if sort in SORTS else "relevance"
         try:
             with Session(engine) as session:
+                target = None
+                if to is not None:
+                    target = session.get(Library, to)
+                    if target is None or target.kind not in libraries.EXAMPLE_KINDS:
+                        raise HTTPException(404, "That list of examples does not exist.")
                 local, found = [], None
                 if not query.is_empty() and where == "library":
                     local = search_library(session, query)
@@ -1150,6 +1185,9 @@ def create_app(
                     here=str(request.url.path)
                     + (f"?{request.url.query}" if request.url.query else ""),
                     queue_full=len(queued) >= cfg.queue.max_size,
+                    add=add,
+                    top=top,
+                    target=target,
                 )
         finally:
             engine.dispose()
@@ -1733,8 +1771,8 @@ def create_app(
                     "/library",
                     {
                         "kind": "info",
-                        "message": f"Deleted the library {name} ({count} papers). Papers in "
-                        "your other libraries, your queue and your reading history are kept.",
+                        "message": f"Deleted {name} ({count} papers). Other libraries, queue "
+                        "and reading history are kept.",
                         "events": [],
                         "points": 0,
                     },
@@ -1856,10 +1894,7 @@ def create_app(
                     )
                 else:
                     payload = toast(
-                        "No library is used for recommendations now: the similarity to your "
-                        "library is 0 for every candidate and the library rules of the "
-                        "positive examples find nothing.",
-                        "warning",
+                        "No library used: similarity is 0 for every candidate.", "warning"
                     )
                 return back(next_url, payload)
         finally:
@@ -1930,7 +1965,7 @@ def create_app(
             return error(url, "Not in this list")
         examples.refresh(session, cfg)
         session.commit()
-        return back(url, toast("Removed from the list. “Removed by you” can restore it.", "info"))
+        return back(url, toast("Removed. “Removed by you” can restore it.", "info"))
 
     @app.post("/library/{library_id}/restore/{paper_id}")
     def example_restore(library_id: int, paper_id: int):
@@ -1944,7 +1979,7 @@ def create_app(
                 session.commit()
                 return back(
                     f"/library/{library_id}",
-                    toast("Restored: the rules may choose this paper again.", "info"),
+                    toast("Restored.", "info"),
                 )
         finally:
             engine.dispose()
@@ -1959,8 +1994,12 @@ def create_app(
                 library = example_library_of(session, library_id)
                 try:
                     if not ref.strip():
-                        raise ReadingError("Enter a DOI, pmid:N, PMCn or title words")
-                    paper = find_paper(session, ref)
+                        raise ReadingError("Enter a DOI, a PubMed ID or a title")
+                    try:
+                        paper = find_paper(session, ref)
+                    except TitleNotFound as problem:
+                        session.rollback()
+                        return pick_by_title(problem, to=library_id)
                     if paper is None:
                         http = make_http(cfg)
                         try:
@@ -2041,8 +2080,7 @@ def create_app(
                 return back(
                     f"/library/{library_id}",
                     toast(
-                        f"Undid {undone} change{'s' if undone != 1 else ''}: the list follows "
-                        "the rules again.",
+                        f"Undid {undone} change{'s' if undone != 1 else ''}.",
                         "info",
                     ),
                 )
@@ -2339,7 +2377,7 @@ def create_app(
             "/settings",
             {
                 "kind": "success",
-                "message": "Settings saved; they apply to the next recommendations.",
+                "message": "Settings saved for the next recommendations.",
                 "events": [],
                 "points": 0,
             },
@@ -2365,7 +2403,11 @@ def create_app(
                         session.add(paper)
                         session.flush()
                     elif ref.strip():
-                        paper = find_paper(session, ref)
+                        try:
+                            paper = find_paper(session, ref)
+                        except TitleNotFound as problem:
+                            session.rollback()
+                            return pick_by_title(problem, top=top)
                         if paper is None:
                             http = make_http(cfg)
                             try:
@@ -2373,7 +2415,7 @@ def create_app(
                             finally:
                                 http.close()
                     else:
-                        raise ReadingError("Enter a DOI, a reference or a title")
+                        raise ReadingError("Enter a DOI, a PubMed ID or a title")
                     origin = source_of(session, paper, ref, source or None)
                     queue_add(session, cfg, paper, origin, 1 if top else None)
                 except ReadingError as exc:

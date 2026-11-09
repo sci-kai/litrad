@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set active = "libraries" %}
+{% from "macros.html" import icon_link %}
 {% block title %}Libraries{% endblock %}
 {% block heading %}🗂️ Libraries{% endblock %}
 {% macro export_form(action) -%}
@@ -15,17 +16,15 @@
 {% set recommended = summaries | selectattr("library.kind", "equalto", "recommended") | list %}
 {% set choosable = summaries | rejectattr("library.kind", "in", ["positive", "negative"]) | list %}
 
-<div class="row" style="justify-content: space-between; margin-bottom: 1rem">
-  <p class="muted" style="margin:0; flex:1 1 400px"><small>One library per imported export · 🎯 used for recommendations</small></p>
+<div class="row" style="justify-content: flex-end; margin-bottom: 1rem">
   <a class="button primary" href="/library/import">⬆️ Import a file</a>
 </div>
 
 {% if not imported %}
 <div class="card up-next" style="margin-bottom:1rem">
   <h2>📥 Import your first library</h2>
-  <p><b>BibTeX</b> (Paperpile, Zotero, Mendeley, JabRef), <b>RIS</b> (EndNote, Citavi) or <b>CSL-JSON</b>. Recommendations are based on it.
-    <a href="{{ '/docs/1-setup#what-an-export-must-contain' }}">What the export must contain →</a></p>
-  <a class="button primary" href="/library/import">⬆️ Import a file</a>
+  <p><b>BibTeX</b> (Paperpile, Zotero, Mendeley, JabRef), <b>RIS</b> (EndNote, Citavi) or <b>CSL-JSON</b>.
+    {{ icon_link("/docs/1-setup#what-an-export-must-contain", "?", "What an export must contain", "help") }}</p>
 </div>
 {% endif %}
 
@@ -49,9 +48,9 @@
 
   <div class="card library-card special">
     <div class="row" style="justify-content: space-between; flex-wrap: nowrap">
-      <h2>📚 {{ "Reading queue" }}</h2><span class="chip">always current</span>
+      <h2>📚 Reading queue</h2>{{ icon_link("/queue", "→", "Open the queue") }}
     </div>
-    <div class="lib-stats"><b>{{ queue | length }}</b>/{{ cfg.queue.max_size }} papers · <a href="/queue">open the queue</a></div>
+    <div class="lib-stats"><b>{{ queue | length }}</b>/{{ cfg.queue.max_size }} papers</div>
     {{ export_form("/library/queue/export") }}
   </div>
 
@@ -74,8 +73,7 @@
 
 {% if choosable %}
 <div class="card" id="used" style="margin-top:1rem">
-  <h2>🎯 Used for recommendations</h2>
-  <p class="muted">“Your library”: the similarity score and the positive-example rules <i>newest</i>, <i>highest impact</i>, <i>highest FWCI</i>, <i>most cited</i> use these. <a href="/docs/4-web-ui#libraries-import-and-export" title="What this choice affects">?</a></p>
+  <h2>🎯 Used for recommendations {{ icon_link("/docs/4-web-ui#libraries-import-and-export", "?", "What this choice affects", "help") }}</h2>
   {% if no_library_used %}<div class="notice warn">⚠️ No library used: similarity is 0 for every candidate; ranking uses topic, impact and timeliness only.</div>{% endif %}
   <form method="post" action="/library/use" class="grid" style="gap:.4rem">
     <fieldset style="border:0; padding:0; margin:0">
@@ -89,8 +87,7 @@
 </div>
 {% endif %}
 
-<h2 style="margin-top:1.5rem">🧲 Examples for Semantic Scholar recommendations</h2>
-<p class="muted">New papers similar to the positive and unlike the negative examples. <a href="/docs/5-how-papers-are-recommended#1-candidates">How it works →</a></p>
+<h2 style="margin-top:1.5rem">🧲 Examples for Semantic Scholar {{ icon_link("/docs/5-how-papers-are-recommended#1-candidates", "?", "How the examples are used", "help") }}</h2>
 {% if not cfg.sources.semanticscholar %}<div class="notice warn">Semantic Scholar is off in the settings: these lists are not used.</div>{% endif %}
 <div class="library-cards">
   {% for kind, icon in [("positive", "👍"), ("negative", "👎")] %}{% set ex = example_lists[kind] %}

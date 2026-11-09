@@ -756,12 +756,17 @@ def personal_bests(session: Session, rules, today: date, current: dict | None = 
     }
 
 
-def next_goals(session: Session, rules, today: date, current: dict | None = None) -> list[str]:
-    """Short, concrete hints on what to do next (``current``: see badge_progress)."""
+def next_goals(
+    session: Session, rules, today: date, current: dict | None = None, quest: bool = True
+) -> list[str]:
+    """Short, concrete hints on what to do next (``current``: see badge_progress).
+
+    ``quest=False`` leaves out the weekly quest (the dashboard shows its card).
+    """
     rules = as_rules(rules)
     hints = []
     progress = week_progress(session, rules, today)
-    if not progress["done"]:
+    if quest and not progress["done"]:
         deep_missing = max(progress["goal_detail"] - progress["detail"], 0)
         total_missing = max(progress["goal_detail"] + progress["goal_skim"] - progress["total"], 0)
         parts = []

@@ -37,6 +37,7 @@ from litrad.profile import active_rules
 from litrad.reading import (
     REF_HELP,
     ReadingError,
+    TitleNotFound,
     add_note,
     drop_from_queue,
     fetch_paper,
@@ -167,7 +168,17 @@ def queue_add_cmd(
             session.add(paper)
             session.flush()
         elif ref:
-            paper = find_paper(session, ref)
+            try:
+                paper = find_paper(session, ref)
+            except TitleNotFound as error:
+                if error.matches:
+                    raise
+                # like the web UI's add box: point to the database search
+                raise ReadingError(
+                    f"None of your papers matches '{ref}'. Search the databases with "
+                    f'litrad search --title "{ref}" --add N, or add it without DOI '
+                    f'with --title "{ref}".'
+                ) from None
             if paper is None:  # an unknown DOI
                 http = make_http(cfg)
                 try:

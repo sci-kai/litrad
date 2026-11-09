@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form with context %}
+{% from "macros.html" import paper_meta, read_form, icon_link with context %}
 {% set active = "dashboard" %}
 {% block title %}Dashboard{% endblock %}
 {% block heading %}Good to see you, {{ profile.name if profile else "reader" }} 👋{% endblock %}
 {% block content %}
 {% if header.reminder %}
-<div class="notice">✨ {% if header.since_batch is none %}No recommendations yet.{% else %}Recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">Get recommendations →</a></div>
+<div class="notice">✨ {% if header.since_batch is none %}No recommendations yet.{% else %}Recommendations are {{ header.since_batch }} days old.{% endif %} <a href="/recommendations">Get new ones →</a></div>
 {% endif %}
 {% if waiting is not none and waiting >= nudge_days %}
 <div class="notice warn">⏳ Your top paper has been waiting <b>{{ waiting }} days</b>: read or remove it.</div>
@@ -18,7 +18,7 @@
   <ol class="steps">
     {% for label, url, done in steps %}
     <li class="{{ 'done' if done }}"><span class="grow">{{ label }}</span>
-      {% if not done %}<a class="button small {{ 'primary' if label == next_step[0] }}" href="{{ url }}">{{ "Start" if label == next_step[0] else "Go" }} →</a>{% else %}<small class="muted">done</small>{% endif %}</li>
+      {% if not done %}<a class="button small {{ 'primary' if label == next_step[0] }}" href="{{ url }}">{{ "Start" if label == next_step[0] else "Go" }} →</a>{% else %}<span title="done">✅<span class="sr-only">done</span></span>{% endif %}</li>
     {% endfor %}
   </ol>
 </div>
@@ -35,11 +35,10 @@
       {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
     </div>
     <div class="actions">
-      <button class="primary" type="button" data-toggle="dash-read">🐸 Log reading</button>
+      <button class="primary" type="button" data-toggle="dash-read" title="Top paper first: +{{ (rules.frog_bonus * 100) | round | int }} % XP">🐸 Log reading</button>
       <a class="button" href="/papers/{{ paper.id }}">📄 Abstract</a>
     </div>
     {{ read_form(paper, "/", "dash-read") }}
-    <p class="muted" style="margin-top:.6rem"><small>🐸 top paper first: +{{ (rules.frog_bonus * 100) | round | int }} % XP</small></p>
     {% else %}
     <div class="empty">
       <span class="big" aria-hidden="true">📭</span>
@@ -52,20 +51,20 @@
 
   <div class="card">
     <div class="head"><h2>🗓️ Weekly quest</h2><span class="grade {{ 'S' if week.done and week.thorough else ('A' if week.done else '') }}">{{ "S" if week.done and week.thorough else ("A" if week.done else (week.fraction * 100) | int ~ "%") }}</span></div>
-    <p class="muted">Week from {{ week.week_start.isoformat() }}: {{ week.goal_detail }} deep read + {{ week.goal_skim }} more skims · +{{ rules.quest_xp }} XP</p>
+    <p class="muted">{{ week.goal_detail }} deep read{{ "s" if week.goal_detail != 1 }} + {{ week.goal_skim }} skim{{ "s" if week.goal_skim != 1 }} · +{{ rules.quest_xp }} XP</p>
     <div class="quest-track">
       {% for i in range(week.goal_detail) %}<div class="slot deep {{ 'done' if i < week.detail }}" title="deep read"></div>{% endfor %}
       {% set extra = week.total - [week.detail, week.goal_detail] | min %}
       {% for i in range(week.goal_skim) %}<div class="slot {{ 'done' if i < extra }}" title="skim"></div>{% endfor %}
     </div>
-    <p><b>{{ week.xp }}</b> XP this week · streak <b>{{ stats.streak }}</b> week(s) <span class="flame {{ 'on' if stats.streak }}">🔥</span> · next reads ×{{ "%.2f" | format(multiplier) }}</p>
+    <p><b>{{ week.xp }}</b> XP this week · <span class="flame {{ 'on' if stats.streak }}">🔥</span> <b>{{ stats.streak }}</b>-week streak · next reads ×{{ "%.2f" | format(multiplier) }}</p>
     {% for hint in hints %}<div class="hint">💡 <span>{{ hint }}</span></div>{% endfor %}
   </div>
 </div>
 
 <div class="grid two" style="margin-top:1rem">
   <div class="card">
-    <div class="head"><h2>✨ Latest recommendations</h2><a href="/recommendations">open →</a></div>
+    <div class="head"><h2>✨ Latest recommendations</h2>{{ icon_link("/recommendations", "→", "Open the recommendations") }}</div>
     {% if batch %}<p class="muted" style="margin:0 0 .4rem">from {{ batch.created_at.date().isoformat() }}{% if recs and rec_status | length == recs | length %} · 🎉 all handled{% endif %}</p>{% endif %}
     {% if recs %}
     {% for rec, paper in recs %}
@@ -82,7 +81,7 @@
   </div>
 
   <div class="card">
-    <div class="head"><h2>📚 Queue ({{ queue | length }}/{{ cfg.queue.max_size }})</h2><a href="/queue">manage →</a></div>
+    <div class="head"><h2>📚 Queue ({{ queue | length }}/{{ cfg.queue.max_size }})</h2>{{ icon_link("/queue", "→", "Open the queue") }}</div>
     {% for item, paper in queue %}
     <div class="list-row">
       <span class="rank">q{{ item.position }}</span>
@@ -105,15 +104,14 @@
 </div>
 
 <div class="head-row" id="weekly">
-  <h2>🗓️ Weekly reports</h2>
+  <h2>🗓️ Weekly reports {{ icon_link("/docs/6-gamification#streaks-weekly-quest-and-metrics", "?", "Grades: S quest and a thorough read, A quest, B half way, C started", "help") }}</h2>
   {% if wpages > 1 %}
   <nav class="pager" aria-label="Weekly report pages" style="margin:0">
     {% if wpage > 1 %}<a class="button small" href="/?wpage={{ wpage - 1 }}#weekly">← newer</a>{% endif %}
-    <span class="muted">weeks {{ summaries[-1].week_start.isoformat() }} to {{ summaries[0].week_start.isoformat() }} · page {{ wpage }}/{{ wpages }}</span>
+    <span class="muted" title="weeks {{ summaries[-1].week_start.isoformat() }} to {{ summaries[0].week_start.isoformat() }}">page {{ wpage }}/{{ wpages }}</span>
     {% if wpage < wpages %}<a class="button small" href="/?wpage={{ wpage + 1 }}#weekly">older →</a>{% endif %}
   </nav>
   {% endif %}
 </div>
-<p class="muted"><small>Monday–Sunday · <b>S</b> quest + thorough read · <b>A</b> quest · <b>B</b> half way · <b>C</b> started · <b>–</b> rest</small></p>
 {% include "_weekly.html" %}
 {% endblock %}

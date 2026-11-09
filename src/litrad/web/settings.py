@@ -74,7 +74,7 @@ GROUPS = (
     ),
     Group(
         "Eligibility: current or important",
-        "Only fresh papers or landmarks are considered.",
+        "",
         (
             Setting(
                 ("selection", "fresh_window_months"),
@@ -186,7 +186,7 @@ GROUPS = (
     ),
     Group(
         "Fine-tuning",
-        "Constants of the score formulas; the defaults are sensible.",
+        "Constants of the score formulas.",
         (
             Setting(
                 ("selection", "similarity_share"),
@@ -295,7 +295,7 @@ GROUPS = (
     ),
     Group(
         "Reading queue",
-        "Game rules are locked per profile (Profile page).",
+        "",
         (
             Setting(
                 ("queue", "max_size"),
@@ -408,7 +408,7 @@ RULE_GROUPS = (
     ),
     (
         "Bonuses",
-        "Paid on top of the base points.",
+        "",
         (
             ("frog_bonus", "🐸 top paper first: share of base points", "float", 0, 5, 0.05),
             ("streak_step", "🔥 streak: extra share per consecutive week", "float", 0, 1, 0.01),

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import findings with context %}
+{% from "macros.html" import findings, icon_link with context %}
 {% set active = "import" %}
 {% block title %}Import{% endblock %}
 {% block heading %}⬆️ Import a library file{% endblock %}
@@ -16,21 +16,21 @@
   </div>
   {% endif %}
   <p class="muted" style="margin-top:.6rem">{{ "Nothing changed yet: choose the file again and press “Check & import”." if check.ok else "Nothing was imported." }}
-    <a href="{{ requirements }}">What an export must contain →</a></p>
+    {{ icon_link(requirements, "?", "What an export must contain", "help") }}</p>
 </div>
 {% endif %}
 
 <form method="post" action="/library/import" enctype="multipart/form-data" class="card import-form" data-loading="Checking and importing (about a minute)…">
   <h2><label for="import-file">1 · The file</label></h2>
   <input type="file" id="import-file" name="file" accept=".bib,.bibtex,.ris,.json,.txt" required>
-  <p class="muted" style="margin:.4rem 0 0"><small>BibTeX (<code>.bib</code>), RIS (<code>.ris</code>) or CSL-JSON (<code>.json</code>) · tested with Paperpile's BibTeX · <a href="{{ requirements }}">what the export must contain</a></small></p>
+  <p class="muted" style="margin:.4rem 0 0"><small>BibTeX (<code>.bib</code>), RIS (<code>.ris</code>) or CSL-JSON (<code>.json</code>)</small> {{ icon_link(requirements, "?", "What an export must contain", "help") }}</p>
 
   <h2 style="margin-top:1.2rem">2 · Where it goes</h2>
   <div class="import-targets">
     <div class="import-target">
       <label class="choice">
         <input type="radio" name="target" value="new" {{ "checked" if form.target != "existing" or not choices }}>
-        <span><b>A new library</b><br><small class="muted">e.g. per reference manager or project</small></span>
+        <span><b>A new library</b></span>
       </label>
       <div class="choice-body new-body">
         <input type="text" name="name" value="{{ form.name or '' }}" placeholder="Name, e.g. Paperpile – cancer evolution" maxlength="80" aria-label="name of the new library">
@@ -41,7 +41,7 @@
     <div class="import-target">
       <label class="choice">
         <input type="radio" name="target" value="existing" {{ "checked" if form.target == "existing" }}>
-        <span><b>An existing library</b><br><small class="muted">add to it or replace it</small></span>
+        <span><b>An existing library</b></span>
       </label>
       <div class="choice-body existing-body">
         <select name="library_id" aria-label="library">{% for lib in choices %}<option value="{{ lib.id }}" {{ "selected" if form.library_id == lib.id }}>{{ lib.name }}</option>{% endfor %}</select>
@@ -56,7 +56,7 @@
     <button name="action" value="check">🔍 Check only</button>
     <button class="primary" name="action" value="import">⬆️ Check &amp; import</button>
   </div>
-  <p class="muted" style="margin:.5rem 0 0"><small>Always checked first: an invalid file changes nothing. No duplicates across libraries; reading history untouched; no PDFs needed.</small></p>
+  <p class="muted" style="margin:.5rem 0 0"><small>An invalid file changes nothing; your reading history stays.</small></p>
 </form>
 
 {% endblock %}

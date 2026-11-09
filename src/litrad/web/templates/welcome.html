@@ -13,7 +13,6 @@
 <main class="welcome">
   <div class="welcome-head">
     {% with brand_center = true, brand_big = true %}{% include "_brand.html" %}{% endwith %}
-    <p class="muted">Library, queue and progress belong to a profile.</p>
   </div>
 
   {% if profiles %}
@@ -52,7 +51,7 @@
   <div class="grid two" style="margin-top:1rem; align-items:start">
     <section class="card">
       <h2>✨ Create a new profile</h2>
-      <p class="muted">Own library, topics and progress. 🔒 Game rules are locked at creation.</p>
+      <p class="muted">🔒 Game rules are locked at creation.</p>
       <form method="post" action="/welcome/create" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
         <div class="field" style="margin:0"><label for="create-name">Profile name</label><input type="text" id="create-name" name="name" placeholder="e.g. Kai" maxlength="80" required></div>
         {{ rules_fields(rule_groups, form_rules, levels_text, "create") }}
@@ -61,7 +60,7 @@
     </section>
     <section class="card">
       <h2>📂 Load a saved profile</h2>
-      <p class="muted">From a backup or a colleague's file, as a new profile. Files edited outside litrad are refused.</p>
+      <p class="muted">Becomes a new profile. Files edited outside litrad are refused.</p>
       <form method="post" action="/welcome/load" enctype="multipart/form-data" class="grid" style="gap:.6rem">
         {% if saves %}
         <div class="field" style="margin:0"><label for="load-saved">Saved file</label>
@@ -78,7 +77,7 @@
     </section>
     <section class="card">
       <h2>📦 Import an archive</h2>
-      <p class="muted">An archive from <i>Export everything</i> becomes a new profile. It is checked first: nothing is created unless all of it is consistent.</p>
+      <p class="muted">From <i>Export everything</i>; becomes a new profile. Nothing is created unless all of it is consistent.</p>
       <form method="post" action="/welcome/import-all" enctype="multipart/form-data" class="grid" style="gap:.6rem">
         <div class="field" style="margin:0"><label for="archive-file">Archive (.zip)</label>
         <input type="file" id="archive-file" name="file" accept=".zip,application/zip" required></div>

@@ -451,7 +451,7 @@ def test_library_page_actions(site):
         ).text
     )
     gone = client.post("/library/1/delete", data={"confirm_name": "pp"}, follow_redirects=True)
-    assert "Deleted the library PP (7 papers)" in gone.text
+    assert "Deleted PP (7 papers)" in gone.text
     assert "That library does not exist" in client.get("/library/1", follow_redirects=True).text
 
 

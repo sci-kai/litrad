@@ -200,7 +200,7 @@ def test_add_recommendation_then_drop_costs_xp(app_env):
     response = post(client, "/queue/add", {"ref": f"#{pid}", "next_url": "/recommendations"})
     assert "Added to your queue" in celebration(response)["message"]
     queue = client.get("/queue").text
-    assert "✨ recommendation" in queue and "−15 XP if removed unread" in queue
+    assert "✨ recommendation" in queue and "✖ Remove (−15 XP)" in queue
     assert "data-confirm" in queue
     response = post(client, f"/queue/{pid}/drop")
     payload = celebration(response)
@@ -214,7 +214,7 @@ def test_manual_add_and_drop_costs_xp(app_env):
     response = post(client, "/queue/add", {"title": "Preprint from the lab", "url": "https://x"})
     assert "Preprint from the lab" in celebration(response)["message"]
     pid = paper_id(path, title="Preprint from the lab")
-    assert "−15 XP if removed unread" in client.get("/queue").text
+    assert "✖ Remove (−15 XP)" in client.get("/queue").text
     payload = celebration(post(client, f"/queue/{pid}/drop"))
     assert payload["points"] == -15 and payload["penalty"] and payload["kind"] == "warning"
 
@@ -226,10 +226,10 @@ def test_add_unknown_doi_and_errors(app_env):
     assert "A brand new paper" in celebration(response)["message"]
     assert celebration(post(client, "/queue/add", {"ref": "10.9/missing"}))["kind"] == "error"
     assert celebration(post(client, "/queue/add", {}))["kind"] == "error"
-    assert (
-        "Nothing matches"
-        in celebration(post(client, "/queue/add", {"ref": "zebrafish xyz"}))["message"]
-    )
+    # title words that match none of your papers: the database search to pick from
+    response = post(client, "/queue/add", {"ref": "zebrafish xyz"})
+    assert "/search?" in str(response.url) and "title=zebrafish+xyz" in str(response.url)
+    assert "Not among your papers" in celebration(response)["message"]
 
 
 def test_queue_limit_in_ui(app_env):
@@ -457,7 +457,7 @@ def test_library_paper_picked_from_recommendations_keeps_penalty(app_env):
     client, path, _ = app_env
     pid = paper_id(path, bibtex_key="Cheung2016-vl")  # a library paper
     post(client, "/queue/add", {"ref": f"#{pid}", "source": "recommendation"})
-    assert "−15 XP if removed unread" in client.get("/queue").text
+    assert "✖ Remove (−15 XP)" in client.get("/queue").text
     payload = celebration(post(client, f"/queue/{pid}/drop"))
     assert payload["points"] == -15
 

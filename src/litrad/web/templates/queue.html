@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form with context %}
+{% from "macros.html" import paper_meta, read_form, add_box with context %}
 {% set active = "queue" %}
 {% block title %}Reading queue{% endblock %}
 {% block heading %}📚 Reading queue <small class="muted">{{ queue | length }}/{{ cfg.queue.max_size }}</small>{% endblock %}
@@ -9,7 +9,7 @@
   <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
   <a href="/read">✅ Read papers</a>
 </nav>
-<p class="muted"><small>🐸 q1 first: +{{ (rules.frog_bonus * 100) | round | int }} % XP · ⚠️ removed or not relevant before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
+<p class="muted"><small>🐸 q1 first: +{{ (rules.frog_bonus * 100) | round | int }} % XP · ⚠️ removed before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
 
 <div class="grid">
   {% for item, paper in queue %}
@@ -24,7 +24,6 @@
         <span class="chip">{{ {"recommendation": "✨ recommendation", "library": "📁 library", "manual": "✍️ added by you"}[item.source] | default(item.source) }}</span>
         <span class="chip {{ 'penalty' if waiting >= nudge_days }}">⏳ waiting {{ waiting }} d</span>
         {% if readings[paper.id] %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>{% endif %}
-        {% if costs[paper.id] %}<span class="chip penalty" title="Removing it unread costs XP">⚠️ −{{ costs[paper.id] }} XP if removed unread</span>{% endif %}
       </div>
       <div class="actions">
         <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🐸 " if item.position == 1 }}Log reading</button>
@@ -56,23 +55,12 @@
     {% if queue | length >= cfg.queue.max_size %}
     <p class="notice warn">📚 Queue full: read or remove a paper first.</p>
     {% else %}
-    <form method="post" action="/queue/add" class="grid" style="gap:.6rem">
-      <div class="field" style="margin:0">
-        <label for="ref">DOI, PubMed ID, recommendation (r1), citation key or title words</label>
-        <input type="text" id="ref" name="ref" placeholder="10.1038/s41586-024-07894-z · pmid:35931863 · r2 · Barkley2022-ri">
-        <span class="help">Unknown DOIs are looked up on OpenAlex.</span>
+    <form method="post" action="/queue/add" class="grid" style="gap:.6rem" data-loading="Looking up the paper…">
+      {{ add_box("ref") }}
+      <div class="row" style="justify-content:space-between">
+        <label class="row" style="font-weight:400"><input type="checkbox" name="top" value="true" style="width:auto"> Read next (q1)</label>
+        <button class="primary">➕ Add</button>
       </div>
-      <details>
-        <summary>…or by title only (no DOI)</summary>
-        <div class="grid two" style="margin-top:.5rem">
-          <div class="field" style="margin:0"><label for="add-title">Title</label>
-            <input type="text" id="add-title" name="title" placeholder="e.g. A preprint on clonal haematopoiesis"></div>
-          <div class="field" style="margin:0"><label for="add-url">Link <small class="muted">(optional)</small></label>
-            <input type="url" id="add-url" name="url" placeholder="https://…"></div>
-        </div>
-      </details>
-      <label class="row"><input type="checkbox" name="top" value="true" style="width:auto"> Read next (q1)</label>
-      <div><button class="primary">➕ Add to queue</button> <a class="button ghost" href="/search">🔍 Find papers</a></div>
     </form>
     {% endif %}
   </div>

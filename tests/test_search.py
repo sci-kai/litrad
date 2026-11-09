@@ -263,7 +263,9 @@ def site(tmp_path, monkeypatch, make_http):
 def test_search_page(site):
     client, path, _ = site
     page = client.get("/search").text
-    assert "Search papers" in page and "Europe PMC + PubMed" in page and "My library" in page
+    assert (
+        "Find &amp; add papers" in page and "Europe PMC + PubMed" in page and "My library" in page
+    )
     page = client.get("/search?author=Swanton+C&journal=Nature&sort=cited").text
     assert "4 results" in page and "Somatic evolution following cancer treatment" in page
     assert "Europe PMC: 11 matches · PubMed: 11 matches" in page

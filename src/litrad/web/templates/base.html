@@ -50,7 +50,7 @@
   <main class="main" id="main">
     <div class="topbar">
       <h1>{% block heading %}{% endblock %}</h1>
-      <a class="player" href="/profile" title="Profile {{ profile.name if profile else '' }}: rules, save, compare, switch">
+      <a class="player" href="/profile" title="Your profile">
         <span class="avatar">{{ header.level.icon }}</span>
         <span>
           <span class="who-name">{{ profile.name if profile else "Profile" }}</span><br>

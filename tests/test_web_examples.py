@@ -38,7 +38,7 @@ def labels_ok(html: str) -> None:
 def test_pages_render_for_an_empty_profile(site):  # noqa: F811
     client, _ = site
     overview = client.get("/library").text
-    assert "Examples for Semantic Scholar recommendations" in overview
+    assert "Examples for Semantic Scholar" in overview
     assert "Positive examples" in overview and "Negative examples" in overview
     assert "Used for recommendations" not in overview  # no library to choose yet
     for kind in ("positive", "negative"):
@@ -75,11 +75,18 @@ def test_add_remove_restore_and_reset(app_env):  # noqa: F811
     positive = example_url(client, "positive")
     assert BARKLEY not in client.get(positive).text.lower()  # never in both lists
     assert "Enter a DOI" in post(client, f"{url}/add", {"ref": " "}).text
-    assert "Nothing matches" in post(client, f"{url}/add", {"ref": "zzzz qqqq"}).text
+    picked = post(client, f"{url}/add", {"ref": "zzzz qqqq"})  # no match: pick from a search
+    assert (
+        f"to={url.rsplit('/', 1)[1]}" in str(picked.url) and "Not among your papers" in picked.text
+    )
 
     pid = paper_id(path, doi=BARKLEY)
     done = post(client, f"{url}/remove/{pid}")
-    assert "Removed from the list" in done.text and "This list is empty" in done.text
+    assert (
+        "Removed. " in done.text
+        and "can restore it" in done.text
+        and "This list is empty" in done.text
+    )
     assert "Not in this list" in post(client, f"{url}/remove/{pid}").text
 
     other = paper_id(path, doi=BASSEZ)
@@ -90,7 +97,7 @@ def test_add_remove_restore_and_reset(app_env):  # noqa: F811
     assert "Restored" in page and "rule: newest" in page
     post(client, f"{positive}/remove/{other}")
     page = post(client, f"{positive}/reset").text
-    assert "Undid 1 change:" in page and "Removed by you" not in page
+    assert "Undid 1 change." in page and "Removed by you" not in page
     # the generic routes refuse the example lists
     library_id = int(positive.rsplit("/", 1)[1])
     deleted = post(client, f"/library/{library_id}/delete", {"confirm_name": "Positive examples"})
@@ -129,7 +136,7 @@ def test_paper_page_buttons(app_env):  # noqa: F811
     pid = paper_id(path, doi=BASSEZ)
     page = client.get(f"/papers/{pid}").text
     assert "Example for Semantic Scholar" in page and "rule: newest" in page
-    assert "Use as negative example" in page and "Not an example" in page
+    assert "👎 Negative</button>" in page and "Not an example" in page
     page = post(client, f"/papers/{pid}/example", {"role": "negative"}).text
     assert "Used as negative example" in page and "Negative example" in page
     page = post(client, f"/papers/{pid}/example", {"role": "positive"}).text
@@ -151,7 +158,7 @@ def test_choose_the_libraries_used_for_recommendations(app_env):  # noqa: F811
     client, path, _ = app_env
     client.get("/library")  # migrates the old data into "My library"
     other = post(client, "/library/use", {})  # nothing checked
-    assert "No library is used for recommendations now" in other.text
+    assert "No library used: similarity is 0" in other.text
     assert "No library used" in client.get("/library").text
     positive = client.get(example_url(client, "positive")).text
     assert "rule: newest" not in positive and "No library used" in positive

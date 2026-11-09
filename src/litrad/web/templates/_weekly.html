@@ -5,16 +5,15 @@
   <div class="card week-card {{ 'rest' if empty and not w.current }}">
     <div class="week-head">
       <div class="week-title">
-        <span class="grade {{ w.grade }}" aria-label="grade {{ w.grade }}">{{ w.grade }}</span>
+        <span class="grade {{ w.grade }}" aria-label="grade {{ w.grade }}" title="grade {{ w.grade }} · S quest and a thorough read · A quest · B half way · C started">{{ w.grade }}</span>
         <div>
-          <b>Week of {{ w.week_start.isoformat() }}</b> {% if w.current %}<span class="chip queued">this week</span>{% endif %}<br>
-          <small class="muted">{{ w.comment }}</small>
+          <b>Week of {{ w.week_start.isoformat() }}</b> {% if w.current %}<span class="chip queued">this week</span>{% endif %}
         </div>
       </div>
       {% if not empty or w.current %}
       <div class="week-figures">
         <div class="stat"><div class="value {{ 'neg' if w.xp < 0 }}">{{ "%+d" | format(w.xp) if w.xp else 0 }}</div><div class="label">XP</div></div>
-        <div class="stat"><div class="value">{{ w.progress.total }}</div><div class="label">papers ≥ skimmed</div></div>
+        <div class="stat"><div class="value">{{ w.progress.total }}</div><div class="label" title="skimmed or deeper">papers</div></div>
         <div class="stat"><div class="value">{{ w.progress.detail }}</div><div class="label">deep reads</div></div>
       </div>
       {% endif %}
@@ -32,7 +31,7 @@
         {% for kind, points in w.xp_by_kind.items() %}
         <div class="list-row compact"><span>{{ kind_icons.get(kind, "✨") }}</span><span class="grow">{{ kind_labels.get(kind, kind) }}</span><span class="{{ 'pos' if points >= 0 else 'neg' }}">{{ "%+d" | format(points) }}</span></div>
         {% endfor %}
-        {% for b in w.badges %}<div class="list-row compact">🏅 Badge unlocked: <b>{{ b.name }}</b></div>{% endfor %}
+        {% for b in w.badges %}<div class="list-row compact"><span title="badge unlocked">🏅</span><b>{{ b.name }}</b></div>{% endfor %}
       </div>
     </div>
     {% endif %}
