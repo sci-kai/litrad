@@ -23,7 +23,7 @@ from pathlib import Path
 import yaml
 from sqlmodel import Session, func, select
 
-from litresearch.backup import atomic_write_text, load_profile, snapshot
+from litresearch.backup import BackupError, atomic_write_text, check_file, load_profile, snapshot
 from litresearch.backup import slug as slug_of
 from litresearch.config import Config
 from litresearch.db import Paper, Profile, Reading, XpEvent, init_db, now
@@ -285,6 +285,9 @@ def adopt_legacy(base: Config, name: str, rules: GameRules | None = None) -> str
 
 def import_profile_file(base: Config, data: dict, name: str | None = None) -> str:
     """A new profile from a saved profile file (rules, progress, settings)."""
+    if not isinstance(data, dict):
+        raise BackupError("Not a litresearch profile file")
+    check_file(data)  # before a folder is created: a refused file leaves nothing behind
     saved = data.get("profile") or {}
     slug, home = _new_folder(base, name or saved.get("name") or "Imported profile")
     try:

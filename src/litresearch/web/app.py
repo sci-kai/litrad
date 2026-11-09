@@ -621,7 +621,7 @@ def create_app(
                 slug = profiles.import_profile_file(base, uploads[0]["data"], name)
         except archive.ArchiveError as exc:
             return archive_problems(request, exc) or error("/welcome", f"Not loaded: {exc}")
-        except (BackupError, ProfilesError, json.JSONDecodeError, OSError) as exc:
+        except (BackupError, ProfilesError, ValueError, OSError) as exc:
             return error("/welcome", f"Not loaded: {friendly_error(exc)}")
         finally:
             remove_temporary(uploads)
@@ -2146,7 +2146,7 @@ def create_app(
                 if path:
                     entries.append(saved_entry(path))
             entries += await read_upload(request)
-        except (BackupError, json.JSONDecodeError, OSError) as exc:
+        except (BackupError, ValueError, OSError) as exc:
             remove_temporary(entries)
             return error("/profile/compare", str(exc))
         try:

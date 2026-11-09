@@ -99,7 +99,7 @@ def import_progress_cmd(
         return
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+    except (OSError, ValueError) as error:
         _fail(f"Cannot read {source}: {error}")
     engine = init_db(cfg.paths.database)
     try:
@@ -458,7 +458,7 @@ def profile_load_cmd(
         return
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+    except (OSError, ValueError) as error:
         _fail(f"Cannot read {source}: {error}")
     try:
         slug = profiles.import_profile_file(base, data, name)
@@ -490,7 +490,7 @@ def profile_compare_cmd(
             else:
                 data = json.loads(path.read_text(encoding="utf-8"))
                 rows.append(summarize(data, cfg, path.name))
-        except (OSError, json.JSONDecodeError, BackupError) as error:
+        except (OSError, ValueError, BackupError) as error:
             console.print(f"[yellow]{path}: {error}[/yellow]")
     reference = rows[0]["fingerprint"]
     for row in rows:

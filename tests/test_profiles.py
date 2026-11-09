@@ -593,3 +593,15 @@ def test_cli_save_load_compare_and_merge_archives(config_path, plain_console, tm
 
     restored = run("restore", str(archive_file), "--yes", profile="ada")
     assert restored.exit_code == 1 and "is an archive" in restored.stdout
+
+
+def test_loading_a_broken_file_fails_cleanly(config_path, plain_console, tmp_path, base):
+    """Not a dict, not UTF-8, not JSON: a message, no traceback, no profile folder."""
+    for name, raw in (("list.json", b"[1, 2]"), ("latin.json", b"\xff\xfe{"), ("x.json", b"{")):
+        path = tmp_path / name
+        path.write_bytes(raw)
+        result = runner.invoke(cli.app, ["profile", "load", str(path), "-c", str(config_path)])
+        assert result.exit_code == 1 and result.exception.__class__ is SystemExit, name
+        compared = runner.invoke(cli.app, ["profile", "compare", str(path), "-c", str(config_path)])
+        assert compared.exception is None or compared.exception.__class__ is SystemExit, name
+    assert profiles.list_profiles(base) == []
