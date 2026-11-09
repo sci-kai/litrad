@@ -90,11 +90,15 @@ def make_http(cfg: Config) -> HttpClient:
 def run() -> None:
     """Console entry point: expected problems become messages, not tracebacks."""
     from litresearch.config import ConfigError
+    from litresearch.migrations import MigrationError, SchemaTooNew
 
     try:
         app()
     except ConfigError as error:
         console.print(f"[red]Configuration problem:[/red] {error}")
+        raise SystemExit(2) from None
+    except (SchemaTooNew, MigrationError) as error:
+        console.print(f"[red]Database problem:[/red] {error}")
         raise SystemExit(2) from None
 
 

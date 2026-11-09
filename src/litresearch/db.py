@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from pydantic import NaiveDatetime
-from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint, event, inspect, text
+from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint, event
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 
@@ -302,56 +302,24 @@ def get_engine(path: Path):
 
 
 def add_missing_columns(engine) -> list[str]:
-    """Minimal migration: add columns that exist in the models but not in the file.
+    """Create missing tables, columns and indexes (see ``migrations.sync_schema``)."""
+    from litresearch.migrations import sync_schema
 
-    Only nullable columns or columns with a scalar default can be added this
-    way, which covers additive schema changes. Returns ``table.column`` names.
-    """
-    inspector = inspect(engine)
-    added = []
-    models = {m.__tablename__: m for m in SQLModel.__subclasses__() if hasattr(m, "__table__")}
     with engine.begin() as connection:
-        for table in SQLModel.metadata.sorted_tables:
-            if not inspector.has_table(table.name):
-                continue
-            existing = {c["name"] for c in inspector.get_columns(table.name)}
-            for column in table.columns:
-                if column.name in existing:
-                    continue
-                kind = column.type.compile(engine.dialect)
-                default = ""
-                scalar = getattr(column.default, "arg", None)
-                if isinstance(scalar, bool | int | float):
-                    default = f" DEFAULT {int(scalar) if isinstance(scalar, bool) else scalar}"
-                elif isinstance(scalar, str):
-                    default = " DEFAULT '" + scalar.replace("'", "''") + "'"
-                elif isinstance(column.type, JSON):
-                    # existing rows would stay NULL, which the models do not expect
-                    factory = models.get(table.name).model_fields[column.name].default_factory
-                    if factory is empty_list:
-                        default = " DEFAULT '[]'"
-                    elif factory is empty_dict:
-                        default = " DEFAULT '{}'"
-                connection.execute(
-                    text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {kind}{default}')
-                )
-                added.append(f"{table.name}.{column.name}")
-    return added
+        return sync_schema(connection)
 
 
 def add_missing_indexes(engine) -> None:
-    """Create indexes added to the model after a database was created.
-
-    ``create_all`` only indexes new tables, so older databases get them here.
-    """
-    for table in SQLModel.metadata.sorted_tables:
-        for index in table.indexes:
-            index.create(engine, checkfirst=True)
+    """Create indexes added to the model after a database was created."""
+    add_missing_columns(engine)
 
 
 def init_db(path: Path):
-    engine = get_engine(path)
-    SQLModel.metadata.create_all(engine)
-    add_missing_columns(engine)
-    add_missing_indexes(engine)
-    return engine
+    """Open a profile database; new files are created, older ones upgraded first.
+
+    Raises ``migrations.SchemaTooNew`` for a database of a newer litresearch.
+    """
+    from litresearch.migrations import migrate
+
+    migrate(path)
+    return get_engine(path)
