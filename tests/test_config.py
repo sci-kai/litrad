@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from litresearch.config import Config, load_config
+from litrad.config import Config, load_config
 
 EXAMPLE = Path(__file__).parents[1] / "config" / "config.example.yaml"
 
@@ -38,7 +38,7 @@ def test_old_detail_skim_keys_are_migrated():
 
 @pytest.mark.parametrize("value", [".inf", "-.inf", ".nan"])
 def test_infinite_numbers_rejected(tmp_path, value):
-    from litresearch.config import ConfigError
+    from litrad.config import ConfigError
 
     path = tmp_path / "config.yaml"
     path.write_text(f"paths:\n  bibtex: x.bib\nbackup:\n  interval_hours: {value}\n")

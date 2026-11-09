@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "macros.html" import paper_meta, findings with context %}
+{% set active = "library" %}
+{% block title %}{{ library.name }}{% endblock %}
+{% block heading %}{{ "✨" if library.kind == "recommended" else "🗂️" }} {{ library.name }}{% endblock %}
+{% block content %}
+{% include "_library_tabs.html" %}
+{% set age = (today - last_run.at.date()).days if last_run else none %}
+{% set here = "/library/" ~ library.id ~ "?q=" ~ (q | urlencode) ~ "&folder=" ~ (folder | urlencode) ~ "&status=" ~ (status | urlencode) %}
+
+<div class="card library-head">
+  <div class="row" style="justify-content: space-between; align-items: start">
+    <div style="flex: 1 1 320px">
+      <p style="margin:0">{{ library.description or "No description." }}</p>
+      <p class="muted" style="margin:.4rem 0 0">
+        <b>{{ n_library }}</b> paper{{ 's' if n_library != 1 }} · <b>{{ n_read }}</b> read in litrad
+        {% if library.use_for_recommendations %}· 🎯 used for recommendations{% else %}· not used for recommendations{% endif %}
+        {% if last_run %}· last import {{ last_run.at.date().isoformat() }} ({{ formats.get(last_run.format or library.format, "?") }}){% endif %}
+      </p>
+      {% if library.source_path %}<p class="muted" style="margin:.2rem 0 0"><small>File: <code>{{ library.source_path }}</code>{% if not file_modified %} <span class="neg">(not found)</span>{% endif %}</small></p>{% endif %}
+    </div>
+    <div class="row">
+      {% if library.kind == "imported" %}<a class="button primary" href="/library/import?to={{ library.id }}">⬆️ Import file</a>{% endif %}
+      {% if library.source_path and file_modified %}
+      <form method="post" action="/library/{{ library.id }}/reimport" data-loading="Updating the library from its file (about a minute)…"><button title="read the library's file again (e.g. after rclone synced a new export)">🔄 Update from file</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% if age is not none and age >= stale_days and library.kind == "imported" %}<div class="notice warn" style="margin:.6rem 0 0">⏳ Last updated {{ age }} days ago: export it again and import it.</div>{% endif %}
+  {% if last_run and file_modified and file_modified > last_run.at %}<div class="notice warn" style="margin:.6rem 0 0">📥 The file changed after the last import: use “Update from file”.</div>{% endif %}
+
+  <div class="grid two" style="margin-top:.8rem">
+    <div class="sub-card">
+      <h3>⬇️ Export</h3>
+      <form method="get" action="/library/{{ library.id }}/export" class="row export-form">
+        <select name="format" aria-label="format">{% for key, (label, _) in export_formats.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+        <label class="row" title="adds keywords such as litrad-read and litrad-rating-4 (labels in your reference manager)"><input type="checkbox" name="status" value="true" style="width:auto"> with reading status</label>
+        <button class="small">⬇️ Export {{ n_library }} papers</button>
+      </form>
+      <small class="muted">BibTeX: Paperpile, Zotero, Mendeley, JabRef · RIS: EndNote, Citavi</small>
+    </div>
+    <details class="sub-card">
+      <summary><h3 style="display:inline">✏️ Edit</h3></summary>
+      <form method="post" action="/library/{{ library.id }}/edit" class="grid" style="gap:.5rem; margin-top:.5rem">
+        <input type="text" name="name" value="{{ library.name }}" maxlength="80" required aria-label="Library name">
+        <textarea name="description" placeholder="What is in this library?" aria-label="Library description">{{ library.description }}</textarea>
+        <label class="row" style="font-weight:400"><input type="checkbox" name="use_for_recommendations" value="true" {{ "checked" if library.use_for_recommendations }} style="width:auto"> 🎯 use for recommendations (similarity to your library)</label>
+        <div><button class="primary small">💾 Save</button></div>
+      </form>
+      <form method="post" action="/library/{{ library.id }}/delete" class="row" style="margin-top:.8rem">
+        <p class="muted" style="margin:0; flex-basis:100%"><small>Papers stay in your other libraries and reading history.</small></p>
+        <input type="text" name="confirm_name" placeholder="type “{{ library.name }}” to delete" style="max-width:260px" aria-label="Type the library name to confirm deletion" required autocomplete="off">
+        <button class="small danger">🗑️ Delete library</button>
+      </form>
+    </details>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>Papers <small class="muted">{{ n_rows }} of {{ n_library }}</small></h2>
+  <form method="get" class="row" style="margin-bottom:.8rem">
+    <input class="grow" type="search" name="q" value="{{ q }}" placeholder="title, author, journal, DOI, citation key" style="flex:1 1 240px" aria-label="Search this library">
+    {% if folders %}
+    <select name="folder" style="max-width:340px" aria-label="folder or label">
+      <option value="">All folders and labels</option>
+      {% for name, count in folders %}<option value="{{ name }}" {{ "selected" if name == folder }}>{{ name }} ({{ count }})</option>{% endfor %}
+    </select>
+    {% endif %}
+    <select name="status" style="max-width:180px" aria-label="reading status">
+      <option value="" {{ "selected" if not status }}>All papers</option>
+      <option value="unread" {{ "selected" if status == "unread" }}>Not read yet</option>
+      <option value="read" {{ "selected" if status == "read" }}>Read</option>
+    </select>
+    <button class="primary">Filter</button>
+  </form>
+  {% if rows %}
+  <form method="post" action="/library/{{ library.id }}/read-earlier" id="read-earlier" class="row" style="margin-bottom:.6rem">
+    <input type="hidden" name="next_url" value="{{ here }}&page={{ page }}">
+    <label class="row" style="font-weight:400"><input type="checkbox" data-select-all="read-earlier" style="width:auto"> all on this page</label>
+    <select name="level" aria-label="depth" style="width:auto">{% for level in ["abstract", "skimmed", "read", "thorough"] %}<option value="{{ level }}" {{ "selected" if level == "skimmed" }}>{{ status_icons[level] }} {{ level }}</option>{% endfor %}</select>
+    <input type="date" name="read_on" aria-label="Read on (optional)" style="width:auto">
+    <button class="small" title="papers you read before using litrad: {{ (rules.backlog_share * 100) | round | int }} % of the points, no streak, quest or bonus">🕰️ Mark as read earlier</button>
+  </form>
+  {% endif %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Paper</th><th>Folders &amp; labels</th><th>Status</th><th></th></tr></thead>
+    {% for row in rows %}{% set paper = row.paper %}{% set tags = row.entry.folders + row.entry.tags %}
+    <tr>
+      <td><label class="sr-only" for="sel-{{ paper.id }}">Select</label><input type="checkbox" id="sel-{{ paper.id }}" name="paper" value="{{ paper.id }}" form="read-earlier" style="width:auto; float:left; margin:.2rem .5rem 0 0"><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br>{{ paper_meta(paper, library_chip=False) }}</td>
+      <td>{% for f in tags[:3] %}<span class="chip">📁 {{ f }}</span> {% endfor %}{% if tags | length > 3 %}<small class="muted">+{{ tags | length - 3 }}</small>{% endif %}</td>
+      <td style="white-space:nowrap">{% if row.reading %}{{ status_icons[row.reading.status.value] }} {{ row.reading.status.value }}{% elif row.queued %}📚 queued{% else %}<span class="muted">unread</span>{% endif %}</td>
+      <td style="white-space:nowrap">
+        {% if not row.queued and (not row.reading or depth(row.reading.status) < 2) %}
+        <form class="inline" method="post" action="/queue/add"><input type="hidden" name="ref" value="#{{ paper.id }}"><input type="hidden" name="source" value="library"><input type="hidden" name="next_url" value="{{ here }}&page={{ page }}"><button class="small">➕ Add to queue</button></form>
+        {% endif %}
+        {% if library.kind == "recommended" %}
+        <form class="inline" method="post" action="/library/{{ library.id }}/remove/{{ paper.id }}"><button class="small ghost" title="remove from this library" aria-label="Remove from this library">✖</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">{{ "No papers match the filter." if n_library else "This library is empty." }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% if pages > 1 %}
+  <div class="row" style="margin-top:.8rem; justify-content:center">
+    {% if page > 1 %}<a class="button small" href="{{ here }}&page={{ page - 1 }}">← previous</a>{% endif %}
+    <span class="muted">page {{ page }}/{{ pages }}</span>
+    {% if page < pages %}<a class="button small" href="{{ here }}&page={{ page + 1 }}">next →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if runs %}
+<details class="card" style="margin-top:1rem">
+  <summary><h2 style="display:inline">🕑 Import history</h2> <small class="muted">checks of every import · <a href="{{ requirements }}">what an export must contain</a></small></summary>
+  {% if last_run.check %}<h3 style="margin-top:.8rem">Checks of the last import</h3>{{ findings(last_run.check) }}{% endif %}
+  <table style="margin-top:.6rem">
+    <thead><tr><th>When</th><th>How</th><th>File</th><th class="num">Entries</th><th class="num">New / removed</th><th>Warnings</th></tr></thead>
+    {% for run in runs %}
+    <tr><td style="white-space:nowrap">{{ run.at.isoformat() }}</td><td>{{ {"new": "new library", "add": "added", "replace": "replaced"}.get(run.mode, run.mode) }}<br><small class="muted">{{ run.source }} · {{ formats.get(run.format, run.format or "BibTeX") }}</small></td>
+      <td><code>{{ run.file_name }}</code><br><small class="muted">sha256 {{ run.sha256[:12] }} · {{ (run.size / 1024) | round(1) }} kB</small></td>
+      <td class="num">{{ run.entries }}</td><td class="num">{{ run.added }} / {{ run.removed }}</td>
+      <td>{% for w in run.warnings[:4] %}<small>{{ w }}</small><br>{% else %}<small class="muted">none</small>{% endfor %}</td></tr>
+    {% endfor %}
+  </table>
+</details>
+{% endif %}
+{% endblock %}

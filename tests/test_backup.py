@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import enter_profile
-from litresearch import libraries
-from litresearch.backup import (
+from litrad import libraries
+from litrad.backup import (
     BackupError,
     atomic_write_text,
     backup_loop,
@@ -27,8 +27,8 @@ from litresearch.backup import (
     snapshot,
     verify_checksum,
 )
-from litresearch.config import Config
-from litresearch.db import (
+from litrad.config import Config
+from litrad.db import (
     Achievement,
     Library,
     Paper,
@@ -39,8 +39,8 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.game import total_xp
-from litresearch.reading import queue_add, record_reading
+from litrad.game import total_xp
+from litrad.reading import queue_add, record_reading
 
 AT = datetime(2026, 10, 5, 9, 0, 0)
 runner = CliRunner()
@@ -159,17 +159,17 @@ def test_run_backup_and_rotation(source):
             result = run_backup(cfg, session, AT + timedelta(minutes=minute))
     files = sorted(p.name for p in cfg.backup.dir.iterdir())
     assert files == [
-        "litresearch_20261005_090200.sqlite",
-        "litresearch_20261005_090300.sqlite",
-        "litresearch_20261005_090400.sqlite",
+        "litrad_20261005_090200.sqlite",
+        "litrad_20261005_090300.sqlite",
+        "litrad_20261005_090400.sqlite",
         # the documented archive of "export everything", with the note files
-        "litresearch_backup_20261005_090200.zip",
-        "litresearch_backup_20261005_090300.zip",
-        "litresearch_backup_20261005_090400.zip",
+        "litrad_backup_20261005_090200.zip",
+        "litrad_backup_20261005_090300.zip",
+        "litrad_backup_20261005_090400.zip",
     ]
     assert len(result.removed) == 2  # snapshot and archive of the oldest
     assert latest_backup(cfg) == AT + timedelta(minutes=4)
-    from litresearch import archive
+    from litrad import archive
 
     checked = archive.check_file(result.archive, cfg)
     assert not checked.report.errors
@@ -180,29 +180,29 @@ def test_run_backup_and_rotation(source):
 def test_rotation_counts_legacy_and_new_backups_together(tmp_path):
     """Backups from before 1.0 (progress JSON + notes zip) age out with the archives."""
     for day in range(1, 4):
-        (tmp_path / f"litresearch_progress_2026010{day}_070000.json").write_text("{}")
-        (tmp_path / f"litresearch_notes_2026010{day}_070000.zip").write_text("")
+        (tmp_path / f"litrad_progress_2026010{day}_070000.json").write_text("{}")
+        (tmp_path / f"litrad_notes_2026010{day}_070000.zip").write_text("")
     for day in range(4, 6):
-        (tmp_path / f"litresearch_backup_2026010{day}_070000.zip").write_text("")
-    (tmp_path / "litresearch_export_kai_20260101_070000.zip").write_text("")  # yours
-    (tmp_path / "litresearch_profile_kai_20260101_070000.zip").write_text("")  # yours
+        (tmp_path / f"litrad_backup_2026010{day}_070000.zip").write_text("")
+    (tmp_path / "litrad_export_kai_20260101_070000.zip").write_text("")  # yours
+    (tmp_path / "litrad_profile_kai_20260101_070000.zip").write_text("")  # yours
     rotate(tmp_path, keep=3)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "litresearch_backup_20260104_070000.zip",
-        "litresearch_backup_20260105_070000.zip",
-        "litresearch_export_kai_20260101_070000.zip",
-        "litresearch_notes_20260103_070000.zip",
-        "litresearch_profile_kai_20260101_070000.zip",
-        "litresearch_progress_20260103_070000.json",
+        "litrad_backup_20260104_070000.zip",
+        "litrad_backup_20260105_070000.zip",
+        "litrad_export_kai_20260101_070000.zip",
+        "litrad_notes_20260103_070000.zip",
+        "litrad_profile_kai_20260101_070000.zip",
+        "litrad_progress_20260103_070000.json",
     ]
 
 
 def test_latest_backup_reads_archives_and_legacy_files(tmp_path):
     cfg = make_cfg(tmp_path)
     cfg.backup.dir.mkdir(parents=True)
-    (cfg.backup.dir / "litresearch_progress_20261001_070000.json").write_text("{}")
+    (cfg.backup.dir / "litrad_progress_20261001_070000.json").write_text("{}")
     assert latest_backup(cfg) == datetime(2026, 10, 1, 7)
-    (cfg.backup.dir / "litresearch_backup_20261002_070000.zip").write_text("")
+    (cfg.backup.dir / "litrad_backup_20261002_070000.zip").write_text("")
     assert latest_backup(cfg) == datetime(2026, 10, 2, 7)
 
 
@@ -217,7 +217,7 @@ def test_restore_refuses_an_archive_with_a_hint(source, tmp_path):
 def test_rotate_ignores_other_files(tmp_path):
     (tmp_path / "notes.txt").write_text("keep me")
     for i in range(3):
-        (tmp_path / f"litresearch_2026010{i}_000000.sqlite").write_text("")
+        (tmp_path / f"litrad_2026010{i}_000000.sqlite").write_text("")
     removed = rotate(tmp_path, keep=1)
     assert len(removed) == 2 and (tmp_path / "notes.txt").exists()
 
@@ -226,7 +226,7 @@ def test_latest_backup_without_backups(tmp_path):
     cfg = make_cfg(tmp_path)
     assert latest_backup(cfg) is None
     cfg.backup.dir.mkdir(parents=True)
-    (cfg.backup.dir / "litresearch_progress_garbage.json").write_text("{}")
+    (cfg.backup.dir / "litrad_progress_garbage.json").write_text("{}")
     assert latest_backup(cfg) is None
 
 
@@ -237,7 +237,7 @@ def test_atomic_write_keeps_old_file_on_failure(tmp_path, monkeypatch):
     def broken_replace(*_):
         raise OSError("disk full")
 
-    monkeypatch.setattr("litresearch.backup.os.replace", broken_replace)
+    monkeypatch.setattr("litrad.backup.os.replace", broken_replace)
     with pytest.raises(OSError):
         atomic_write_text(path, "new")
     assert path.read_text() == "old"
@@ -351,11 +351,11 @@ def test_import_respects_queue_limit(source, tmp_path):
 @pytest.mark.parametrize(
     "data, message",
     [
-        ({"format": "something else"}, "Not a litresearch progress export"),
-        ({"format": "litresearch-progress", "format_version": 99}, "newer litresearch"),
+        ({"format": "something else"}, "Not a litrad progress export"),
+        ({"format": "litrad-progress", "format_version": 99}, "newer litrad"),
         (
             {
-                "format": "litresearch-progress",
+                "format": "litrad-progress",
                 "papers": {},
                 "readings": [{"paper": "p1", "status": "read"}],
             },
@@ -363,7 +363,7 @@ def test_import_respects_queue_limit(source, tmp_path):
         ),
         (
             {
-                "format": "litresearch-progress",
+                "format": "litrad-progress",
                 "papers": {"p1": {"title": "X"}},
                 "readings": [{"paper": "p1", "status": "bogus"}],
             },
@@ -390,7 +390,7 @@ def test_restore_round_trip(source):
         session.commit()
     engine.dispose()
     safety = restore(cfg, snap, AT + timedelta(hours=1))
-    assert safety.name == "litresearch_20261005_100000_before_restore.sqlite"
+    assert safety.name == "litrad_20261005_100000_before_restore.sqlite"
     restored = init_db(cfg.paths.database)
     with Session(restored) as session:
         assert not session.exec(select(XpEvent).where(XpEvent.points == 999)).all()
@@ -440,7 +440,7 @@ def test_backup_loop_backs_up_and_survives_errors(tmp_path, monkeypatch):
     def broken(*_args, **_kwargs):
         raise BackupError("disk full")
 
-    monkeypatch.setattr("litresearch.backup.run_backup", broken)
+    monkeypatch.setattr("litrad.backup.run_backup", broken)
     messages.clear()
     backup_loop(path, OneShot(), messages.append)
     assert messages == ["WARNING: backup of (no profile) failed: disk full"]
@@ -471,7 +471,7 @@ def write_config(tmp_path):
 def plain_console(monkeypatch):
     from rich.console import Console
 
-    import litresearch.cli_data as cli_data
+    import litrad.cli_data as cli_data
 
     console = Console(color_system=None, width=300, highlight=False)
     monkeypatch.setattr(cli, "console", console)
@@ -507,9 +507,9 @@ def test_cli_backup_export_import_check_restore(tmp_path, plain_console):
     assert result.exit_code == 1 and "Cannot read" in result.stdout
     (tmp_path / "bad.json").write_text('{"format": "x"}')
     result = runner.invoke(cli.app, ["import-progress", str(tmp_path / "bad.json"), *c])
-    assert result.exit_code == 1 and "Not a litresearch" in result.stdout
+    assert result.exit_code == 1 and "Not a litrad" in result.stdout
 
-    snap = sorted((tmp_path / "backups").glob("litresearch_2*.sqlite"))[0]
+    snap = sorted((tmp_path / "backups").glob("litrad_2*.sqlite"))[0]
     result = runner.invoke(cli.app, ["restore", str(snap), *c], input="n\n")
     assert result.exit_code == 1  # aborted
     result = runner.invoke(cli.app, ["restore", str(snap), "--yes", *c])
@@ -517,7 +517,7 @@ def test_cli_backup_export_import_check_restore(tmp_path, plain_console):
 
 
 def test_web_backup_and_download(tmp_path):
-    from litresearch.web.app import create_app
+    from litrad.web.app import create_app
 
     path = write_config(tmp_path)
     init_db(tmp_path / "db.sqlite").dispose()
@@ -531,12 +531,12 @@ def test_web_backup_and_download(tmp_path):
     assert "Backup written" in client.get(location.split("#")[0]).text
     download = client.get("/progress.json")
     assert download.headers["content-disposition"].startswith(
-        "attachment; filename=litresearch_progress_"
+        "attachment; filename=litrad_progress_"
     )
-    assert download.json()["format"] == "litresearch-progress"
+    assert download.json()["format"] == "litrad-progress"
     assert download.json()["settings"]["topics"] == []  # the profile's settings travel along
     # backups of a profile go to its own subfolder
-    assert list((tmp_path / "backups" / "ada").glob("litresearch_*.sqlite"))
+    assert list((tmp_path / "backups" / "ada").glob("litrad_*.sqlite"))
     client.close()
 
 

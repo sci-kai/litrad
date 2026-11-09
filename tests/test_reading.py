@@ -3,8 +3,8 @@ from datetime import date, datetime
 import pytest
 from sqlmodel import Session
 
-from litresearch.config import Config
-from litresearch.db import (
+from litrad.config import Config
+from litrad.db import (
     Category,
     Paper,
     QueueItem,
@@ -14,8 +14,8 @@ from litresearch.db import (
     RecommendationBatch,
     init_db,
 )
-from litresearch.game import level_for, total_xp
-from litresearch.reading import (
+from litrad.game import level_for, total_xp
+from litrad.reading import (
     ReadingError,
     add_note,
     drop_from_queue,

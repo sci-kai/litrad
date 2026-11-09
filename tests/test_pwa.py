@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import litresearch
+import litrad
 from conftest import enter_profile
-from litresearch.web.app import create_app
-from litresearch.web.auth import hash_password
+from litrad.web.app import create_app
+from litrad.web.auth import hash_password
 from test_auth import write_config
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,7 +63,7 @@ def test_service_worker(locked):
     assert response.headers["cache-control"] == "no-cache"
     assert "javascript" in response.headers["content-type"]
     script = response.text
-    assert f'"litresearch-v{litresearch.__version__}"' in script
+    assert f'"litrad-v{litrad.__version__}"' in script
     assert "__VERSION__" not in script
     assert 'request.method !== "GET"' in script  # POST is never handled or cached
     assert "caches.delete" in script  # old versions are cleaned up
@@ -118,8 +118,8 @@ def test_service_worker_is_registered_by_app_js(locked):
 
 def test_package_data_covers_the_phone_app_files():
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    patterns = pyproject["tool"]["setuptools"]["package-data"]["litresearch.web"]
-    web = ROOT / "src" / "litresearch" / "web"
+    patterns = pyproject["tool"]["setuptools"]["package-data"]["litrad.web"]
+    web = ROOT / "src" / "litrad" / "web"
     files = [
         "sw.js",
         "templates/offline.html",

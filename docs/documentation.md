@@ -1,6 +1,6 @@
-# litresearch documentation
+# litrad documentation
 
-litresearch is a personal literature radar built on your reference-manager
+litrad is a personal literature radar built on your reference-manager
 libraries (Paperpile, Zotero, Mendeley, EndNote …). On request it proposes
 **up to 5 papers**, ranked by similarity to your library (SPECTER2
 embeddings), your topics, paper impact and timeliness (very recent *or* a
@@ -15,21 +15,21 @@ This is the complete documentation. In the web UI it is under
 
 ## Contents
 
-- **Part I: Using litresearch:** [1. Setup](#1-setup) · [2. The weekly loop](#2-the-weekly-loop) · [3. Profiles](#3-profiles) · [4. Web UI](#4-web-ui)
+- **Part I: Using litrad:** [1. Setup](#1-setup) · [2. The weekly loop](#2-the-weekly-loop) · [3. Profiles](#3-profiles) · [4. Web UI](#4-web-ui)
 - **Part II: How it works:** [5. How papers are recommended](#5-how-papers-are-recommended) · [6. Gamification](#6-gamification)
 - **Part III: Reference:** [7. Commands](#7-commands) · [8. Data sources and privacy](#8-data-sources-and-privacy) · [9. Configuration](#9-configuration) · [10. Your data and backups](#10-your-data-and-backups) · [11. Data formats](#11-data-formats)
 - **Part IV: How it is built:** [12. Architecture](#12-architecture) · [13. Implementation and credits](#13-implementation-and-credits) · [14. Development](#14-development)
 
 ---
 
-# Part I: Using litresearch
+# Part I: Using litrad
 
 
 ## 1. Setup
 
 ### 1. Install
 
-Two ways to run litresearch:
+Two ways to run litrad:
 
 - **Desktop app (default):** on your own computer, for you alone. Double-click
   it; it opens in your web browser.
@@ -39,27 +39,27 @@ Two ways to run litresearch:
 #### Desktop app
 
 Download the file for your system from the **Releases** page of the
-litresearch repository on GitHub (latest release, *Assets*):
+litrad repository on GitHub (latest release, *Assets*):
 
 | System | File | Install |
 |---|---|---|
-| Windows 10/11 (64-bit) | `litresearch-<version>-windows-x86_64.exe` | run it; installs for you only, no administrator rights; Start menu entry, optional desktop shortcut |
-| macOS (Apple silicon) | `litresearch-<version>-macos-arm64.dmg` | open it, drag **litresearch** to *Applications* |
-| Linux (x86_64 or ARM) | `litresearch-<version>-linux-x86_64.AppImage` / `-linux-aarch64.AppImage` | `chmod +x litresearch-*.AppImage`, then double-click or run it |
+| Windows 10/11 (64-bit) | `litrad-<version>-windows-x86_64.exe` | run it; installs for you only, no administrator rights; Start menu entry, optional desktop shortcut |
+| macOS (Apple silicon) | `litrad-<version>-macos-arm64.dmg` | open it, drag **litrad** to *Applications* |
+| Linux (x86_64 or ARM) | `litrad-<version>-linux-x86_64.AppImage` / `-linux-aarch64.AppImage` | `chmod +x litrad-*.AppImage`, then double-click or run it |
 
 The builds are not signed (signing costs money), so the system warns the
 first time:
 
 - **Windows** SmartScreen: *Windows protected your PC* → **More info** →
   **Run anyway**.
-- **macOS**: right-click (or Ctrl-click) litresearch in *Applications* →
+- **macOS**: right-click (or Ctrl-click) litrad in *Applications* →
   **Open** → **Open**. On newer macOS versions: try to open it once, then
   *System Settings → Privacy & Security* → **Open Anyway**.
 - **Linux**: make the AppImage executable (above). If it says FUSE is
   missing, install `libfuse2` (Debian/Ubuntu: `sudo apt install libfuse2t64`)
   or run it with `--appimage-extract-and-run`.
 
-**First start:** litresearch creates your configuration and data folder,
+**First start:** litrad creates your configuration and data folder,
 starts on this computer only (`http://127.0.0.1:47290/`, another free port
 if that one is taken) and opens it in your default browser, where you create
 your profile ([step 5](#5-create-your-profile-and-import-your-library)).
@@ -67,31 +67,31 @@ Nothing is reachable from other computers. Starting it again while it runs
 just opens the browser on the running one.
 
 **Quit:** **⏻ Quit** at the bottom of the sidebar (or on the welcome page).
-Closing the browser tab does not stop litresearch; started from a terminal,
-Ctrl+C also quits. On macOS litresearch has no Dock icon: it runs in the
+Closing the browser tab does not stop litrad; started from a terminal,
+Ctrl+C also quits. On macOS litrad has no Dock icon: it runs in the
 background until you quit it; if it is already running, open
 `http://127.0.0.1:47290/` (or your bookmark) instead of starting it again.
 
-**Where your data lives** (`litresearch where` prints it):
+**Where your data lives** (`litrad where` prints it):
 
 | System | Configuration | Data (profiles, backups, cache, log) |
 |---|---|---|
-| Windows | `%LOCALAPPDATA%\litresearch\config.yaml` | `%LOCALAPPDATA%\litresearch\` |
-| macOS | `~/Library/Application Support/litresearch/config.yaml` | `~/Library/Application Support/litresearch/` |
-| Linux | `~/.config/litresearch/config.yaml` | `~/.local/share/litresearch/` |
+| Windows | `%LOCALAPPDATA%\litrad\config.yaml` | `%LOCALAPPDATA%\litrad\` |
+| macOS | `~/Library/Application Support/litrad/config.yaml` | `~/Library/Application Support/litrad/` |
+| Linux | `~/.config/litrad/config.yaml` | `~/.local/share/litrad/` |
 
 The desktop app writes a log to `logs/app.log` in the data folder; if it
 cannot start, it opens a page in the browser that names the problem and the
 log file.
 
 **Update:** download and install the new version over the old one (quit
-litresearch first; the Windows installer closes it). Your data stays; the
+litrad first; the Windows installer closes it). Your data stays; the
 CHANGELOG says when a version changes the data format. **Uninstall:**
 Windows *Settings → Apps*, macOS move the app to the Bin, Linux delete the
 AppImage. Your data folder is kept; delete it yourself if you no longer need
 it.
 
-With a Python installation, `litresearch app` (or `litresearch-app`) starts
+With a Python installation, `litrad app` (or `litrad-app`) starts
 the same desktop mode ([commands](#7-commands)).
 
 #### Server mode
@@ -101,52 +101,52 @@ installation (developed on a Raspberry Pi 5, Python 3.13). On Debian, Ubuntu
 or Raspberry Pi OS: `sudo apt install git python3-venv`.
 
 ```bash
-git clone <repository-url> litresearch && cd litresearch
+git clone <repository-url> litrad && cd litrad
 python3 install.py                # about 1–3 minutes; offers to start the web UI at the end
-.venv/bin/litresearch serve       # later: start the web UI, open the address it prints
+.venv/bin/litrad serve       # later: start the web UI, open the address it prints
 ```
 
-`install.py` checks the system, creates `.venv`, installs litresearch,
+`install.py` checks the system, creates `.venv`, installs litrad,
 creates `config/config.yaml` from the example (an existing one is never
-overwritten) and checks that litresearch starts. If something is missing it
+overwritten) and checks that litrad starts. If something is missing it
 stops with the fix (e.g. the `apt` command); it never says "Done" over a
-broken installation. Run litresearch commands from the litresearch folder:
+broken installation. Run litrad commands from the litrad folder:
 there `config/config.yaml` is found, and `data/` lives next to `config/`.
 
 | Option | Does |
 |---|---|
 | `--service` | start the web UI automatically (systemd user service), on the network set as `web.host`, without asking |
 | `--remove-service` | stop starting it automatically (data stays) |
-| `--repair` | reinstall all packages without pip's cache, e.g. after an interrupted download ("litresearch does not start") |
+| `--repair` | reinstall all packages without pip's cache, e.g. after an interrupted download ("litrad does not start") |
 | `--dev` | add test and lint tools |
 
-- **Update:** `litresearch backup`, then `git pull && python3 install.py`.
+- **Update:** `litrad backup`, then `git pull && python3 install.py`.
   `config/` and `data/` are kept; the CHANGELOG says when a version changes
   the data format.
 - **Without the installer:** `python3 -m venv .venv && .venv/bin/pip install -e .`
   and `cp config/config.example.yaml config/config.yaml`.
-- **As a package** (`pipx install litresearch`, or the
-  wheel of a GitHub release: `pip install litresearch-*.whl`): no git folder
+- **As a package** (`pipx install litrad`, or the
+  wheel of a GitHub release: `pip install litrad-*.whl`): no git folder
   needed, run it from any folder. The first command creates your configuration and data in your
   per-user folders:
 
   | System | Configuration | Data (profiles, backups, cache) |
   |---|---|---|
-  | Linux | `~/.config/litresearch/config.yaml` | `~/.local/share/litresearch/` |
-  | macOS | `~/Library/Application Support/litresearch/config.yaml` | `~/Library/Application Support/litresearch/` |
-  | Windows | `%LOCALAPPDATA%\litresearch\config.yaml` | `%LOCALAPPDATA%\litresearch\` |
+  | Linux | `~/.config/litrad/config.yaml` | `~/.local/share/litrad/` |
+  | macOS | `~/Library/Application Support/litrad/config.yaml` | `~/Library/Application Support/litrad/` |
+  | Windows | `%LOCALAPPDATA%\litrad\config.yaml` | `%LOCALAPPDATA%\litrad\` |
 
-`litresearch where` shows which configuration and data folders are in use
+`litrad where` shows which configuration and data folders are in use
 and why ([lookup order](#9-configuration)).
 
 **With Docker** (server mode for a Pi, NAS or lab server; the image runs on
 ARM and x86). The image is named after the GitHub repository,
-`ghcr.io/<owner>/litresearch` below:
+`ghcr.io/<owner>/litrad` below:
 
 ```bash
-docker run --rm -it -v litresearch:/data ghcr.io/<owner>/litresearch litresearch set-password   # once
-docker run -d --name litresearch --restart unless-stopped -p 8080:8080 \
-    -v litresearch:/data ghcr.io/<owner>/litresearch
+docker run --rm -it -v litrad:/data ghcr.io/<owner>/litrad litrad set-password   # once
+docker run -d --name litrad --restart unless-stopped -p 8080:8080 \
+    -v litrad:/data ghcr.io/<owner>/litrad
 ```
 
 Open `http://<host>:8080` and log in. The server listens on all networks of
@@ -155,17 +155,17 @@ script or a Docker secret use `set-password --password-file FILE` (first line
 of the file) instead of the prompt. Everything lives in the volume `/data`
 (configuration `/data/config.yaml`, created on first start, profiles,
 database, backups in `/data/backups`); to edit the file, find the volume
-with `docker volume inspect litresearch`.
+with `docker volume inspect litrad`.
 
-**Update:** run `docker exec litresearch litresearch backup`, then
-`docker pull` the image, `docker rm -f litresearch` and start it again with
+**Update:** run `docker exec litrad litrad backup`, then
+`docker pull` the image, `docker rm -f litrad` and start it again with
 the same volume. The port is plain HTTP: keep
 it in your home network or behind a VPN, as described in
 [Web UI](#using-it-from-your-laptop-local-network).
 
 ### 2. Export your library from your reference manager
 
-litresearch reads your library from an export file, so it works with any
+litrad reads your library from an export file, so it works with any
 reference manager and never needs its password or PDFs.
 
 | Reference manager | How to export | Format |
@@ -203,27 +203,27 @@ when it finds an error. Files up to 50 MB can be uploaded.
   want them as keywords.
 - Prefer file names without spaces, e.g. `library.bib`.
 - Check a file without importing it: *Check only* on the import page, or
-  `litresearch check-bib FILE`.
+  `litrad check-bib FILE`.
 
 ### 3. Keep the export up to date (optional)
 
 Update a library from its file at any time (*Update from file* on its page,
-or `litresearch ingest` for all libraries). For a file your reference manager
+or `litrad ingest` for all libraries). For a file your reference manager
 keeps up to date, e.g. Paperpile's auto-export to Google Drive, fetch it
 with [rclone](https://rclone.org/drive/):
 
 ```bash
 rclone config                     # once: create a remote called "gdrive"
-rclone copyto "gdrive:<path in Drive>/library.bib" ~/litresearch-exports/paperpile.bib
-litresearch library import ~/litresearch-exports/paperpile.bib --new "Paperpile"   # once
-litresearch ingest                # then e.g. daily from cron
+rclone copyto "gdrive:<path in Drive>/library.bib" ~/litrad-exports/paperpile.bib
+litrad library import ~/litrad-exports/paperpile.bib --new "Paperpile"   # once
+litrad ingest                # then e.g. daily from cron
 ```
 
 Watching the file and re-importing automatically is planned (roadmap 1.1).
 
 ### 4. Configure
 
-`config/config.yaml` (or your per-user config, see `litresearch where`)
+`config/config.yaml` (or your per-user config, see `litrad where`)
 holds the machine settings (APIs, web server, backups) and the defaults for
 new profiles ([Configuration](#9-configuration)). In a git folder it and
 `data/` are git-ignored, so API keys stay local. Recommended, both free:
@@ -236,17 +236,17 @@ new profiles ([Configuration](#9-configuration)). In a git folder it and
 
 ### 5. Create your profile and import your library
 
-In the web UI: `litresearch serve`, open the printed address, create a
+In the web UI: `litrad serve`, open the printed address, create a
 profile, then **Library → Import**: choose the file, name the new library and
 press *Check & import*. On the command line:
 
 ```bash
-litresearch profile create "Kai"      # game rules are locked from now on
-litresearch library import library.bib --new "Paperpile" --description "everything"
-litresearch status
+litrad profile create "Kai"      # game rules are locked from now on
+litrad library import library.bib --new "Paperpile" --description "everything"
+litrad status
 ```
 
-Data from before profiles existed is taken over with `litresearch profile
+Data from before profiles existed is taken over with `litrad profile
 adopt NAME` (or on the welcome screen); its library becomes "My library".
 
 The import report lists entries added, updated and removed, DOIs taken from
@@ -288,8 +288,8 @@ for one command.
 Web: **Reading → Recommendations → Get recommendations**. CLI:
 
 ```bash
-litresearch recommend          # latest list; no API requests
-litresearch recommend --new    # a new list (about a minute), e.g. after changing topics
+litrad recommend          # latest list; no API requests
+litrad recommend --new    # a new list (about a minute), e.g. after changing topics
 ```
 
 - Every paper is **fresh** (published within `fresh_window_months`) or a
@@ -301,20 +301,20 @@ litresearch recommend --new    # a new list (about a minute), e.g. after changin
   up; unread papers from your libraries can. A paper you did not pick can
   come back after `cooldown_weeks` (8).
 - A new list every Monday by cron (`crontab -e`):
-  `0 7 * * 1  cd /path/to/litresearch-tool && .venv/bin/litresearch ingest && .venv/bin/litresearch recommend --new > data/this-week.txt`
+  `0 7 * * 1  cd /path/to/litrad-tool && .venv/bin/litrad ingest && .venv/bin/litrad recommend --new > data/this-week.txt`
 
 ### 2. Fill your reading queue
 
 ```bash
-litresearch queue add r1              # a recommendation
-litresearch queue add r3 --top        # ... straight to position 1
-litresearch queue add Barkley2022-ri  # a paper from your libraries (citation key)
-litresearch queue add 10.1038/s41586-024-07894-z   # any DOI
-litresearch queue add pmid:35931863   # any PubMed ID, or a PMC id: PMC5812436
-litresearch queue add --title "Preprint from the lab meeting" --url https://...
-litresearch queue                     # show it
-litresearch queue move q4 1           # reorder
-litresearch queue drop q3             # remove (costs XP if not at least skimmed)
+litrad queue add r1              # a recommendation
+litrad queue add r3 --top        # ... straight to position 1
+litrad queue add Barkley2022-ri  # a paper from your libraries (citation key)
+litrad queue add 10.1038/s41586-024-07894-z   # any DOI
+litrad queue add pmid:35931863   # any PubMed ID, or a PMC id: PMC5812436
+litrad queue add --title "Preprint from the lab meeting" --url https://...
+litrad queue                     # show it
+litrad queue move q4 1           # reorder
+litrad queue drop q3             # remove (costs XP if not at least skimmed)
 ```
 
 - When the queue is full (`queue.max_size`, default 5) nothing can be added
@@ -329,11 +329,11 @@ litresearch queue drop q3             # remove (costs XP if not at least skimmed
 Web: **Library → Find & add**. CLI:
 
 ```bash
-litresearch search "circulating tumor DNA" --journal "Nature Medicine" --from 2023
-litresearch search --author "Swanton C; Turajlic S" --title evolution --sort cited
-litresearch search "ctDNA" --oa --source pubmed --limit 20     # free full texts, PubMed only
-litresearch search "ctDNA" --author "Swanton C" --add 2        # put result 2 on the queue
-litresearch search clonal -s library                          # only your own libraries
+litrad search "circulating tumor DNA" --journal "Nature Medicine" --from 2023
+litrad search --author "Swanton C; Turajlic S" --title evolution --sort cited
+litrad search "ctDNA" --oa --source pubmed --limit 20     # free full texts, PubMed only
+litrad search "ctDNA" --author "Swanton C" --add 2        # put result 2 on the queue
+litrad search clonal -s library                          # only your own libraries
 ```
 
 Keywords are searched in title and abstract; `--title`, `--author`,
@@ -359,13 +359,13 @@ paginated, 50 per page.
 ### 3. Read
 
 ```bash
-litresearch next                      # top paper: abstract, TL;DR, link
-litresearch read q1 thorough --rating 5 --note "Key figure 3; method usable for our SCC data"
-litresearch read q2 abstract          # an abstract read keeps it on the queue
-litresearch note q1 "Follow-up: check their supplementary table S4"
-litresearch dismiss r4                # not relevant; teaches the recommender
-litresearch show Barkley2022-ri       # details, status, all notes
-litresearch history
+litrad next                      # top paper: abstract, TL;DR, link
+litrad read q1 thorough --rating 5 --note "Key figure 3; method usable for our SCC data"
+litrad read q2 abstract          # an abstract read keeps it on the queue
+litrad note q1 "Follow-up: check their supplementary table S4"
+litrad dismiss r4                # not relevant; teaches the recommender
+litrad show Barkley2022-ri       # details, status, all notes
+litrad history
 ```
 
 Reading levels: `abstract` → `skimmed` → `read` → `thorough`. Reaching
@@ -379,15 +379,15 @@ you can also edit in Obsidian: [Notes and Obsidian](#notes-and-obsidian).
 
 Each paper's notes are **one Markdown file** (UTF-8, LF line endings). Edit
 it on the paper page (**✏️ Edit**, **👁 Preview**, **💾 Save**) or in any
-editor; litresearch picks up the change.
+editor; litrad picks up the change.
 
 **Where the files are.** `<profile folder>/notes/`, or, with
 `paths.obsidian_vault` set (in `config.yaml` or the profile's
 `settings.yaml`), `<vault>/<paths.notes_subfolder>/` (default subfolder
-`litresearch`). Obsidian then edits the same files; nothing is copied.
+`litrad`). Obsidian then edits the same files; nothing is copied.
 Profiles that share a vault need different subfolders. Subfolders inside
 the notes folder are allowed (move or rename files freely).
-`litresearch notes path REF` prints a paper's file; Settings → Data &
+`litrad notes path REF` prints a paper's file; Settings → Data &
 backups shows the folder.
 
 **File name.** The paper's citation key (from its first library) with
@@ -395,11 +395,11 @@ everything but `a-z A-Z 0-9 - _ .` replaced by `-` and accents removed
 (`Müller2020:ab` → `Muller2020-ab.md`); without a key `doi-<doi>.md`, else
 `paper-<id>.md`. A name taken by another paper gets `-2`, `-3` …
 
-**Format `litresearch-note/1`.** YAML front matter, then your note:
+**Format `litrad-note/1`.** YAML front matter, then your note:
 
 ```markdown
 ---
-litresearch_id: 42
+litrad_id: 42
 title: Clonal evolution in melanoma
 authors:
   - Smith, Jane
@@ -414,7 +414,7 @@ rating: 5
 tags:
   - tumour-evolution
 updated: '2026-11-09T08:30:00'
-format: litresearch-note/1
+format: litrad-note/1
 ---
 
 ## Summary
@@ -423,21 +423,21 @@ Key figure 3 shows … see also [[Barkley2022-ri]].
 
 | Key | Meaning |
 |---|---|
-| `litresearch_id` | the paper's id in this profile; finds the file again after a rename (checked against DOI and PMID) |
+| `litrad_id` | the paper's id in this profile; finds the file again after a rename (checked against DOI and PMID) |
 | `title`, `authors`, `year`, `journal`, `doi`, `pmid`, `citekey` | paper metadata; empty values stay empty (`doi:`) |
 | `status` | deepest reading level reached (`abstract` … `thorough`), `dismissed`, or empty |
 | `rating` | 1–5 stars or empty |
-| `tags` | your library labels (spaces → `-`); tags you add are kept, litresearch never removes a tag |
-| `updated` | last time litresearch wrote the file (ISO 8601) |
-| `format` | `litresearch-note/1` |
+| `tags` | your library labels (spaces → `-`); tags you add are kept, litrad never removes a tag |
+| `updated` | last time litrad wrote the file (ISO 8601) |
+| `format` | `litrad-note/1` |
 
-litresearch rewrites only these keys and only when a value changed; keys,
+litrad rewrites only these keys and only when a value changed; keys,
 comments and order you add stay. The **body** (everything after the front
 matter) is written only when you save the note or add a note while logging a
 reading (then your entry goes below the file's current text). Windows line
 endings are converted to LF. Invalid front matter is left as it is and
 reported. Changing `status` or `rating` in the file has no effect: set them
-in litresearch.
+in litrad.
 
 **Links.** `[[citation-key]]`, `[[file-name]]`, `[[key|text]]` link to the
 paper's page in the preview (Obsidian resolves them by file name). Unknown
@@ -453,31 +453,31 @@ folder, if there is one, else from a short built-in outline (`## Summary`,
 **Sync and conflicts.** The file is the source of truth; the database keeps a
 copy for search, Read papers, XP and backups. The copy is refreshed when you
 open a paper, Read papers, Settings → **🔄 Sync notes**, `notes sync`, and
-before backups and exports. litresearch remembers the version both had at
+before backups and exports. litrad remembers the version both had at
 the last sync:
 
 - only the file changed → its text is taken over (notes bonus if it is now
   long enough, once per paper as before);
-- only litresearch's copy changed (log dialog, progress import, restore) →
+- only litrad's copy changed (log dialog, progress import, restore) →
   the file is updated;
 - both changed → **conflict**: nothing is overwritten. The paper page shows
-  both versions side by side: **Keep file**, **Keep litresearch's** (or
+  both versions side by side: **Keep file**, **Keep litrad's** (or
   **Keep mine** after an edit), or edit the merged text and **Save merged**.
 - The editor remembers the version it was opened from; if the file changed
   meanwhile (e.g. in Obsidian), saving shows the same conflict view.
 
 A missing file is written again from the copy; a renamed or moved file is
-found by its `litresearch_id`. Existing notes from before 0.5 become files on
+found by its `litrad_id`. Existing notes from before 0.5 become files on
 first use (opening a paper, a backup or `notes sync`); a file with different
 text is a conflict, never overwritten. Nothing is deleted automatically.
 
 ```bash
-litresearch notes sync          # import edits, write missing files, list conflicts and orphans
-litresearch notes check         # the same as a report only; exit code 1 on conflicts or problems
-litresearch notes path q1       # the file of a paper
+litrad notes sync          # import edits, write missing files, list conflicts and orphans
+litrad notes check         # the same as a report only; exit code 1 on conflicts or problems
+litrad notes path q1       # the file of a paper
 ```
 
-*Orphans* are files that match no paper (by `litresearch_id`, DOI, PMID,
+*Orphans* are files that match no paper (by `litrad_id`, DOI, PMID,
 citation key or file name); *waiting* files belong to a paper you have not
 logged yet: log a reading and they are linked.
 
@@ -496,8 +496,8 @@ relevant*. 50 per page; **Export TSV** writes all rows matching the filters,
 not only the page.
 
 ```bash
-litresearch read-papers --depth thorough --rating 4 --since 2026-01-01
-litresearch read-papers --search "clonal" --library Paperpile --tsv clonal.tsv
+litrad read-papers --depth thorough --rating 4 --since 2026-01-01
+litrad read-papers --search "clonal" --library Paperpile --tsv clonal.tsv
 ```
 
 TSV columns: title, authors, year, journal, doi, pmid, deepest depth, first
@@ -506,7 +506,7 @@ written as `\t` and `\n`, empty values as `n/a`.
 
 ### 4. Check your score
 
-Web: **Progress & XP** and the dashboard. CLI: `litresearch score` shows
+Web: **Progress & XP** and the dashboard. CLI: `litrad score` shows
 level and XP to the next level, streak and the current XP multiplier ("next
 reads earn ×1.05"), this week's grade and quest progress, Reading Impact
 Factor, discipline, depth and badges with the next one in reach.
@@ -538,12 +538,12 @@ mix.
 **Command line:**
 
 ```bash
-litresearch profile list                     # * marks the current profile
-litresearch profile create "Grace" --yes     # rules from config.yaml, locked
-litresearch profile use grace
-litresearch --profile Kai queue              # one command for another profile
-litresearch profile adopt "Kai"              # data from before profiles -> profile
-litresearch profile load saved.json --name "Kai (laptop)"
+litrad profile list                     # * marks the current profile
+litrad profile create "Grace" --yes     # rules from config.yaml, locked
+litrad profile use grace
+litrad --profile Kai queue              # one command for another profile
+litrad profile adopt "Kai"              # data from before profiles -> profile
+litrad profile load saved.json --name "Kai (laptop)"
 ```
 
 Saving, loading and comparing profiles: [Gamification](#saving-loading-and-comparing-profiles);
@@ -553,14 +553,14 @@ where the files live: [Your data and backups](#10-your-data-and-backups).
 ## 4. Web UI
 
 ```bash
-litresearch serve                    # asks where to serve; Enter keeps web.host
-litresearch serve --network wlan0    # no question: only the WLAN (or eth0, all, local, an IP)
-litresearch serve --no-choose        # no question: web.host / web.port from the config
-litresearch serve --list-networks    # the networks of this computer
+litrad serve                    # asks where to serve; Enter keeps web.host
+litrad serve --network wlan0    # no question: only the WLAN (or eth0, all, local, an IP)
+litrad serve --no-choose        # no question: web.host / web.port from the config
+litrad serve --list-networks    # the networks of this computer
 ```
 
 This chapter is about **server mode**. The [desktop app](#desktop-app)
-(`litresearch app`) needs none of it: it is always local and opens the
+(`litrad app`) needs none of it: it is always local and opens the
 browser itself.
 
 `serve` asks where the UI should be reachable (choosing another network
@@ -584,7 +584,7 @@ exist, the server does not start and lists the choices.
 
 ### Using it from your laptop (local network)
 
-1. Set a password once: `litresearch set-password` (stored only as a salted
+1. Set a password once: `litrad set-password` (stored only as a salted
    scrypt hash in `web.password_hash`).
 2. Choose the network when `serve` asks, or set `web.host: wlan0`.
 3. Open the printed address (e.g. `http://10.100.7.134:8080/`) on the laptop
@@ -609,7 +609,7 @@ exist, the server does not start and lists the choices.
 
 ### Using it on your phone
 
-litresearch can be installed on the phone's home screen as an app (server
+litrad can be installed on the phone's home screen as an app (server
 mode). The phone only shows pages from your server; nothing is stored on it
 except the icon, style files and a small "You are offline" page, never your
 papers or ratings.
@@ -617,7 +617,7 @@ papers or ratings.
 **At home (same Wi-Fi).**
 
 1. Serve on the network with a password (see above), e.g.
-   `litresearch set-password` once, then `litresearch serve`.
+   `litrad set-password` once, then `litrad serve`.
 2. Open the printed address (`http://<server-ip>:8080/`) in the phone's
    browser and log in.
 3. Browser menu, **Add to Home Screen** (Safari: Share, then **Add to Home
@@ -625,21 +625,21 @@ papers or ratings.
 
 Browsers only allow the full installation and the offline page on HTTPS (or
 `localhost`). Over plain `http://` the result is a home-screen shortcut that
-opens litresearch in the browser, without the offline page.
+opens litrad in the browser, without the offline page.
 
 **From anywhere, with HTTPS (Tailscale).**
 
 1. Install Tailscale on the server and on the phone and sign in with the same
    account; in the Tailscale admin console enable MagicDNS and HTTPS
    certificates.
-2. On the server, with litresearch running locally (`litresearch serve`, the
+2. On the server, with litrad running locally (`litrad serve`, the
    default address `127.0.0.1:8080`), run `tailscale serve --bg 8080`. It
    prints an address like `https://<machine>.<tailnet>.ts.net`; only your
    own devices can reach it.
 3. Open that address on the phone, log in, and add it to the home screen as
    above.
 
-A password is required: without one litresearch only answers IP addresses
+A password is required: without one litrad only answers IP addresses
 and the computer's own names and answers the `*.ts.net` name with "Unknown
 host name" (HTTP 421). With a password set, any host name is accepted and the
 login protects your data. Never open the port to the internet directly.
@@ -699,19 +699,19 @@ status, notes and points are shared.
 |---|---|---|
 | **Import** into a new library | Library → Import, `library import FILE --new NAME` | the file becomes the library; *Update from file* / `ingest` read it again later |
 | Import into an existing library | `--to NAME` (add) or `--to NAME --replace` | **add** its papers, or **replace** the library (papers missing in the file leave this library, nothing else changes) |
-| **Export** | library page, `library export NAME [FILE] --format bibtex\|ris [--status]` | BibTeX (Paperpile, Zotero, Mendeley, JabRef) or RIS (EndNote, Citavi); *with reading status* adds keywords such as `litresearch-read`, `litresearch-rating-4` (labels in your reference manager) |
+| **Export** | library page, `library export NAME [FILE] --format bibtex\|ris [--status]` | BibTeX (Paperpile, Zotero, Mendeley, JabRef) or RIS (EndNote, Citavi); *with reading status* adds keywords such as `litrad-read`, `litrad-rating-4` (labels in your reference manager) |
 | 🎯 **Used for recommendations** | Libraries page (checkboxes, *Save*), `library use NAME… [--off]` | which libraries form "your library": the similarity score and the pool of the positive-example rules `recent`, `impact`, `fwci`, `cited` (not `liked`, `read` or papers you add). With none checked, the similarity is 0 for every candidate; the Libraries page and the recommendation warnings say so |
 
 Every file is checked first; an invalid file changes nothing
 ([what an export must contain](#what-an-export-must-contain)). Two libraries
-are kept by litresearch: **Recommended** (a recommendation joins it when you
+are kept by litrad: **Recommended** (a recommendation joins it when you
 queue it, and stays after reading; remove with ✖) and **Reading queue**
 (always exactly the current queue; exportable). Databases from before
 libraries existed are migrated to a library called **My library**.
 
 **Positive examples** and **Negative examples** are the papers sent to
 Semantic Scholar's recommendations ([how they are chosen](#1-candidates)).
-litresearch regenerates them before every list and whenever you open them;
+litrad regenerates them before every list and whenever you open them;
 each paper shows its origin (*added by you* or *rule: …*, also exported as a
 label). On their pages you can **remove** a paper (the rules then skip it;
 *Removed by you* → **Restore**), **add a paper** (DOI, `pmid:N`, `PMCn`,
@@ -743,7 +743,7 @@ Every rule that decides which papers you see. Each number is a setting
 (`selection.…`) of your profile, editable under **Settings**. The
 Recommendations page shows the same rules with your current values (**How
 recommendations are made**), and each recommendation has an **evidence
-tree** with the actual numbers. Code: `src/litresearch/recommend/`
+tree** with the actual numbers. Code: `src/litrad/recommend/`
 (`engine.py`: candidates and filters; `scoring.py`: scores and selection);
 keep this chapter and `web/templates/_how_recommend.html` in sync with it.
 
@@ -774,7 +774,7 @@ off-topic hits such as a FASTQ tool for "circulating tumor DNA".)
 **Semantic Scholar recommendations** (`sources.semanticscholar`): recent
 papers similar to *positive* and unlike *negative* example papers. Both
 lists are libraries (Library → *Positive examples*, *Negative examples*;
-`litresearch examples`) and are built in this order, without duplicates,
+`litrad examples`) and are built in this order, without duplicates,
 papers you removed and papers without DOI, until `s2_positive_count` (100)
 or `s2_negative_count` (50) papers are reached:
 
@@ -926,7 +926,7 @@ planned to read first), not volume.
 
 ### Your profile and its locked rules
 
-1. **Create** a profile (welcome screen, `litresearch profile create`) and
+1. **Create** a profile (welcome screen, `litrad profile create`) and
    choose every reward, the penalty, the level ladder and badge targets; the
    form is pre-filled from the `game` section of `config.yaml`.
 2. The rules are copied into the profile's database and **locked**. Their
@@ -939,7 +939,7 @@ planned to read first), not volume.
 3. **Different rules** need another profile; the old one stays and you can
    switch back at any time.
 4. **Rules formats.** New profiles get *rules format 2* (the defaults below:
-   60 levels, 129 badges). A profile locked by litresearch 1.0 or earlier
+   60 levels, 129 badges). A profile locked by litrad 1.0 or earlier
    keeps *format 1* (20 levels from 🎓 Curious Undergrad to 🏆 Hallmarks
    Author at 13 000 XP, the 44 badges without ², its own badge targets and
    rules) and its fingerprint. Rules stored without `rules_format` that list
@@ -950,7 +950,7 @@ planned to read first), not volume.
 | Rule | Default | Meaning |
 |---|---|---|
 | `xp_abstract` / `xp_skimmed` / `xp_read` / `xp_thorough` | 5 / 15 / 40 / 80 | base points for the depth **you** choose; deeper may never pay less |
-| `backlog_share` | 1.0 | 🕰️ share of the base points for a paper you **read earlier**, before litresearch ([below](#starting-with-papers-you-already-read)) |
+| `backlog_share` | 1.0 | 🕰️ share of the base points for a paper you **read earlier**, before litrad ([below](#starting-with-papers-you-already-read)) |
 | `frog_bonus` | 0.5 | 🐸 share of the base points when the paper was **q1** (up next) and read ≥ skimmed |
 | `streak_step` / `streak_max_steps` | 0.05 / 10 | 🔥 +5 % per consecutive reading week, at most +50 % ("next reads earn ×N") |
 | `classic_percentile` / `classic_xp` | 99 / 20 | 🏛️ landmark (top 1 % cited) read at least at "read" depth |
@@ -980,9 +980,9 @@ Fairness rules that always apply:
 
 ### Starting with papers you already read
 
-Mark the papers you read before using litresearch as **read earlier**: the
+Mark the papers you read before using litrad as **read earlier**: the
 🕰️ checkbox (and an optional date) in the *Log reading* dialog,
-`litresearch read REF LEVEL --earlier [--date YYYY-MM-DD]`, or on a library
+`litrad read REF LEVEL --earlier [--date YYYY-MM-DD]`, or on a library
 page tick the papers and use *🕰️ Mark as read earlier* with one depth
 (papers already read at least that deeply are skipped).
 
@@ -1203,7 +1203,7 @@ or badge. The defaults above (format 2) give:
 
 ### Saving, loading and comparing profiles
 
-- **Save** (Profile page, `litresearch profile save [FILE]`): an
+- **Save** (Profile page, `litrad profile save [FILE]`): an
   [archive](#the-archive-export-everything) (`.zip`) with the profile and its
   locked rules, every status, rating and note (also the note files),
   history, queue, XP, badges, recommendation batches with evidence, and the
@@ -1215,7 +1215,7 @@ or badge. The defaults above (format 2) give:
   papers read, thorough reads, longest streak, quests, badges, discipline,
   depth, Reading Impact Factor, notes and active weeks side by side, the best
   value highlighted; says whether profiles played by the **same rules**
-  (fingerprint) and whether a file was **edited** outside litresearch.
+  (fingerprint) and whether a file was **edited** outside litrad.
 - Every file has a **checksum** (archives: a SHA-256 per file); a file whose
   content no longer matches is refused. This catches hand edits; it is not a cryptographic proof. Loading
   and comparing also check the file against its schema and for consistency
@@ -1245,12 +1245,12 @@ or badge. The defaults above (format 2) give:
 | `search [KEYWORDS] [--title] [--author] [--journal] [--from] [--to] [--oa] [--source all\|europepmc\|pubmed\|library] [--sort relevance\|newest\|cited] [--limit N] [--add N]` | find papers in Europe PMC and PubMed and queue them |
 | `queue [add\|drop\|move]` | the reading queue |
 | `next`, `show REF` | top paper / any paper with abstract, status, notes |
-| `read REF LEVEL [--rating] [--note] [--earlier [--date YYYY-MM-DD]]` | log a reading and earn XP; `--earlier`: read before litresearch ([details](#starting-with-papers-you-already-read)) |
+| `read REF LEVEL [--rating] [--note] [--earlier [--date YYYY-MM-DD]]` | log a reading and earn XP; `--earlier`: read before litrad ([details](#starting-with-papers-you-already-read)) |
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant |
 | `notes sync\|check`, `notes path REF` | note files: import edits, write missing files, list conflicts and orphans (`check` changes nothing) / print a paper's file ([Notes and Obsidian](#notes-and-obsidian)) |
 | `score`, `history` | level, streak, grade, badges / reading log |
 | `read-papers [--depth LEVEL]… [--rating N] [--since DATE] [--until DATE] [--library NAME] [--notes] [--dismissed] [--search WORDS] [--sort last\|first\|depth\|rating\|xp\|title] [--limit N] [--tsv FILE]` | your reading history; `--tsv` writes all matching rows |
-| `app [--port N] [--no-browser]` | desktop mode: the web UI on this computer only, opened in your browser; Quit in the sidebar. `--no-browser` or `LITRESEARCH_NO_BROWSER=1`: do not open a browser. Also as `litresearch-app` |
+| `app [--port N] [--no-browser]` | desktop mode: the web UI on this computer only, opened in your browser; Quit in the sidebar. `--no-browser` or `LITRAD_NO_BROWSER=1`: do not open a browser. Also as `litrad-app` |
 | `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI (server mode) |
 | `set-password [--remove] [--password-file FILE]` | password for network access |
 | `backup`, `restore FILE` | snapshot + archive of everything / restore a snapshot |
@@ -1275,7 +1275,7 @@ personal data:
 | [Crossref](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) | DOI by title (during import) | free; polite pool with `mailto` |
 | [OpenAlex](https://docs.openalex.org/) | metrics, identifiers, venues, topic searches | ≈ 1000 credits/day; a batch look-up of 50 papers costs 1, a search 10 |
 | [Semantic Scholar](https://www.semanticscholar.org/product/api) | SPECTER2 embeddings, TL;DRs, recommendations | one rate limit shared by all anonymous users (HTTP 429 is common); a free key gives 1 request/s |
-| [Europe PMC](https://europepmc.org/RestfulWebService) | paper search, look-up by DOI/PMID/PMC id | free; litresearch waits 0.1 s between requests |
+| [Europe PMC](https://europepmc.org/RestfulWebService) | paper search, look-up by DOI/PMID/PMC id | free; litrad waits 0.1 s between requests |
 | [PubMed](https://www.ncbi.nlm.nih.gov/books/NBK25501/) (NCBI E-utilities) | paper search, look-up by PMID | 3 requests/s (10 with `api.ncbi_key`) |
 
 **What leaves your machine:** titles/authors of library papers without DOI
@@ -1283,7 +1283,7 @@ personal data:
 topic queries (OpenAlex); what you type into the paper search (Europe PMC,
 PubMed); the DOIs of the positive and negative example papers (Semantic
 Scholar recommendations; switch off with `sources.semanticscholar`). PubMed
-requests carry `tool=litresearch` but no e-mail; `api.contact_email` stays
+requests carry `tool=litrad` but no e-mail; `api.contact_email` stays
 `n/a` unless you want the polite pools.
 
 Answers are cached in `data/cache/http_cache.sqlite` (Crossref 1 year,
@@ -1309,11 +1309,11 @@ Planned: PubMed as a recommendation source and PubMed Central full texts
   starts without topics; a profile taken over from old data starts with the
   topics of `config.yaml`.
 
-**Which `config.yaml`** (the first that applies; `litresearch where` shows
+**Which `config.yaml`** (the first that applies; `litrad where` shows
 the choice):
 
 1. `-c/--config PATH`;
-2. the environment variable `LITRESEARCH_CONFIG` (a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
+2. the environment variable `LITRAD_CONFIG` (a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
 3. `config/config.yaml` in the current folder (a git installation);
 4. your per-user config file ([Setup](#1-install)). If it does not exist
    yet, the first command creates it from the example, with the data in your
@@ -1336,10 +1336,10 @@ rejected. Sections marked *(planned)* are validated but not used yet.
 | `base_dir` | `n/a` | folder relative paths start from (see above); a new per-user config sets it to your per-user data folder |
 | `profiles_dir` | `data/profiles` | one folder per profile |
 | `bibtex` | `data/paperpile/library.bib` | an export file that `ingest` imports into **My library** when no library has a file yet (the set-up before 0.2); a profile uses `library.bib` in its folder unless its `settings.yaml` sets it |
-| `database` | `data/litresearch.sqlite` | database *before profiles*; a profile uses `litresearch.sqlite` in its folder |
+| `database` | `data/litrad.sqlite` | database *before profiles*; a profile uses `litrad.sqlite` in its folder |
 | `cache_dir` | `data/cache` | HTTP response cache |
 | `obsidian_vault` | `n/a` | Obsidian vault for the note files; `n/a`: `<profile folder>/notes/` ([Notes and Obsidian](#notes-and-obsidian)) |
-| `notes_subfolder` | `litresearch` | folder inside the vault for the note files (`""` = the vault itself); only used with `obsidian_vault` |
+| `notes_subfolder` | `litrad` | folder inside the vault for the note files (`""` = the vault itself); only used with `obsidian_vault` |
 
 ### `topics`, `excluded_terms`, `library`
 
@@ -1438,16 +1438,16 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 
 `data/` below is the data folder: in a git installation `data/` next to
 `config/`; installed as a package (pip, pipx), your per-user data folder
-(without the `data/` part, e.g. `~/.local/share/litresearch/profiles/`); in
+(without the `data/` part, e.g. `~/.local/share/litrad/profiles/`); in
 the Docker image the volume `/data` (also holding `config.yaml`; find it on
-the host with `docker volume inspect litresearch`).
-`litresearch where` prints the actual folders. Each profile has its own
+the host with `docker volume inspect litrad`).
+`litrad where` prints the actual folders. Each profile has its own
 folder `data/profiles/<profile>/`; `data/profiles/.current` names the
 profile the command line uses.
 
 | What | Where (default) | Rebuildable? |
 |---|---|---|
-| **Your progress**: statuses, ratings, notes, history, queue, XP, badges, recommendations, example choices, locked rules | `data/profiles/<profile>/litresearch.sqlite` | **no**, back it up |
+| **Your progress**: statuses, ratings, notes, history, queue, XP, badges, recommendations, example choices, locked rules | `data/profiles/<profile>/litrad.sqlite` | **no**, back it up |
 | Libraries, paper metadata, metrics, embeddings | same database | yes, from the export files |
 | Uploaded export files | `data/profiles/<profile>/libraries/` | yes, export again |
 | **Your notes** (Markdown files) | `data/profiles/<profile>/notes/` or your Obsidian vault | **no**; in every backup (zip), copy in the database |
@@ -1458,7 +1458,7 @@ profile the command line uses.
 | Desktop app log, running-instance lock | `logs/app.log`, `app-instance.json` in the per-user data folder | yes |
 | Backups | `data/backups/<profile>/` (`backup.dir`) | they *are* the copy |
 | Copies made before a database upgrade | `data/profiles/<profile>/upgrade-backups/` | they *are* the copy ([Database upgrades](#database-upgrades)) |
-| Data from before profiles | `data/litresearch.sqlite` | kept as it was |
+| Data from before profiles | `data/litrad.sqlite` | kept as it was |
 
 All paths are settings, so everything can live in one folder of your choice.
 
@@ -1471,7 +1471,7 @@ All paths are settings, so everything can live in one folder of your choice.
 
    ```yaml
    backup:
-     dir: /home/kai/Nextcloud/litresearch-backups
+     dir: /home/kai/Nextcloud/litrad-backups
      keep: 14
      interval_hours: 24
    ```
@@ -1479,8 +1479,8 @@ All paths are settings, so everything can live in one folder of your choice.
    While `serve` runs it backs up every profile at start and every 24 h.
    Backups keep running even if a profile's `settings.yaml` or
    `config.yaml` is invalid (the problem is logged). On demand:
-   `litresearch backup` or **Back up now** under Settings → Data & backups.
-3. Now and then run `litresearch check`: location, integrity check,
+   `litrad backup` or **Back up now** under Settings → Data & backups.
+3. Now and then run `litrad check`: location, integrity check,
    contents and age of the last backup.
 
 **Do not sync the live database file**: a sync client may copy it mid-write
@@ -1494,28 +1494,28 @@ Two files per backup, named with `YYYYMMDD_HHMMSS`:
 
 | File | Content | Use |
 |---|---|---|
-| `litresearch_20261008_070000.sqlite` | complete database snapshot (SQLite online backup API, consistent while the server writes, integrity-checked) | `litresearch restore FILE` |
-| `litresearch_backup_20261008_070000.zip` | the whole **profile** as an [archive](#the-archive-export-everything) (the same as *Export everything*): rules, settings, statuses, ratings, notes and note files, history, queue, XP, badges, recommendations, libraries, example choices | `profile load` (new profile), `import-all --into` (merge); `restore` takes the note files from it |
+| `litrad_20261008_070000.sqlite` | complete database snapshot (SQLite online backup API, consistent while the server writes, integrity-checked) | `litrad restore FILE` |
+| `litrad_backup_20261008_070000.zip` | the whole **profile** as an [archive](#the-archive-export-everything) (the same as *Export everything*): rules, settings, statuses, ratings, notes and note files, history, queue, XP, badges, recommendations, libraries, example choices | `profile load` (new profile), `import-all --into` (merge); `restore` takes the note files from it |
 
 The oldest files beyond `backup.keep` (default 14 of each kind) are
-deleted. Backups made before 1.0 (`litresearch_progress_<date>_<time>.json`
-and `litresearch_notes_<date>_<time>.zip`) are still read, and age out
+deleted. Backups made before 1.0 (`litrad_progress_<date>_<time>.json`
+and `litrad_notes_<date>_<time>.zip`) are still read, and age out
 together with the new ones. Profiles you save yourself
-(`litresearch_profile_<name>_<date>_<time>.zip`) and *Export everything*
+(`litrad_profile_<name>_<date>_<time>.zip`) and *Export everything*
 files are never deleted.
 
 ### Restoring
 
 ```bash
-# stop `litresearch serve` first
-litresearch restore /path/to/backups/litresearch_20261008_070000.sqlite
+# stop `litrad serve` first
+litrad restore /path/to/backups/litrad_20261008_070000.sqlite
 ```
 
 The current database is first saved as `…_before_restore.sqlite`, so a
 restore can be undone; these copies are rotated by time like other snapshots
 and count toward `backup.keep`. Before anything changes, the snapshot is
-checked: integrity, a litresearch database at all, a schema version this
-version understands (a snapshot of a newer litresearch is refused; an older
+checked: integrity, a litrad database at all, a schema version this
+version understands (a snapshot of a newer litrad is refused; an older
 one is upgraded when it is next opened) and no rows referring to papers,
 libraries or batches that do not exist. Paths that do not exist are refused
 too. Note files:
@@ -1526,9 +1526,9 @@ copy is never overwritten but becomes a [conflict](#notes-and-obsidian).
 ### Moving to another machine, or merging two
 
 ```bash
-litresearch export-all export.zip                     # old machine (or take the latest backup archive)
-litresearch import-all export.zip --into PROFILE --dry-run   # new machine: preview
-litresearch import-all export.zip --into PROFILE
+litrad export-all export.zip                     # old machine (or take the latest backup archive)
+litrad import-all export.zip --into PROFILE --dry-run   # new machine: preview
+litrad import-all export.zip --into PROFILE
 ```
 
 `import-progress FILE` does the same for the current profile and also takes
@@ -1553,7 +1553,7 @@ How the merge works:
   papers`), so an invalid file changes nothing.
 
 The same works with an [archive](#importing-an-archive):
-`litresearch import-all FILE.zip --into PROFILE`; it also brings the libraries
+`litrad import-all FILE.zip --into PROFILE`; it also brings the libraries
 with all metadata and the note files.
 
 To start a profile from a saved file instead, use *Load a saved profile* on
@@ -1571,7 +1571,7 @@ server.
 
 ## 11. Data formats
 
-Everything you build up in litresearch is stored and exported in plain,
+Everything you build up in litrad is stored and exported in plain,
 documented formats, so that later versions keep reading it and other tools
 can use it.
 
@@ -1581,11 +1581,11 @@ Three version numbers are independent of each other:
 
 | Version | Where | Changes when |
 |---|---|---|
-| app version (`0.2.0-dev`) | `litresearch version` | every release |
+| app version (`0.2.0-dev`) | `litrad version` | every release |
 | **data format** (`1`) | `format_version` in `manifest.json` of an archive | the content of the archive changes in any way: a new file, a new field, a changed meaning |
 | **database schema** (`1`) | `PRAGMA user_version` of each profile database | a table, column or index changes |
 
-A litresearch version reads every data format and database schema up to its
+A litrad version reads every data format and database schema up to its
 own and refuses newer ones with a clear message, so an older version never
 damages data of a newer one. **Compatibility promise from 1.0 on:** every
 1.x version reads and upgrades all data, settings and exports of earlier
@@ -1595,19 +1595,19 @@ other way round.
 
 ### Database upgrades
 
-When litresearch opens a profile database with an older schema version
+When litrad opens a profile database with an older schema version
 (databases of 0.1 to 0.5 have version 0), it first saves a copy to
-`data/profiles/<profile>/upgrade-backups/litresearch_<date>_<time>_before-schema-<old>-to-<new>.sqlite`
+`data/profiles/<profile>/upgrade-backups/litrad_<date>_<time>_before-schema-<old>-to-<new>.sqlite`
 (the newest 3 copies are kept; older ones are deleted after an upgrade
-succeeded; `litresearch where` shows the folder) and then upgrades it by numbered, tested steps, one transaction each: an
+succeeded; `litrad where` shows the folder) and then upgrades it by numbered, tested steps, one transaction each: an
 interrupted upgrade resumes where it stopped. Nothing is ever reset. A
 database with a newer schema version is not opened at all: update
-litresearch, or restore a backup made with this version. `litresearch check`
+litrad, or restore a backup made with this version. `litrad check`
 shows the schema version.
 
 ### The archive ("Export everything")
 
-`litresearch export-all [FILE.zip]` or **📦 Export everything** on the Profile
+`litrad export-all [FILE.zip]` or **📦 Export everything** on the Profile
 page writes one zip file per profile. All text is UTF-8, dates and times are
 ISO 8601 local time (`2026-10-09T08:42:05`), every JSON file has a JSON Schema
 (draft 2020-12) in `schemas/`, and papers are referred to by their key `p<id>`
@@ -1615,13 +1615,13 @@ from `papers.json`.
 
 | File | Content (main fields) |
 |---|---|
-| `manifest.json` | `format` (`litresearch-export`), `format_version`, `app_version`, `schema_version`, `created`, `profile`, `counts`, and `files`: SHA-256 and size of every other file |
+| `manifest.json` | `format` (`litrad-export`), `format_version`, `app_version`, `schema_version`, `created`, `profile`, `counts`, and `files`: SHA-256 and size of every other file |
 | `README.md` | what each file contains (generated) |
 | `papers.json` | `papers`: every paper any other file refers to: `key`, identifiers (`doi`, `pmid`, `pmcid`, `arxiv_id`, `s2_id`, `openalex_id`, `bibtex_key`), `title`, `authors`, `year`, `pub_date`, `venue`, `abstract`, metrics, `topics`, `folders`, `tags`, `in_library` |
 | `libraries.json` | `libraries`: `name`, `description`, `kind` (imported, recommended), `format`, `use_for_recommendations`, dates, `files`, and `papers` (`paper`, `citation_key`, `folders`, `tags`, `added_at`) |
 | `libraries/<name>.bib`, `.json` | each library as BibTeX and CSL-JSON for reference managers (views of `libraries.json`, checked on import but not read) |
 | `readings.json` | `readings`: `paper`, `status` (abstract, skimmed, read, thorough, dismissed), `rating`, `notes`, `updated_at` |
-| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top`, `at`; optional (not in older files): `earlier: true` (read before litresearch) and `read_on` (`YYYY-MM-DD` or null) |
+| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top`, `at`; optional (not in older files): `earlier: true` (read before litrad) and `read_on` (`YYYY-MM-DD` or null) |
 | `xp_ledger.json` | `total` and `events`: `points`, `kind`, `reason`, `at`, `paper`, running `balance` |
 | `badges.json` | `badges`: `code`, `name`, `unlocked_at` |
 | `queue.json` | `queue`: `paper`, `position` (1 = next), `source`, `added_at` |
@@ -1633,14 +1633,14 @@ from `papers.json`.
 | `notes/…` | the [note files](#notes-and-obsidian) as they are, with `note_template.md` |
 | `schemas/*.schema.json` | the JSON Schemas |
 
-Not included, because litresearch recomputes them or they belong to one
+Not included, because litrad recomputes them or they belong to one
 machine: embeddings, the example lists themselves (your choices are), the
 import log, the sync state of note files. The schemas are also in the
-package (`litresearch/schemas/`).
+package (`litrad/schemas/`).
 
 ### Importing an archive
 
-`litresearch import-all FILE.zip` creates a new profile (named as in the
+`litrad import-all FILE.zip` creates a new profile (named as in the
 archive, or `--new NAME`); `--into PROFILE` merges into an existing one
 (after a backup); on the web: *Import an archive* on the welcome screen (new
 profile) or on the Profile page (merge). **Before anything changes**, the
@@ -1650,7 +1650,7 @@ archive is checked:
 2. every JSON file against its JSON Schema;
 3. consistency: every paper key used in readings, history, XP, queue,
    recommendations, example choices, library members and note files
-   (`litresearch_id`) is in `papers.json`; no key, reading, queue entry,
+   (`litrad_id`) is in `papers.json`; no key, reading, queue entry,
    badge, library or library member twice; the `.bib`/`.json` copies list
    the papers of `libraries.json`; the XP `balance` and `total` add up and
    match `xp_total`; badge XP belongs to an unlocked badge; reading XP to a
@@ -1663,7 +1663,7 @@ Problems are listed by file and record, e.g.
 `readings.json[12]: paper p77 not in papers.json`, and nothing is imported
 (all or nothing: one database transaction; note files are written only
 after it succeeded; a note file that cannot be written then, e.g. on a full
-disk, is listed, its note stays in the database and `litresearch notes sync`
+disk, is listed, its note stays in the database and `litrad notes sync`
 writes it later). `--partial` (*Only the consistent part*) imports the
 consistent records and lists what was skipped, including everything that
 refers to a skipped record. `--dry-run` checks and shows what would change.
@@ -1681,15 +1681,15 @@ a new profile, and paths from another machine never.
 
 Still read, so nothing written by an earlier version is lost:
 
-- **Progress and profile files** (`litresearch_progress_*.json`,
-  `litresearch_profile_*.json`, format `litresearch-progress` version 2, and
+- **Progress and profile files** (`litrad_progress_*.json`,
+  `litrad_profile_*.json`, format `litrad-progress` version 2, and
   version 1 without checksum from before game profiles). Backups and *Save
   profile* wrote version 2 until 1.0 and write archives since;
   `export-progress`, *Download* on the Profile page and a `profile save` to a
   `.json` file still write it. It is described by
   `schemas/progress.schema.json` and checked like an archive before it is
   loaded, merged or compared.
-- **Notes zips of backups** (`litresearch_notes_*.zip`, before 1.0): `restore`
+- **Notes zips of backups** (`litrad_notes_*.zip`, before 1.0): `restore`
   still takes the note files from them.
 - **Databases** of every version since 0.1.0-alpha.1 (upgraded as above).
 - **Notes in the database** (before 0.5): they become note files.
@@ -1705,12 +1705,12 @@ the [data model](#data-model). Read it without changing it, ideally from a
 backup snapshot:
 
 ```bash
-sqlite3 -readonly data/profiles/<profile>/litresearch.sqlite \
+sqlite3 -readonly data/profiles/<profile>/litrad.sqlite \
   "SELECT p.title, r.status, r.rating FROM reading r JOIN paper p ON p.id = r.paper_id"
 ```
 
 Times are stored as local ISO 8601 text, lists and settings as JSON text.
-Do not write into the live database while litresearch runs; use the archive
+Do not write into the live database while litrad runs; use the archive
 or the commands instead.
 
 
@@ -1997,7 +1997,7 @@ Methods:
 
 - [zotero-arxiv-daily](https://github.com/TideDra/zotero-arxiv-daily) (MIT):
   embedding similarity between new preprints and a reference-manager library.
-  It inspired the general idea; no code was reused, and litresearch differs
+  It inspired the general idea; no code was reused, and litrad differs
   in input, sources, impact scoring, the reading workflow and the game.
 - Scholar Inbox (Flicke et al., 2025, arXiv:2504.08385), Semantic Scholar
   Research Feeds, ResearchRabbit and Litmaps were reviewed as alternatives.
@@ -2007,8 +2007,8 @@ Methods:
 ### License and citation
 
 MIT license with the Commons Clause ([LICENSE](../LICENSE)): you may use, change
-and share litresearch, but not sell it or a paid product or service (including
-hosting, consulting or support) whose value comes mainly from it. To cite litresearch use
+and share litrad, but not sell it or a paid product or service (including
+hosting, consulting or support) whose value comes mainly from it. To cite litrad use
 [CITATION.cff](../CITATION.cff); please also cite OpenAlex and Semantic
 Scholar/SPECTER2 (see Literature) when you report results based on it.
 
@@ -2043,7 +2043,7 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
 ```bash
 .venv/bin/pytest                         # offline suite (default)
 .venv/bin/pytest --network               # also the real APIs
-.venv/bin/pytest --cov=litresearch --cov-report=term-missing
+.venv/bin/pytest --cov=litrad --cov-report=term-missing
 .venv/bin/ruff check src tests && .venv/bin/ruff format src tests
 ```
 
@@ -2090,24 +2090,24 @@ of the database models needs a new migration step, a higher
 ### Desktop builds
 
 `.github/workflows/release.yml` builds the desktop apps for every tag (and
-on *Run workflow*, without releasing): PyInstaller (`packaging/litresearch.spec`,
+on *Run workflow*, without releasing): PyInstaller (`packaging/litrad.spec`,
 one folder, entry `packaging/desktop_entry.py`), then an AppImage
 (`tools/build_appimage.py`), an Inno Setup installer
-(`packaging/windows/litresearch.iss`) or a `.dmg` (`hdiutil`). Each build is
+(`packaging/windows/litrad.iss`) or a `.dmg` (`hdiutil`). Each build is
 checked with `tools/smoke_desktop.py BINARY`: start in a temporary home,
 create a profile, load pages, second start, Quit, lock removed. Locally on
 Linux:
 
 ```bash
 pip install pyinstaller
-pyinstaller --distpath /tmp/lr/dist --workpath /tmp/lr/work packaging/litresearch.spec
-python tools/smoke_desktop.py /tmp/lr/dist/litresearch/litresearch
-python tools/build_appimage.py /tmp/lr/dist/litresearch --output /tmp/lr/litresearch.AppImage \
+pyinstaller --distpath /tmp/lr/dist --workpath /tmp/lr/work packaging/litrad.spec
+python tools/smoke_desktop.py /tmp/lr/dist/litrad/litrad
+python tools/build_appimage.py /tmp/lr/dist/litrad --output /tmp/lr/litrad.AppImage \
     --appimagetool PATH/appimagetool-$(uname -m).AppImage
 ```
 
 ### Recording new API fixtures
 
-Run a real `litresearch ingest`, then take the responses from
+Run a real `litrad ingest`, then take the responses from
 `data/cache/http_cache.sqlite` (table `cache`, JSON in column `body`). Trim
 them before committing: shorten embeddings and drop affiliations.

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://litrad.example/schemas/1/profile.schema.json",
+  "title": "litrad profile",
+  "description": "The game profile with its locked rules",
+  "type": "object",
+  "properties": {
+    "profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/profile"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "xp_total": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "profile",
+    "xp_total"
+  ],
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?$",
+          "description": "ISO 8601 date and time, local time, no offset (YYYY-MM-DDTHH:MM:SS)"
+        },
+        "rules": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "The locked game rules (see the Gamification chapter)"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "app_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "rules"
+      ]
+    }
+  }
+}

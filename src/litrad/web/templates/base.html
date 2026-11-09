@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}The Literature Radar Game{% endblock %} · litrad</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+{% include "_pwa_head.html" %}
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="ringGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6c4bf4"/><stop offset="100%" stop-color="#12b5a5"/>
+    </linearGradient>
+    <linearGradient id="barGradient" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#6c4bf4"/><stop offset="100%" stop-color="#12b5a5"/>
+    </linearGradient>
+  </defs>
+</svg>
+{% set active = active | default("") %}
+<div class="app">
+  <aside class="sidebar">
+    {% include "_brand.html" %}
+    <nav class="nav" aria-label="Main">
+      <a href="/" class="{{ 'active' if active == 'dashboard' }}"{% if active == 'dashboard' %} aria-current="page"{% endif %}><span class="icon">🏠</span>Dashboard</a>
+      <div class="group">Reading</div>
+      <a href="/queue" class="sub {{ 'active' if active == 'queue' }}"{% if active == 'queue' %} aria-current="page"{% endif %}><span class="icon">📚</span>Reading queue<span class="count">{{ header.queue }}/{{ cfg.queue.max_size }}</span></a>
+      <a href="/recommendations" class="sub {{ 'active' if active == 'recommendations' }}"{% if active == 'recommendations' %} aria-current="page"{% endif %}><span class="icon">✨</span>Recommendations{% if header.reminder %}<span class="dot" title="time for new recommendations"><span class="sr-only">(time for new ones)</span></span>{% endif %}</a>
+      <a href="/read" class="sub {{ 'active' if active == 'read' }}"{% if active == 'read' %} aria-current="page"{% endif %}><span class="icon">✅</span>Read papers</a>
+      <div class="group">Progress</div>
+      <a href="/progress" class="sub {{ 'active' if active == 'progress' }}"{% if active == 'progress' %} aria-current="page"{% endif %}><span class="icon">🏆</span>Progress &amp; XP</a>
+      <div class="group">Library</div>
+      <a href="/library" class="sub {{ 'active' if active in ('libraries', 'library', 'import') }}"{% if active in ('libraries', 'library', 'import') %} aria-current="page"{% endif %}><span class="icon">🗂️</span>Libraries</a>
+      <a href="/search" class="sub {{ 'active' if active == 'search' }}"{% if active == 'search' %} aria-current="page"{% endif %}><span class="icon">🔍</span>Find &amp; add</a>
+      <div class="group"></div>
+      <a href="/settings" class="{{ 'active' if active == 'settings' }}"{% if active == 'settings' %} aria-current="page"{% endif %}><span class="icon">⚙️</span>Settings</a>
+      <a href="/docs" class="{{ 'active' if active == 'docs' }}"{% if active == 'docs' %} aria-current="page"{% endif %}><span class="icon">📖</span>Documentation</a>
+    </nav>
+    <div class="footer">
+      <button type="button" class="small ghost" data-shortcuts title="Keyboard shortcuts (press ?)">⌨️ Shortcuts <kbd>?</kbd></button>
+      <form method="post" action="/welcome/leave"><button class="small ghost">🔁 Switch profile</button></form>
+      {% if cfg.web.password_hash %}<form method="post" action="/logout"><button class="small ghost">🔒 Log out</button></form>{% endif %}
+      {% if desktop %}<form method="post" action="/app/quit"><button class="small ghost" title="Stop litrad on this computer">⏻ Quit</button></form>{% endif %}
+      <div class="version">litrad v{{ version }}</div>
+    </div>
+  </aside>
+  <main class="main" id="main">
+    <div class="topbar">
+      <h1>{% block heading %}{% endblock %}</h1>
+      <a class="player" href="/profile" title="Profile {{ profile.name if profile else '' }}: rules, save, compare, switch">
+        <span class="avatar">{{ header.level.icon }}</span>
+        <span>
+          <span class="who-name">{{ profile.name if profile else "Profile" }}</span><br>
+          <span class="lvl">Lv {{ header.level.number }} · {{ header.level.title }}</span><br>
+          <span class="xpbar"><span style="width: {{ (header.progress * 100) | round(1) }}%"></span></span>
+        </span>
+        <span class="xp-value"><b>{{ header.xp }}</b> <small>XP</small></span>
+        <span class="streak" title="weekly reading streak"><span class="flame {{ 'on' if header.streak >= 1 }}">🔥</span> {{ header.streak }}</span>
+      </a>
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<div class="toasts" aria-live="polite"></div>
+<div class="overlay" id="loading"><div class="modal" role="alertdialog" aria-live="assertive" aria-label="Working"><div class="spinner"></div><h2>Working…</h2><p></p></div></div>
+<template id="shortcuts-help">
+  <dl class="shortcuts">
+    <dt><kbd>n</kbd></dt><dd>next paper</dd>
+    <dt><kbd>r</kbd></dt><dd>recommendations</dd>
+    <dt><kbd>p</kbd></dt><dd>progress &amp; XP</dd>
+    <dt><kbd>?</kbd></dt><dd>this help</dd>
+    <dt><kbd>Esc</kbd></dt><dd>close a dialog</dd>
+  </dl>
+</template>
+{% if celebration %}<script id="celebration" type="application/json">{{ celebration | tojson }}</script>{% endif %}
+<script src="/static/app.js"></script>
+</body>
+</html>

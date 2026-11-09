@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://litrad.example/schemas/1/recommendations.schema.json",
+  "title": "litrad recommendations",
+  "description": "Recommendation batches with funnel, parameters and per-paper score breakdown",
+  "type": "object",
+  "properties": {
+    "batches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
+  },
+  "required": [
+    "batches"
+  ],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "properties": {
+        "week_start": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "ISO 8601 date (YYYY-MM-DD)"
+        },
+        "created_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?$",
+          "description": "ISO 8601 date and time, local time, no offset (YYYY-MM-DDTHH:MM:SS)"
+        },
+        "n_candidates": {
+          "type": "integer"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "funnel": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "description": "Candidates removed per step"
+        },
+        "params": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "description": "Selection settings used"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "paper": {
+                "type": "string",
+                "pattern": "^p[1-9][0-9]*$",
+                "description": "Export key of a paper in papers.json"
+              },
+              "rank": {
+                "type": "integer"
+              },
+              "category": {
+                "enum": [
+                  "detail",
+                  "skim",
+                  "open"
+                ]
+              },
+              "score": {
+                "type": "number"
+              },
+              "breakdown": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Score components and evidence"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "paper",
+              "rank",
+              "score"
+            ]
+          }
+        }
+      },
+      "required": [
+        "week_start",
+        "created_at",
+        "items"
+      ]
+    }
+  }
+}

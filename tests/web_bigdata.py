@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import insert
 from sqlmodel import Session, select
 
-from litresearch.db import (
+from litrad.db import (
     Category,
     IngestRun,
     Library,

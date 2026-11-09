@@ -3,8 +3,8 @@ import pytest
 from sqlmodel import Session, select
 
 from conftest import SAMPLE_BIB, FakeApis
-from litresearch.db import Embedding, Paper, init_db, load_embedding
-from litresearch.ingest.pipeline import ingest_library
+from litrad.db import Embedding, Paper, init_db, load_embedding
+from litrad.ingest.pipeline import ingest_library
 
 
 @pytest.fixture

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>litrad</title>
+  <!-- litrad logo: a rat with a mortarboard on the app's tile, with radar arcs (hidden,
+       like the whiskers, below 40 px). Hand-drawn on a 64 x 64 grid;
+       tools/make_icons.py renders the PNG icons from it. -->
+  <style>@media (max-width: 40px) { #radar, #whiskers { display: none } }</style>
+  <defs>
+    <linearGradient id="litrad-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6c4bf4"/>
+      <stop offset="1" stop-color="#12b5a5"/>
+    </linearGradient>
+  </defs>
+  <rect id="tile" width="64" height="64" rx="16" fill="url(#litrad-tile)"/>
+  <g id="radar" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="2.4">
+    <path d="M0 36a28 28 0 0 1 28 28"/>
+    <path d="M0 22a42 42 0 0 1 42 42"/>
+    <path d="M0 8a56 56 0 0 1 56 56"/>
+  </g>
+  <g id="rat">
+    <!-- tail, body, hind foot -->
+    <path d="M12 51c-9 1-10 9-2 9.5 7 .5 16-1.5 30 .5" fill="none" stroke="#f6a8c4" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M10 50c-2-10 8-16 20-16l14 6c2 8-4 16-16 16-10 0-17-1-18-6z" fill="#e6e9f5"/>
+    <ellipse cx="21" cy="56" rx="4" ry="1.8" fill="#f6a8c4"/>
+    <!-- ear, head with pointed snout, front paw -->
+    <circle cx="27" cy="28.5" r="6" fill="#e6e9f5"/>
+    <circle cx="27" cy="28.5" r="3.6" fill="#f6a8c4"/>
+    <path d="M29 40C25 34 30 25 41 26c6 2 12 8 17 13.5 0 2-2 3-4 3.5-8 3-18 4-23 1-1-1-1.5-2.5-2-4z" fill="#fff"/>
+    <ellipse cx="44" cy="47" rx="3" ry="1.8" fill="#f6a8c4"/>
+    <!-- eye, nose, whiskers -->
+    <circle cx="44" cy="33.5" r="2.3" fill="#1d2033"/>
+    <circle cx="44.8" cy="32.7" r=".7" fill="#fff"/>
+    <circle cx="57.6" cy="40.2" r="2" fill="#ef6b9a"/>
+    <path id="whiskers" d="M54 41l8.5-3.5M54 42.2l9 1" stroke="#fff" stroke-width="1" stroke-linecap="round"/>
+    <!-- mortarboard: cap, board, tassel -->
+    <path d="M31 22h17l-1 5c-5 2-10 2-15 0z" fill="#1d2033"/>
+    <path d="M22 18l18-7 18 7-18 7z" fill="#1d2033"/>
+    <path d="M27 18l13-5" stroke="#3a3f5c" stroke-width="1" stroke-linecap="round"/>
+    <path d="M40 18l14 .5v8" fill="none" stroke="#f5a524" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M52.4 26h3.2l.6 4.2h-4.4z" fill="#f5a524"/>
+    <circle cx="40" cy="18" r="1.5" fill="#f5a524"/>
+  </g>
+</svg>

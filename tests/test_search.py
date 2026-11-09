@@ -8,16 +8,16 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-import litresearch.web.app as web
+import litrad.cli as cli
+import litrad.web.app as web
 from conftest import DATA, FakeApis, enter_profile, profile_cfg
-from litresearch.db import Paper, QueueItem, init_db
-from litresearch.papers import upsert_hit
-from litresearch.reading import ReadingError, fetch_paper, find_paper, queue_add
-from litresearch.search import SearchQuery, search, search_library
-from litresearch.sources.europepmc import clean, parse_result
-from litresearch.sources.hits import Hit
-from litresearch.sources.pubmed import parse_summary
+from litrad.db import Paper, QueueItem, init_db
+from litrad.papers import upsert_hit
+from litrad.reading import ReadingError, fetch_paper, find_paper, queue_add
+from litrad.search import SearchQuery, search, search_library
+from litrad.sources.europepmc import clean, parse_result
+from litrad.sources.hits import Hit
+from litrad.sources.pubmed import parse_summary
 
 RECORDED = json.loads((DATA / "literature_search.json").read_text("utf-8"))
 EPMC = RECORDED["europepmc_search"]["resultList"]["result"]
@@ -303,7 +303,7 @@ def test_search_page_library_and_outage(site, monkeypatch, make_http):
 def cli_profile(tmp_path, monkeypatch, make_http):
     from rich.console import Console
 
-    import litresearch.cli_reading as cli_reading
+    import litrad.cli_reading as cli_reading
 
     console = Console(color_system=None, width=200, highlight=False)
     monkeypatch.setattr(cli_reading, "console", console)

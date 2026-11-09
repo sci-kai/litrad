@@ -1,8 +1,8 @@
-# litresearch in server mode: the web UI on port 8080, all data in the volume /data.
+# litrad in server mode: the web UI on port 8080, all data in the volume /data.
 #
-#   docker build -t litresearch .
-#   docker run --rm -it -v litresearch:/data litresearch litresearch set-password   # once
-#   docker run -d --name litresearch -p 8080:8080 -v litresearch:/data litresearch
+#   docker build -t litrad .
+#   docker run --rm -it -v litrad:/data litrad litrad set-password   # once
+#   docker run -d --name litrad -p 8080:8080 -v litrad:/data litrad
 
 # --- stage 1: build the wheel -------------------------------------------------------
 FROM python:3.13-slim AS build
@@ -14,20 +14,20 @@ RUN python -m build --wheel --outdir /dist
 
 # --- stage 2: runtime (no compilers; all dependencies come as binary wheels) --------
 FROM python:3.13-slim
-LABEL org.opencontainers.image.title="litresearch" \
+LABEL org.opencontainers.image.title="litrad" \
       org.opencontainers.image.description="Personal literature recommender (server mode)" \
       org.opencontainers.image.licenses="LicenseRef-MIT-Commons-Clause"
 
-RUN useradd --create-home --uid 10001 litresearch \
-    && mkdir /data && chown litresearch:litresearch /data
+RUN useradd --create-home --uid 10001 litrad \
+    && mkdir /data && chown litrad:litrad /data
 COPY --from=build /dist/*.whl /tmp/dist/
 RUN pip install --no-cache-dir /tmp/dist/*.whl && rm -rf /tmp/dist
 
 # the first command creates /data/config.yaml with all data next to it
-ENV LITRESEARCH_CONFIG=/data/config.yaml \
+ENV LITRAD_CONFIG=/data/config.yaml \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
-USER litresearch
+USER litrad
 VOLUME /data
 EXPOSE 8080
 
@@ -35,5 +35,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/login', timeout=4)"]
 
-# serving to the network needs a password: set it once with `litresearch set-password`
-CMD ["litresearch", "serve", "--no-choose", "--network", "all", "--port", "8080"]
+# serving to the network needs a password: set it once with `litrad set-password`
+CMD ["litrad", "serve", "--no-choose", "--network", "all", "--port", "8080"]

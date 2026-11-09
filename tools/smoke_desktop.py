@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Smoke-test a built litresearch desktop app (PyInstaller folder, AppImage, .app).
+"""Smoke-test a built litrad desktop app (PyInstaller folder, AppImage, .app).
 
     python tools/smoke_desktop.py PATH-TO-BINARY [--port N] [--timeout S]
 
-Starts the binary with LITRESEARCH_NO_BROWSER=1 on a fixed port in a fresh
+Starts the binary with LITRAD_NO_BROWSER=1 on a fixed port in a fresh
 temporary home folder, then checks that
 
 1. it answers on /welcome (first run: config created), creates a profile
@@ -17,7 +17,7 @@ temporary home folder, then checks that
 
 Linux and macOS use the temporary home folder (HOME, XDG_*). On Windows,
 platformdirs asks the system for the folders, so the run uses the CI user's
-real %LOCALAPPDATA%\\litresearch: run it on a CI machine, not on your own.
+real %LOCALAPPDATA%\\litrad: run it on a CI machine, not on your own.
 
 Uses only the standard library (the data folder is looked up with
 platformdirs if it is installed, else derived from the platform rules).
@@ -72,7 +72,7 @@ def request(url, method="GET", headers=None, timeout: float = 5, data: bytes | N
 
 def data_dir(env: dict) -> Path:
     """The per-user data folder the app will use with this environment."""
-    code = "import platformdirs; print(platformdirs.user_data_dir('litresearch', appauthor=False))"
+    code = "import platformdirs; print(platformdirs.user_data_dir('litrad', appauthor=False))"
     try:
         out = subprocess.run(
             [sys.executable, "-I", "-c", code], env=env, capture_output=True, text=True, check=True
@@ -81,10 +81,10 @@ def data_dir(env: dict) -> Path:
     except subprocess.CalledProcessError:
         pass
     if sys.platform == "darwin":
-        return Path(env["HOME"]) / "Library" / "Application Support" / "litresearch"
+        return Path(env["HOME"]) / "Library" / "Application Support" / "litrad"
     if os.name == "nt":
-        return Path(os.environ["LOCALAPPDATA"]) / "litresearch"
-    return Path(env["XDG_DATA_HOME"]) / "litresearch"
+        return Path(os.environ["LOCALAPPDATA"]) / "litrad"
+    return Path(env["XDG_DATA_HOME"]) / "litrad"
 
 
 class FormFields(HTMLParser):
@@ -129,15 +129,15 @@ def check(condition: bool, message: str) -> None:
 
 
 def smoke(binary: Path, port: int, timeout: float) -> None:
-    home = Path(tempfile.mkdtemp(prefix="litresearch-smoke-"))
+    home = Path(tempfile.mkdtemp(prefix="litrad-smoke-"))
     env = dict(os.environ)
     env.update(
         HOME=str(home),
         XDG_CONFIG_HOME=str(home / "config"),
         XDG_DATA_HOME=str(home / "data"),
-        LITRESEARCH_NO_BROWSER="1",
+        LITRAD_NO_BROWSER="1",
     )
-    env.pop("LITRESEARCH_CONFIG", None)
+    env.pop("LITRAD_CONFIG", None)
     data = data_dir(env)
     lock = data / LOCK_NAME
     if lock.exists():  # Windows: the CI user's real folder
@@ -171,14 +171,14 @@ def smoke(binary: Path, port: int, timeout: float) -> None:
         for path, needle in [
             ("/", "Dashboard"),
             ("/docs", "Setup"),
-            ("/sw.js", "litresearch service worker"),
+            ("/sw.js", "litrad service worker"),
             ("/static/icon-192.png", "PNG"),
-            ("/manifest.webmanifest", "litresearch"),
+            ("/manifest.webmanifest", "litrad"),
         ]:
             status, body = request(base + path)
             check(status == 200 and needle in body, f"{path} is served")
         status, body = request(base + "/app/ping")
-        check(status == 200 and json.loads(body).get("app") == "litresearch", "/app/ping answers")
+        check(status == 200 and json.loads(body).get("app") == "litrad", "/app/ping answers")
         check(lock.is_file() and json.loads(lock.read_text())["port"] == port, f"lock {lock}")
         status, _ = request(base + "/app/quit", "POST")
         check(status == 403, "/app/quit without Origin is refused")

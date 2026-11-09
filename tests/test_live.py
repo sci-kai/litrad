@@ -3,9 +3,9 @@
 import pytest
 from sqlmodel import Session
 
-from litresearch.cli import make_http
-from litresearch.db import init_db
-from litresearch.ingest.pipeline import ingest_library
+from litrad.cli import make_http
+from litrad.db import init_db
+from litrad.ingest.pipeline import ingest_library
 
 
 @pytest.mark.network
@@ -27,8 +27,8 @@ def test_live_ingest_of_sample(cfg):
 
 @pytest.mark.network
 def test_live_recommendations(cfg):
-    from litresearch.config import Config
-    from litresearch.recommend.engine import batch_items, build_recommendations
+    from litrad.config import Config
+    from litrad.recommend.engine import batch_items, build_recommendations
 
     cfg = Config.model_validate(
         {
@@ -56,8 +56,8 @@ def test_live_recommendations(cfg):
 
 @pytest.mark.network
 def test_live_search_and_add(cfg):
-    from litresearch.reading import fetch_paper
-    from litresearch.search import SearchQuery, search
+    from litrad.reading import fetch_paper
+    from litrad.search import SearchQuery, search
 
     http = make_http(cfg)
     engine = init_db(cfg.paths.database)

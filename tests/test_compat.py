@@ -11,10 +11,10 @@ from pathlib import Path
 import pytest
 from sqlmodel import Session, func, select
 
-from litresearch import archive, notes, profiles
-from litresearch.backup import check_file, export_progress, import_progress, summarize
-from litresearch.config import load_config
-from litresearch.db import (
+from litrad import archive, notes, profiles
+from litrad.backup import check_file, export_progress, import_progress, summarize
+from litrad.config import load_config
+from litrad.db import (
     Achievement,
     Library,
     LibraryPaper,
@@ -27,7 +27,7 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.migrations import BACKUP_FOLDER, SCHEMA_VERSION, read_version
+from litrad.migrations import BACKUP_FOLDER, SCHEMA_VERSION, read_version
 
 COMPAT = Path(__file__).parent / "data" / "compat"
 VERSIONS = sorted(p.name for p in COMPAT.iterdir() if (p / "expected.json").is_file())

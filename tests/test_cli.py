@@ -7,10 +7,10 @@ import yaml
 from rich.console import Console
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-import litresearch.cli_reading as cli_reading
+import litrad.cli as cli
+import litrad.cli_reading as cli_reading
 from conftest import SAMPLE_BIB, FakeApis, make_work
-from litresearch.rules import GameRules
+from litrad.rules import GameRules
 
 runner = CliRunner()
 
@@ -122,7 +122,7 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert "▶ UP NEXT" in out and out.index("Paper from a colleague") < out.index("A collective")
 
     code, out = invoke("next", "-c", config)
-    assert code == 0 and "Paper from a colleague" in out and "litresearch read q1" in out
+    assert code == 0 and "Paper from a colleague" in out and "litrad read q1" in out
 
     code, out = invoke("read", "q1", "read", "--rating", "4", "--note", "useful", "-c", config)
     assert code == 0 and "Ate the frog" in out

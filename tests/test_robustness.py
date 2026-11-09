@@ -18,13 +18,13 @@ from sqlalchemy import text
 from sqlmodel import Session, func, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-import litresearch.reading as reading_module
-import litresearch.web.app as web
+import litrad.cli as cli
+import litrad.reading as reading_module
+import litrad.web.app as web
 from conftest import FakeApis, enter_profile, make_work, profile_cfg, within
-from litresearch.backup import export_progress, import_progress
-from litresearch.config import Config, ConfigError, load_config
-from litresearch.db import (
+from litrad.backup import export_progress, import_progress
+from litrad.config import Config, ConfigError, load_config
+from litrad.db import (
     Paper,
     QueueItem,
     Reading,
@@ -35,7 +35,7 @@ from litresearch.db import (
     depth,
     init_db,
 )
-from litresearch.game import (
+from litrad.game import (
     ledger,
     level_for,
     personal_bests,
@@ -46,8 +46,8 @@ from litresearch.game import (
     week_progress,
     weekly_summaries,
 )
-from litresearch.ingest.pipeline import ingest_library
-from litresearch.reading import (
+from litrad.ingest.pipeline import ingest_library
+from litrad.reading import (
     ReadingError,
     add_note,
     drop_from_queue,
@@ -56,11 +56,11 @@ from litresearch.reading import (
     queue_move,
     record_reading,
 )
-from litresearch.recommend.engine import build_recommendations
-from litresearch.recommend.scoring import Candidate, LibraryProfile, rank_candidates
-from litresearch.rules import GameRules
-from litresearch.sources.http import HttpClient, HttpError
-from litresearch.sources.openalex import OpenAlex
+from litrad.recommend.engine import build_recommendations
+from litrad.recommend.scoring import Candidate, LibraryProfile, rank_candidates
+from litrad.rules import GameRules
+from litrad.sources.http import HttpClient, HttpError
+from litrad.sources.openalex import OpenAlex
 
 AT = datetime(2026, 10, 5, 9, 0, 0)
 runner = CliRunner()
@@ -135,7 +135,7 @@ def test_crash_while_building_recommendations_keeps_old_batch(cfg, make_http, mo
     def boom(*_args, **_kwargs):
         raise RuntimeError("crash during scoring")
 
-    monkeypatch.setattr("litresearch.recommend.engine.rank_candidates", boom)
+    monkeypatch.setattr("litrad.recommend.engine.rank_candidates", boom)
     with Session(engine) as session, pytest.raises(RuntimeError):
         build_recommendations(cfg, session, http, use_s2=False)
     assert snapshot_counts(engine) == before
@@ -149,7 +149,7 @@ def test_crash_during_ingest_keeps_previous_library(cfg, make_http, monkeypatch)
         ingest_library(cfg, session, http, use_s2=False)
     before = snapshot_counts(engine)
     monkeypatch.setattr(
-        "litresearch.ingest.pipeline.enrich_openalex",
+        "litrad.ingest.pipeline.enrich_openalex",
         lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt()),
     )
     with Session(engine) as session, pytest.raises(KeyboardInterrupt):
@@ -283,7 +283,7 @@ def test_broken_config_gives_a_clear_message(tmp_path, content, message):
 
 
 def test_cli_entry_point_reports_config_problems(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["litresearch", "status", "-c", str(tmp_path / "nope.yaml")])
+    monkeypatch.setattr("sys.argv", ["litrad", "status", "-c", str(tmp_path / "nope.yaml")])
     with pytest.raises(SystemExit) as exit_info:
         cli.run()
     assert exit_info.value.code == 2

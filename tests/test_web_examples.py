@@ -6,8 +6,8 @@ from datetime import date
 from sqlmodel import Session, select
 
 from conftest import make_work, profile_cfg
-from litresearch import examples, libraries
-from litresearch.db import ExampleChoice, Library, Paper
+from litrad import examples, libraries
+from litrad.db import ExampleChoice, Library, Paper
 from test_libraries import site  # noqa: F401  (fixture: empty profile)
 from test_web import app_env, db, paper_id, post  # noqa: F401  (fixture: filled profile)
 

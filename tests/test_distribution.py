@@ -9,13 +9,13 @@ from pathlib import Path
 import yaml
 from typer.testing import CliRunner
 
-from litresearch import locations
-from litresearch.cli import app
-from litresearch.config import load_config
-from litresearch.web.auth import verify_password
+from litrad import locations
+from litrad.cli import app
+from litrad.config import load_config
+from litrad.web.auth import verify_password
 
 REPO = Path(__file__).parents[1]
-PACKAGE = REPO / "src" / "litresearch"
+PACKAGE = REPO / "src" / "litrad"
 runner = CliRunner()
 
 
@@ -60,9 +60,7 @@ def test_package_data_globs_cover_every_template_and_static_file():
     for folder in ("templates", "static"):
         files = {p.relative_to(web).as_posix() for p in (web / folder).rglob("*") if p.is_file()}
         assert files, folder
-        covered = {
-            f for f in files for pattern in data["litresearch.web"] if _glob(web, pattern, f)
-        }
+        covered = {f for f in files for pattern in data["litrad.web"] if _glob(web, pattern, f)}
         assert files == covered, f"not covered by package-data: {sorted(files - covered)}"
 
 
@@ -71,11 +69,11 @@ def _glob(base: Path, pattern: str, relative: str) -> bool:
 
 
 def test_resources_are_found_through_importlib():
-    web = resources.files("litresearch.web")
+    web = resources.files("litrad.web")
     assert web.joinpath("documentation.md").read_text(encoding="utf-8").startswith("# ")
     assert web.joinpath("static", "app.css").is_file()
     assert web.joinpath("templates", "welcome.html").is_file()
-    assert "web:" in resources.files("litresearch").joinpath("config.example.yaml").read_text()
+    assert "web:" in resources.files("litrad").joinpath("config.example.yaml").read_text()
 
 
 def test_classifiers_are_not_linux_only():
@@ -84,12 +82,12 @@ def test_classifiers_are_not_linux_only():
     assert not any("POSIX" in c for c in project["classifiers"])
 
 
-# --- first run in a container: LITRESEARCH_CONFIG pointing at a fresh folder -------------
+# --- first run in a container: LITRAD_CONFIG pointing at a fresh folder -------------
 
 
 def test_environment_config_is_created_on_first_use_with_data_next_to_it(tmp_path, monkeypatch):
     target = tmp_path / "data" / "config.yaml"
-    monkeypatch.setenv("LITRESEARCH_CONFIG", str(target))
+    monkeypatch.setenv("LITRAD_CONFIG", str(target))
     messages = []
     choice = locations.locate_config(announce=messages.append)
     assert choice.path == target and choice.rule == "env" and target.is_file()
@@ -105,7 +103,7 @@ def test_environment_config_is_created_on_first_use_with_data_next_to_it(tmp_pat
 
 
 def test_explicit_config_option_is_never_created(tmp_path, monkeypatch):
-    monkeypatch.setenv("LITRESEARCH_CONFIG", str(tmp_path / "env.yaml"))
+    monkeypatch.setenv("LITRAD_CONFIG", str(tmp_path / "env.yaml"))
     choice = locations.locate_config(tmp_path / "missing.yaml")
     assert choice.rule == "option" and not (tmp_path / "missing.yaml").exists()
     assert not (tmp_path / "env.yaml").exists()
@@ -168,12 +166,12 @@ def test_dockerfile_is_a_multistage_non_root_server_image():
     assert user and user[-1] not in ("root", "0")
     assert ["VOLUME", "/data"] in ins and ["EXPOSE", "8080"] in ins
     env = " ".join(arg for kw, arg in ins if kw == "ENV")
-    assert "LITRESEARCH_CONFIG=/data/config.yaml" in env
+    assert "LITRAD_CONFIG=/data/config.yaml" in env
     health = " ".join(arg for kw, arg in ins if kw == "HEALTHCHECK")
     assert "/login" in health and "curl" not in health
     cmd = next(arg for kw, arg in ins if kw == "CMD")
     assert json.loads(cmd) == [
-        "litresearch", "serve", "--no-choose", "--network", "all", "--port", "8080",
+        "litrad", "serve", "--no-choose", "--network", "all", "--port", "8080",
     ]  # fmt: skip
 
 

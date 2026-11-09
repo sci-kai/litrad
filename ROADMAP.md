@@ -1,6 +1,6 @@
 # Roadmap
 
-Where litresearch is going and in which order. The order is a proposal:
+Where litrad is going and in which order. The order is a proposal:
 **feedback from testing decides** what comes first, changes or is dropped.
 Each milestone is a GitHub milestone with its issues.
 
@@ -17,7 +17,7 @@ Each milestone is a GitHub milestone with its issues.
 
 ## Principles
 
-- **You decide:** litresearch suggests; nothing is added to your queue,
+- **You decide:** litrad suggests; nothing is added to your queue,
   library or notes without your action.
 - **Transparent:** every number behind a recommendation or score can be seen
   and explained.
@@ -33,26 +33,26 @@ Each milestone is a GitHub milestone with its issues.
 **0.1 · Core loop.** Recommendations, queue, reading log, game and profiles.
 Testing asks: are recommendations relevant (how many of 5 are worth
 reading)? Are defaults, queue limit, penalty and level speed right? Does
-`install.py` work on other machines? Still open: `litresearch report`, a
+`install.py` work on other machines? Still open: `litrad report`, a
 diagnostic summary for issues.
 
 **0.2 · Find papers and libraries (`v0.2.0-dev`).** Search Europe PMC and
-PubMed (Library → Find & add, `litresearch search`) and queue results; add
+PubMed (Library → Find & add, `litrad search`) and queue results; add
 papers by `pmid:`/PMC id. Several libraries per profile, import BibTeX, RIS
 or CSL-JSON into new or existing libraries, export with reading status;
 *Recommended* and *Reading queue* libraries. Performance with large
 libraries and long use. Testing asks: do non-Paperpile exports import
 cleanly? Are several libraries useful? Do searches find what you look for?
 
-**0.3 · Desktop app and distribution.** Two ways to run litresearch:
+**0.3 · Desktop app and distribution.** Two ways to run litrad:
 
 - **Desktop mode (default):** double-click; it starts on this computer only
   (a free local port), opens in the browser and quits cleanly. Downloads on
   GitHub Releases, built automatically for every tag: Windows installer,
   Linux AppImage, macOS `.dmg`.
-- **Server mode (as today):** `litresearch serve` on a Pi, NAS or lab server,
+- **Server mode (as today):** `litrad serve` on a Pi, NAS or lab server,
   reachable from your other devices on chosen networks with a password;
-  also as a Docker image (ARM and x86) and `pipx install litresearch`.
+  also as a Docker image (ARM and x86) and `pipx install litrad`.
 
 Groundwork: data and settings in per-user folders (`platformdirs`) with a
 first-run setup; existing git installations keep their folder. For phones:
@@ -72,7 +72,7 @@ front matter and templates, an editor with preview, `[[citation-key]]`
 links, two-way sync with an Obsidian vault (`paths.obsidian_vault`) that
 shows conflicts instead of overwriting; existing notes are migrated.
 
-**0.6 · Stable, open data formats.** Everything you build up in litresearch
+**0.6 · Stable, open data formats.** Everything you build up in litrad
 (libraries, reading log, statuses, ratings, notes, XP ledger, badges, queue,
 recommendations with their evidence, settings and game rules) is stored and
 exported in documented standard formats that later versions keep reading:
@@ -107,7 +107,7 @@ exports of earlier versions without breaking them. New features only add
 would need 2.0. This is what lets the features below arrive as minor
 versions.
 
-**Code provenance check (before 1.0).** litresearch is written with an AI
+**Code provenance check (before 1.0).** litrad is written with an AI
 assistant, so before 1.0 an external scanner checks whether any code matches
 existing public code: [SCANOSS](https://www.scanoss.com) compares file and
 snippet fingerprints (not the code itself) with its knowledge base of public
@@ -140,6 +140,6 @@ statistics across profiles and years. Open an issue if you want one.
 
 ## How to influence the roadmap
 
-Comment on or 👍 an issue, or open one; report how you use litresearch
+Comment on or 👍 an issue, or open one; report how you use litrad
 (*Testing feedback* template); discuss larger pull requests in an issue
 first ([CONTRIBUTING.md](CONTRIBUTING.md)).

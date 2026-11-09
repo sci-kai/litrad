@@ -1,4 +1,4 @@
-"""Desktop mode (`litresearch app`): port, single instance, quit, browser, log, packaging."""
+"""Desktop mode (`litrad app`): port, single instance, quit, browser, log, packaging."""
 
 import json
 import os
@@ -15,13 +15,13 @@ import uvicorn
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import enter_profile
-from litresearch import desktop, locations
-from litresearch.desktop import Instance
-from litresearch.web.app import create_app
-from litresearch.web.auth import hash_password
-from litresearch.web.network import local_names
+from litrad import desktop, locations
+from litrad.desktop import Instance
+from litrad.web.app import create_app
+from litrad.web.auth import hash_password
+from litrad.web.network import local_names
 from test_auth import write_config
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -166,7 +166,7 @@ def test_quit_needs_a_same_origin_request(desktop_client, quits):
     assert evil.status_code == 403
     assert quits == []
     response = desktop_client.post("/app/quit", headers={"Origin": "http://127.0.0.1:47290"})
-    assert response.status_code == 200 and "litresearch has stopped" in response.text
+    assert response.status_code == 200 and "litrad has stopped" in response.text
     assert "/static/" not in response.text  # self-contained: the server is gone
     assert quits == [1]
     referer = desktop_client.post("/app/quit", headers={"Referer": "http://127.0.0.1:47290/"})
@@ -176,7 +176,7 @@ def test_quit_needs_a_same_origin_request(desktop_client, quits):
 def test_ping_and_quit_work_without_profile(desktop_client):
     ping = desktop_client.get("/app/ping", follow_redirects=False)
     assert ping.status_code == 200
-    assert ping.json() == {"app": "litresearch", "pid": os.getpid(), "version": cli.__version__}
+    assert ping.json() == {"app": "litrad", "pid": os.getpid(), "version": cli.__version__}
     assert "/app/quit" in desktop_client.get("/welcome").text
 
 
@@ -275,7 +275,7 @@ def test_run_serves_locally_with_lock_backup_and_log(fake_uvicorn, isolated):
     assert log == locations.user_data_dir() / "logs" / "app.log"
     text = log.read_text(encoding="utf-8")
     assert f"Config file {config}" in text and "Created your configuration" in text
-    assert "Quit from the web UI" in text and "litresearch has stopped" in text
+    assert "Quit from the web UI" in text and "litrad has stopped" in text
 
 
 def test_run_with_explicit_port_and_config(fake_uvicorn, tmp_path):
@@ -350,7 +350,7 @@ def test_startup_error_is_logged_and_shown(fake_uvicorn, monkeypatch):
     monkeypatch.setattr(locations, "locate_config", broken)
     assert desktop.run() == 1
     log = desktop.log_file().read_text(encoding="utf-8")
-    assert "litresearch could not start" in log and "Traceback" in log
+    assert "litrad could not start" in log and "Traceback" in log
     page = desktop.log_file().parent / desktop.ERROR_PAGE
     assert urls == [page.as_uri()]  # no terminal (stderr is captured): shown in the browser
     assert "disk on fire" in page.read_text(encoding="utf-8")
@@ -405,9 +405,9 @@ def pyproject() -> dict:
 
 
 def test_gui_script_entry():
-    assert pyproject()["project"]["gui-scripts"] == {"litresearch-app": "litresearch.desktop:main"}
+    assert pyproject()["project"]["gui-scripts"] == {"litrad-app": "litrad.desktop:main"}
     entry = (ROOT / "packaging" / "desktop_entry.py").read_text(encoding="utf-8")
-    assert "from litresearch.desktop import main" in entry
+    assert "from litrad.desktop import main" in entry
 
 
 def package_data_files() -> set[str]:
@@ -425,31 +425,31 @@ def package_data_files() -> set[str]:
 def test_package_data_globs_match_files():
     files = package_data_files()
     for needed in [
-        "litresearch/config.example.yaml",
-        "litresearch/web/documentation.md",
-        "litresearch/web/sw.js",
-        "litresearch/web/templates/stopped.html",
-        "litresearch/web/static/icon-512.png",
+        "litrad/config.example.yaml",
+        "litrad/web/documentation.md",
+        "litrad/web/sw.js",
+        "litrad/web/templates/stopped.html",
+        "litrad/web/static/icon-512.png",
     ]:
         assert needed in files
     assert not any(name.endswith(".py") for name in files)
 
 
 def test_spec_collects_all_package_data():
-    spec = (ROOT / "packaging" / "litresearch.spec").read_text(encoding="utf-8")
-    assert 'collect_data_files("litresearch")' in spec
+    spec = (ROOT / "packaging" / "litrad.spec").read_text(encoding="utf-8")
+    assert 'collect_data_files("litrad")' in spec
     assert "desktop_entry.py" in spec and "BUNDLE(" in spec
     hooks = pytest.importorskip("PyInstaller.utils.hooks")
     collected = {
         (Path(dest) / Path(source).name).as_posix()
-        for source, dest in hooks.collect_data_files("litresearch")
+        for source, dest in hooks.collect_data_files("litrad")
     }
     missing = package_data_files() - collected
     assert not missing, f"not bundled by the PyInstaller spec: {sorted(missing)}"
 
 
 def test_installer_and_appimage_files():
-    iss = (ROOT / "packaging" / "windows" / "litresearch.iss").read_text(encoding="utf-8")
+    iss = (ROOT / "packaging" / "windows" / "litrad.iss").read_text(encoding="utf-8")
     assert "PrivilegesRequired=lowest" in iss and "desktopicon" in iss
     assert "[UninstallDelete]" not in iss  # user data is kept
     assert "are kept in" in iss and "UninstallSilent" in iss

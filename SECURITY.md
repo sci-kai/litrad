@@ -1,6 +1,6 @@
 # Security
 
-litresearch runs on your own machine and stores your reading data locally.
+litrad runs on your own machine and stores your reading data locally.
 When it serves on a network, it requires a password (salted scrypt hash,
 signed session cookie) and rejects requests from other websites. It speaks
 plain HTTP: use it in your own network or through a VPN, never expose the

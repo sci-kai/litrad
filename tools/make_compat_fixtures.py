@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate "golden" compatibility fixtures from released litresearch versions.
+"""Generate "golden" compatibility fixtures from released litrad versions.
+
+Versions before 0.3 were called litresearch (Python package ``litresearch``);
+the builder imports either name, and the database fixture keeps its historical
+file name ``litresearch.sqlite`` for every version.
 
 For every git tag the script checks the tag out into a temporary worktree,
 installs it into a fresh virtual environment and runs a builder snippet inside
@@ -42,14 +46,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_TAGS = ["v0.1.0-alpha.1", "v0.2.0-dev"]
 BIB_FILE = REPO / "tests" / "data" / "paperpile_sample.bib"
-FIXTURE_FILES = ["litresearch.sqlite", "settings.yaml", "progress.json", "profile.json"]
+# the database fixture keeps its historical name for every version
+FIXTURE_DB = "litresearch.sqlite"
+FIXTURE_FILES = [FIXTURE_DB, "settings.yaml", "progress.json", "profile.json"]
 # written by versions that have them (export.zip: "export everything", 0.6 and later)
 OPTIONAL_FILES = ["export.zip"]
 
 README = """# Compatibility fixtures
 
-Golden files written by released litresearch versions. The current app is tested
-to still open, read and upgrade them (see `tests/test_compat.py`).
+Golden files written by released litrad versions (called litresearch before 0.3).
+The current app is tested to still open, read and upgrade them (see `tests/test_compat.py`).
 
 Each folder `<version>/` was produced by `tools/make_compat_fixtures.py`: the
 script checks out the git tag, installs it into a fresh virtual environment and
@@ -117,9 +123,34 @@ socket.getaddrinfo = _blocked
 httpx.Client.send = _blocked
 httpx.HTTPTransport.handle_request = _blocked
 
-from litresearch import backup, db, profiles, reading  # noqa: E402
-from litresearch.config import load_config  # noqa: E402
-from litresearch.db import (  # noqa: E402
+# --- package name: litrad, or litresearch before 0.3 ---------------------------------------
+import importlib  # noqa: E402
+import importlib.abc  # noqa: E402
+import importlib.util  # noqa: E402
+
+try:
+    import litrad  # noqa: F401
+except ImportError:
+
+    class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+        # litrad.x is the module litresearch.x (the same object, no copy)
+
+        def find_spec(self, fullname, path, target=None):
+            if fullname == "litrad" or fullname.startswith("litrad."):
+                return importlib.util.spec_from_loader(fullname, self)
+            return None
+
+        def create_module(self, spec):
+            return importlib.import_module("litresearch" + spec.name[len("litrad") :])
+
+        def exec_module(self, module):
+            pass
+
+    sys.meta_path.insert(0, _Alias())
+
+from litrad import backup, db, profiles, reading  # noqa: E402
+from litrad.config import load_config  # noqa: E402
+from litrad.db import (  # noqa: E402
     Achievement,
     IngestRun,
     Paper,
@@ -131,17 +162,17 @@ from litresearch.db import (  # noqa: E402
     StatusEvent,
     XpEvent,
 )
-from litresearch.ingest import pipeline  # noqa: E402
-from litresearch.ingest.bibtex import parse_bibtex  # noqa: E402
+from litrad.ingest import pipeline  # noqa: E402
+from litrad.ingest.bibtex import parse_bibtex  # noqa: E402
 
 try:
-    from litresearch import libraries  # noqa: E402
-    from litresearch.db import Library, LibraryPaper  # noqa: E402
+    from litrad import libraries  # noqa: E402
+    from litrad.db import Library, LibraryPaper  # noqa: E402
 except ImportError:  # 0.1: a profile has one library (Paper.in_library)
     libraries = None
 
 try:
-    from litresearch import examples  # noqa: E402
+    from litrad import examples  # noqa: E402
 except ImportError:
     examples = None
 
@@ -152,7 +183,7 @@ example["paths"].update(
     {
         "profiles_dir": str(data / "profiles"),
         "bibtex": str(data / "paperpile" / "library.bib"),
-        "database": str(data / "litresearch.sqlite"),
+        "database": str(data / "litrad.sqlite"),
         "cache_dir": str(data / "cache"),
         "obsidian_vault": "n/a",
     }
@@ -264,7 +295,7 @@ with Session(engine) as session:
 
     # --- second library and example choice (0.2) --------------------------------------------
     if libraries is not None:
-        from litresearch.ingest.formats import read_references
+        from litrad.ingest.formats import read_references
 
         overlap = next(p.doi for p in papers if p.doi)
         ris = work / "second.ris"
@@ -308,7 +339,7 @@ with Session(engine) as session:
     expected = {
         "version": name,
         "tag": args["tag"],
-        "app_version": __import__("litresearch").__version__,
+        "app_version": __import__("litrad").__version__,
         "papers": count(Paper),
         "library_papers": count(Paper, Paper.in_library == True),  # noqa: E712
         "readings": count(Reading),
@@ -342,7 +373,7 @@ with Session(engine) as session:
     saved = backup.save_profile_file(session, work / "saved", moment, settings)
     shutil.copyfile(saved, out / "profile.json")
     try:  # the "export everything" archive exists from 0.6 on
-        from litresearch import archive, notes
+        from litrad import archive, notes
     except ImportError:
         archive = None
     if archive is not None:

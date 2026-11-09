@@ -13,11 +13,11 @@ from sqlalchemy import event
 from sqlmodel import Session, func, select
 
 from conftest import FakeApis
-from litresearch import export, libraries
-from litresearch.backup import export_progress, import_progress
-from litresearch.db import LibraryPaper, Paper, init_db
-from litresearch.ingest.formats import read_references
-from litresearch.ingest.pipeline import import_into
+from litrad import export, libraries
+from litrad.backup import export_progress, import_progress
+from litrad.db import LibraryPaper, Paper, init_db
+from litrad.ingest.formats import read_references
+from litrad.ingest.pipeline import import_into
 
 N = 400
 

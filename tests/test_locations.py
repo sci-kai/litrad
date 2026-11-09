@@ -1,13 +1,13 @@
-"""Where the config file and the data are found (litresearch.locations)."""
+"""Where the config file and the data are found (litrad.locations)."""
 
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 from typer.testing import CliRunner
 
-from litresearch import locations
-from litresearch.cli import app
-from litresearch.config import load_config
+from litrad import locations
+from litrad.cli import app
+from litrad.config import load_config
 
 REPO = Path(__file__).parents[1]
 MINIMAL = "paths:\n  profiles_dir: data/profiles\n"
@@ -25,18 +25,18 @@ def write(path: Path, text: str = MINIMAL) -> Path:
 def test_option_wins_over_everything(tmp_path):
     write(tmp_path / "config" / "config.yaml")
     write(locations.user_config_file())
-    choice = locations.find_config(Path("other.yaml"), env={"LITRESEARCH_CONFIG": "env.yaml"})
+    choice = locations.find_config(Path("other.yaml"), env={"LITRAD_CONFIG": "env.yaml"})
     assert choice == locations.ConfigChoice(tmp_path / "other.yaml", "option")
 
 
 def test_environment_variable_wins_over_the_current_folder(tmp_path):
     write(tmp_path / "config" / "config.yaml")
-    choice = locations.find_config(env={"LITRESEARCH_CONFIG": str(tmp_path / "env.yaml")})
+    choice = locations.find_config(env={"LITRAD_CONFIG": str(tmp_path / "env.yaml")})
     assert choice == locations.ConfigChoice(tmp_path / "env.yaml", "env")
 
 
 def test_environment_variable_from_the_real_environment(tmp_path, monkeypatch):
-    monkeypatch.setenv("LITRESEARCH_CONFIG", "my.yaml")
+    monkeypatch.setenv("LITRAD_CONFIG", "my.yaml")
     assert locations.find_config() == locations.ConfigChoice(tmp_path / "my.yaml", "env")
 
 
@@ -71,7 +71,7 @@ def test_first_run_creates_the_user_config(tmp_path):
     data = locations.user_data_dir()
     assert cfg.paths.base_dir == data
     assert cfg.paths.profiles_dir == data / "profiles"
-    assert cfg.paths.database == data / "litresearch.sqlite"
+    assert cfg.paths.database == data / "litrad.sqlite"
     assert cfg.paths.cache_dir == data / "cache"
     assert cfg.backup.dir == data / "backups"
     # comments of the example are kept
@@ -91,7 +91,7 @@ def test_first_run_from_the_command_line(tmp_path):
 
 
 def test_bundled_example_matches_the_repository_example():
-    bundled = (REPO / "src" / "litresearch" / "config.example.yaml").read_bytes()
+    bundled = (REPO / "src" / "litrad" / "config.example.yaml").read_bytes()
     assert (REPO / "config" / "config.example.yaml").read_bytes() == bundled
     assert locations.example_text().encode("utf-8") == bundled
 
@@ -106,7 +106,7 @@ def test_git_layout_resolves_like_before(tmp_path):
     )
     cfg = load_config(Path("config/config.yaml"))
     assert cfg.paths.profiles_dir == tmp_path / "data" / "profiles"
-    assert cfg.paths.database == tmp_path / "data" / "litresearch.sqlite"
+    assert cfg.paths.database == tmp_path / "data" / "litrad.sqlite"
     assert cfg.paths.bibtex == tmp_path / "data" / "paperpile" / "library.bib"
     assert cfg.paths.cache_dir == tmp_path / "data" / "cache"
     assert cfg.backup.dir == tmp_path / "data" / "backups"
@@ -142,23 +142,23 @@ def test_home_folder_in_paths(tmp_path, monkeypatch):
 
 
 def test_profile_settings_paths_use_the_same_base(tmp_path, monkeypatch):
-    from litresearch import profiles
+    from litrad import profiles
 
     base = load_config(write(tmp_path / "config" / "config.yaml"))
     slug = profiles.create_profile(base, "Ada", settings={"paths": {"bibtex": "exports/a.bib"}})
     monkeypatch.chdir(tmp_path / "config")
     cfg = profiles.profile_config(load_config(tmp_path / "config" / "config.yaml"), slug)
     assert cfg.paths.bibtex == tmp_path / "exports" / "a.bib"
-    assert cfg.paths.database == tmp_path / "data" / "profiles" / slug / "litresearch.sqlite"
+    assert cfg.paths.database == tmp_path / "data" / "profiles" / slug / "litrad.sqlite"
     assert cfg.backup.dir == tmp_path / "data" / "backups" / slug
 
 
 @pytest.mark.parametrize(
     "config, explicit, expected, rule",
     [
-        ("C:/Users/ada/litresearch/config/config.yaml", None, "C:/Users/ada/litresearch", "legacy"),
-        ("C:/Users/ada/AppData/Local/litresearch/config.yaml", None,
-         "C:/Users/ada/AppData/Local/litresearch", "config"),
+        ("C:/Users/ada/litrad/config/config.yaml", None, "C:/Users/ada/litrad", "legacy"),
+        ("C:/Users/ada/AppData/Local/litrad/config.yaml", None,
+         "C:/Users/ada/AppData/Local/litrad", "config"),
         ("C:/x/config.yaml", "D:/data", "D:/data", "explicit"),
         ("C:/x/config.yaml", "data", "C:/x/data", "explicit"),
     ],
@@ -168,8 +168,8 @@ def test_base_dir_with_windows_paths(config, explicit, expected, rule):
         PureWindowsPath(config), PureWindowsPath(explicit) if explicit else None
     )
     assert found == (PureWindowsPath(expected), rule)
-    db = locations.resolve_path(found[0], PureWindowsPath("data/litresearch.sqlite"))
-    assert db == PureWindowsPath(expected) / "data" / "litresearch.sqlite"
+    db = locations.resolve_path(found[0], PureWindowsPath("data/litrad.sqlite"))
+    assert db == PureWindowsPath(expected) / "data" / "litrad.sqlite"
     assert locations.resolve_path(found[0], PureWindowsPath("E:/abs.sqlite")) == PureWindowsPath(
         "E:/abs.sqlite"
     )
@@ -182,7 +182,7 @@ def test_base_dir_with_posix_paths():
     )
 
 
-# --- litresearch where ---------------------------------------------------------------
+# --- litrad where ---------------------------------------------------------------
 
 
 def test_where_in_a_git_folder(tmp_path):
@@ -211,6 +211,6 @@ def test_where_with_option_and_environment(tmp_path, monkeypatch):
     assert "given with --config" in result.output
     assert "the config file's folder" in result.output
     assert str(tmp_path / "lab" / "data" / "profiles") in result.output
-    monkeypatch.setenv("LITRESEARCH_CONFIG", str(config))
+    monkeypatch.setenv("LITRAD_CONFIG", str(config))
     result = CliRunner().invoke(app, ["where"])
-    assert "LITRESEARCH_CONFIG" in result.output
+    assert "LITRAD_CONFIG" in result.output

@@ -1,6 +1,6 @@
-# Testing litresearch 0.2.0-dev
+# Testing litrad 0.2.0-dev
 
-Thank you for testing! Use litresearch with your **own library for real
+Thank you for testing! Use litrad with your **own library for real
 reading** for a few weeks, not only a quick click through. Setting it up
 takes about 30 minutes.
 
@@ -8,15 +8,15 @@ takes about 30 minutes.
 
 - Install with `python3 install.py` ([README](README.md)); note your system,
   Python version and browser.
-- Point `backup.dir` to a synced folder and run `litresearch backup` now and
+- Point `backup.dir` to a synced folder and run `litrad backup` now and
   then (documentation, "Your data and backups").
 - Never paste private data (exports, notes, API keys) into an issue; titles
   of public papers are fine.
 
 ## First day
 
-- [ ] Install; `litresearch serve`; open it from another device (after
-      `litresearch set-password`)
+- [ ] Install; `litrad serve`; open it from another device (after
+      `litrad set-password`)
 - [ ] Create a profile; change a game rule before creating it
 - [ ] Export your library (BibTeX, RIS or CSL-JSON) and import it under
       *Library → Import*: were the checks and instructions clear?
@@ -59,7 +59,7 @@ takes about 30 minutes.
   recommendations were worth reading, what motivated or annoyed you, what
   you missed or never used.
 - **Bug report**: steps, expected vs. actual, terminal output (and browser
-  console, F12, for UI problems), `litresearch version` and your system.
+  console, F12, for UI problems), `litrad version` and your system.
 - **Feature request**: check the [roadmap](ROADMAP.md) and existing issues
   first.
 

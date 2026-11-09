@@ -1,4 +1,4 @@
-"""Papers read before litresearch ("read earlier") and the rules formats."""
+"""Papers read before litrad ("read earlier") and the rules formats."""
 
 import json
 import sqlite3
@@ -11,10 +11,10 @@ import yaml
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-from litresearch.backup import export_progress, import_progress
-from litresearch.dataformat import validate_schema
-from litresearch.db import (
+import litrad.cli as cli
+from litrad.backup import export_progress, import_progress
+from litrad.dataformat import validate_schema
+from litrad.db import (
     Achievement,
     Paper,
     ReadStatus,
@@ -24,7 +24,7 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.game import (
+from litrad.game import (
     level_for,
     personal_bests,
     reading_calendar,
@@ -36,10 +36,10 @@ from litresearch.game import (
     week_start,
     weekly_summary,
 )
-from litresearch.migrations import SCHEMA_VERSION, read_version
-from litresearch.profile import start_profile
-from litresearch.reading import ReadingError, mark_read_earlier, queue_add, record_reading
-from litresearch.rules import BADGE_CODES_V1, FINGERPRINT_FIELDS, GameRules
+from litrad.migrations import SCHEMA_VERSION, read_version
+from litrad.profile import start_profile
+from litrad.reading import ReadingError, mark_read_earlier, queue_add, record_reading
+from litrad.rules import BADGE_CODES_V1, FINGERPRINT_FIELDS, GameRules
 
 REPO = Path(__file__).resolve().parent.parent
 # a Saturday night: every time-based badge would notice it
@@ -203,9 +203,9 @@ def test_cli_read_earlier_with_date_and_history_label(tmp_path, cfg):
 def test_web_dialog_and_bulk_action(tmp_path, cfg):
     from fastapi.testclient import TestClient
 
-    import litresearch.web.app as web
+    import litrad.web.app as web
     from conftest import enter_profile, profile_cfg
-    from litresearch import libraries
+    from litrad import libraries
 
     config = _config(tmp_path, cfg)
     client = TestClient(web.create_app(config))
@@ -239,7 +239,7 @@ def test_web_dialog_and_bulk_action(tmp_path, cfg):
     assert response.status_code == 200
     assert "3 marked as read earlier" in response.text and "1 already read" in response.text
     page = client.get("/read")
-    assert page.text.count('title="read earlier, before litresearch"') == 4
+    assert page.text.count('title="read earlier, before litrad"') == 4
     client.close()
     engine = init_db(profile_cfg(config).paths.database)
     with Session(engine) as session:
@@ -301,9 +301,9 @@ def test_progress_round_trip_keeps_the_flag_and_old_files_stay_valid(tmp_path, c
 
 
 def test_archive_round_trip_keeps_the_flag(tmp_path):
-    from litresearch import profiles
-    from litresearch.archive import import_new
-    from litresearch.config import load_config
+    from litrad import profiles
+    from litrad.archive import import_new
+    from litrad.config import load_config
     from test_archive import CONFIG, export
 
     path = tmp_path / "config.yaml"

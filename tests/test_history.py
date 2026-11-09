@@ -1,4 +1,4 @@
-"""Reading history: the Read papers tab, its TSV export and `litresearch read-papers`."""
+"""Reading history: the Read papers tab, its TSV export and `litrad read-papers`."""
 
 import re
 from datetime import datetime
@@ -10,12 +10,12 @@ from sqlalchemy import event
 from sqlmodel import Session
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-import litresearch.cli_reading as cli_reading
-import litresearch.web.app as web
+import litrad.cli as cli
+import litrad.cli_reading as cli_reading
+import litrad.web.app as web
 from conftest import enter_profile, profile_cfg, within
-from litresearch import history
-from litresearch.db import (
+from litrad import history
+from litrad.db import (
     Library,
     LibraryPaper,
     Paper,
@@ -253,7 +253,7 @@ def cli_env(filled, monkeypatch):
 
 
 def test_cli_lists_and_filters(cli_env):
-    from litresearch.profiles import get_current, profile_config  # noqa: F401
+    from litrad.profiles import get_current, profile_config  # noqa: F401
 
     out = runner.invoke(cli.app, ["read-papers", "-c", str(cli_env)]).stdout
     assert "total 3" in out and out.index("Gamma") < out.index("Alpha") < out.index("Beta")

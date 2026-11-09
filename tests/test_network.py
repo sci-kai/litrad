@@ -3,10 +3,10 @@ import uvicorn
 import yaml
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-from litresearch.config import load_config
-from litresearch.web.auth import hash_password
-from litresearch.web.network import Interface, NetworkError, interfaces, resolve
+import litrad.cli as cli
+from litrad.config import load_config
+from litrad.web.auth import hash_password
+from litrad.web.network import Interface, NetworkError, interfaces, resolve
 
 runner = CliRunner()
 
@@ -90,7 +90,7 @@ def test_real_interfaces_include_loopback():
 def server(monkeypatch):
     calls = {}
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
-    monkeypatch.setattr("litresearch.web.network.interfaces", lambda: list(PI))
+    monkeypatch.setattr("litrad.web.network.interfaces", lambda: list(PI))
     monkeypatch.setattr("webbrowser.open", lambda *a, **k: pytest.fail("no browser"))
     return calls
 
@@ -122,7 +122,7 @@ def serve(*args):
 
 def test_serve_guards_against_dns_rebinding(tmp_path, server, monkeypatch):
     created = {}
-    monkeypatch.setattr("litresearch.web.app.create_app", lambda path, **kw: created.update(kw))
+    monkeypatch.setattr("litrad.web.app.create_app", lambda path, **kw: created.update(kw))
     assert serve("-c", write_config(tmp_path)).exit_code == 0
     assert "localhost" in created["trusted_names"]
 
@@ -227,4 +227,4 @@ def test_menu_marks_networks_that_need_a_password(tmp_path, server, plain_consol
     monkeypatch.setattr(cli, "interactive", lambda: True)
     result = runner.invoke(cli.app, ["serve", "-c", write_config(tmp_path)], input="\n")
     assert "eth0     cable (Ethernet): 192.168.50.2 (needs a password)" in result.stdout
-    assert "litresearch set-password" in result.stdout
+    assert "litrad set-password" in result.stdout

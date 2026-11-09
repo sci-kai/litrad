@@ -9,8 +9,8 @@ import httpx
 import platformdirs
 import pytest
 
-from litresearch.config import Config
-from litresearch.sources.http import HttpClient, ResponseCache
+from litrad.config import Config
+from litrad.sources.http import HttpClient, ResponseCache
 
 DATA = Path(__file__).parent / "data"
 SAMPLE_BIB = DATA / "paperpile_sample.bib"
@@ -77,9 +77,11 @@ def within(seconds: float, label: str = "block"):
 
 
 # the real per-user folders, looked up before any test can redirect them
+# (litresearch: the names before the rename, whose folders are moved on the first start)
 REAL_USER_DIRS = [
-    Path(platformdirs.user_config_dir("litresearch", appauthor=False)),
-    Path(platformdirs.user_data_dir("litresearch", appauthor=False)),
+    Path(folder(app, appauthor=False))
+    for app in ("litrad", "litresearch")
+    for folder in (platformdirs.user_config_dir, platformdirs.user_data_dir)
 ]
 
 
@@ -100,20 +102,17 @@ def isolated(tmp_path, monkeypatch):
     touches the real per-user folders fails.
     """
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("LITRESEARCH_CONFIG", raising=False)
+    for variable in ("LITRAD_CONFIG", "LITRESEARCH_CONFIG"):
+        monkeypatch.delenv(variable, raising=False)
     user_home = tmp_path / "user-home"
     for variable, folder in (("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data")):
         monkeypatch.setenv(variable, str(user_home / folder))
-    monkeypatch.setattr(
-        "litresearch.locations.user_config_dir", lambda: user_home / "config" / "litresearch"
-    )
-    monkeypatch.setattr(
-        "litresearch.locations.user_data_dir", lambda: user_home / "data" / "litresearch"
-    )
+    monkeypatch.setattr("litrad.locations.user_config_dir", lambda: user_home / "config" / "litrad")
+    monkeypatch.setattr("litrad.locations.user_data_dir", lambda: user_home / "data" / "litrad")
     before = [_state(path) for path in REAL_USER_DIRS]
     started = []
     monkeypatch.setattr(
-        "litresearch.backup.start_backup_thread",
+        "litrad.backup.start_backup_thread",
         lambda config_path, log=print: started.append(config_path) or (None, None),
     )
     yield started
@@ -299,12 +298,12 @@ def make_work(
 
 
 def format1_rules():
-    """The default rules of rules format 1 (litresearch 0.1 to 1.0), as old profiles locked them.
+    """The default rules of rules format 1 (litrad 0.1 to 1.0), as old profiles locked them.
 
     Tests of the game mechanics written for those numbers use them; they also
     show that a profile locked by an older version keeps playing by its rules.
     """
-    from litresearch.rules import GameRules
+    from litrad.rules import GameRules
 
     data = json.loads((DATA / "compat" / "dev-20261109" / "profile.json").read_text("utf-8"))
     rules = GameRules.model_validate(data["profile"]["rules"])
@@ -314,8 +313,8 @@ def format1_rules():
 
 def rules_form(rules=None) -> dict:
     """The fields of the rules form, filled with ``rules`` (default rules)."""
-    from litresearch.rules import GameRules
-    from litresearch.web.settings import RULE_GROUPS, levels_text
+    from litrad.rules import GameRules
+    from litrad.web.settings import RULE_GROUPS, levels_text
 
     rules = rules or GameRules()
     data = {name: str(getattr(rules, name)) for _, _, fields in RULE_GROUPS for name, *_ in fields}
@@ -337,8 +336,8 @@ def enter_profile(client, name: str = "Tester", adopt: bool = True, **fields):
 
 def profile_cfg(config_path, slug: str | None = None):
     """The effective configuration of the current (or given) profile."""
-    from litresearch import profiles
-    from litresearch.config import load_config
+    from litrad import profiles
+    from litrad.config import load_config
 
     base = load_config(config_path)
     return profiles.profile_config(base, slug or profiles.get_current(base))

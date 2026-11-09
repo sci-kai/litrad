@@ -10,12 +10,12 @@ import yaml
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import profile_cfg
-from litresearch import history, notes, profiles
-from litresearch.backup import export_progress, restore, run_backup
-from litresearch.config import Config, load_config
-from litresearch.db import (
+from litrad import history, notes, profiles
+from litrad.backup import export_progress, restore, run_backup
+from litrad.config import Config, load_config
+from litrad.db import (
     Library,
     LibraryPaper,
     NoteFile,
@@ -25,7 +25,7 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.reading import add_note, record_reading
+from litrad.reading import add_note, record_reading
 from test_web import app_env, celebration, paper_id, post  # noqa: F401 - fixtures
 
 AT = datetime(2026, 10, 7, 8, 30, 0)
@@ -110,12 +110,12 @@ def test_new_file_format(env):
     front, body = notes.split(text)
     meta = yaml.safe_load(front)
     assert list(meta) == list(notes.MANAGED_KEYS)
-    assert meta["litresearch_id"] == a.id and meta["title"] == "Klonale Evolution über Zeit"
+    assert meta["litrad_id"] == a.id and meta["title"] == "Klonale Evolution über Zeit"
     assert meta["authors"] == ["Müller, Jörg", "Doe, A"] and meta["year"] == 2020
     assert meta["journal"] == "Nature" and meta["doi"] == "10.1/a" and meta["pmid"] == "111"
     assert meta["citekey"] == "Müller2020:ab c" and meta["status"] == "thorough"
     assert meta["rating"] == 5 and meta["tags"] == ["tumour-evolution"]
-    assert meta["format"] == "litresearch-note/1"
+    assert meta["format"] == "litrad-note/1"
     assert body.strip() == f"[{AT.isoformat()}] Key figure 3"
 
 
@@ -278,7 +278,7 @@ def test_migration_is_idempotent_and_conflict_safe(env):
     session.commit()
     # a file for b exists already with other content
     existing = folder(cfg) / "doi-10.1-b.md"
-    existing.write_text(f"---\nlitresearch_id: {b.id}\n---\nkept as it is\n")
+    existing.write_text(f"---\nlitrad_id: {b.id}\n---\nkept as it is\n")
     report = notes.refresh_all(session, cfg)
     assert report.counts == {"created": 1, "conflict": 1}
     assert [cid for cid, *_ in report.conflicts] == [b.id]
@@ -303,7 +303,7 @@ def test_folder_unavailable_never_blocks_reading(env, tmp_path):
     # once the vault is there, the note file is written
     (tmp_path / "unmounted").mkdir()
     assert notes.refresh_all(session, gone).counts == {"created": 1}
-    assert (tmp_path / "unmounted" / "litresearch" / "Muller2020-ab-c.md").exists()
+    assert (tmp_path / "unmounted" / "litrad" / "Muller2020-ab-c.md").exists()
 
 
 # --- template and preview ---------------------------------------------------------------
@@ -425,7 +425,7 @@ def test_web_read_papers_search_sees_external_edits_and_settings_status(app_env)
     assert f"/papers/{pid}" not in client.get("/read?q=okapi").text
     page = client.get("/settings").text
     assert str(note_path.parent) in page and "1 file" in page and "no conflicts" in page
-    (note_path.parent / "Orphan.md").write_text("---\nlitresearch_id: 99999\n---\nlost\n")
+    (note_path.parent / "Orphan.md").write_text("---\nlitrad_id: 99999\n---\nlost\n")
     payload = celebration(post(client, "/notes/sync"))
     assert "orphans 1" in payload["message"]
 
@@ -522,13 +522,13 @@ def test_backup_archives_notes_and_restore_brings_back_missing_files(env):
 
 
 def test_restore_takes_note_files_from_a_backup_made_before_1_0(env):
-    """Backups before 1.0 had the note files in litresearch_notes_<stamp>.zip."""
+    """Backups before 1.0 had the note files in litrad_notes_<stamp>.zip."""
     cfg, session, (a, _, _) = env
     record_reading(session, cfg, a, ReadStatus.read, note="note a", at=AT)
     result = run_backup(cfg, session, AT)
     path_a = file_of(session, cfg, a)
     session.close()
-    legacy = result.snapshot.with_name("litresearch_notes_20261005_090000.zip")
+    legacy = result.snapshot.with_name("litrad_notes_20261005_090000.zip")
     with zipfile.ZipFile(legacy, "w") as handle:
         handle.writestr(path_a.name, path_a.read_text())
     result.archive.unlink()  # as if made by 0.6

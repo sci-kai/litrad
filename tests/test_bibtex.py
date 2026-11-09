@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from conftest import SAMPLE_BIB
-from litresearch.ingest.bibtex import (
+from litrad.ingest.bibtex import (
     clean_text,
     make_date,
     normalize_doi,

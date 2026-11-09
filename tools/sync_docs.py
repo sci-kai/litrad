@@ -17,10 +17,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 # (source, copy inside the package)
 PAIRS = [
-    (ROOT / "docs" / "documentation.md", ROOT / "src" / "litresearch" / "web" / "documentation.md"),
+    (ROOT / "docs" / "documentation.md", ROOT / "src" / "litrad" / "web" / "documentation.md"),
     (
         ROOT / "config" / "config.example.yaml",
-        ROOT / "src" / "litresearch" / "config.example.yaml",
+        ROOT / "src" / "litrad" / "config.example.yaml",
     ),
 ]
 FIX_HINT = "run: python tools/sync_docs.py"

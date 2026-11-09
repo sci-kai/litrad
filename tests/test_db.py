@@ -1,7 +1,7 @@
 import numpy as np
 from sqlmodel import Session, select
 
-from litresearch.db import (
+from litrad.db import (
     Embedding,
     Paper,
     ReadStatus,

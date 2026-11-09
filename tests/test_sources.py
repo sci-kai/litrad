@@ -5,10 +5,10 @@ import httpx
 import pytest
 
 from conftest import DATA, FakeApis
-from litresearch.sources import crossref
-from litresearch.sources.http import HttpClient, HttpError
-from litresearch.sources.openalex import BATCH, OpenAlex, parse_work, rebuild_abstract
-from litresearch.sources.semanticscholar import SemanticScholar, parse_paper
+from litrad.sources import crossref
+from litrad.sources.http import HttpClient, HttpError
+from litrad.sources.openalex import BATCH, OpenAlex, parse_work, rebuild_abstract
+from litrad.sources.semanticscholar import SemanticScholar, parse_paper
 
 RECORDED = json.loads((DATA / "api_responses.json").read_text(encoding="utf-8"))
 

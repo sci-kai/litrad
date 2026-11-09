@@ -3,9 +3,9 @@ from datetime import date
 import numpy as np
 import pytest
 
-from litresearch.config import Selection
-from litresearch.db import Category, Paper
-from litresearch.recommend.scoring import (
+from litrad.config import Selection
+from litrad.db import Category, Paper
+from litrad.recommend.scoring import (
     Candidate,
     LibraryProfile,
     age_days,
@@ -20,7 +20,7 @@ from litresearch.recommend.scoring import (
     timeliness_score,
     venue_impact,
 )
-from litresearch.recommend.text import tfidf_matrix, tokens
+from litrad.recommend.text import tfidf_matrix, tokens
 
 TODAY = date(2026, 10, 7)
 SEL = Selection()

@@ -8,9 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-import litresearch.web.app as web
+import litrad.web.app as web
 from conftest import SAMPLE_BIB, FakeApis, enter_profile, make_work, profile_cfg, rules_form
-from litresearch.db import Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
+from litrad.db import Paper, Reading, ReadStatus, StatusEvent, XpEvent, init_db
 from web_bigdata import populate
 
 # every page of the menu (and the pages one click away)
@@ -181,7 +181,7 @@ def test_weeks_of_use(env, apis):
 
 def test_current_profile_figures_match_saved_file(env):
     """The compare page reads the open profile directly; it must agree with summarize()."""
-    from litresearch.backup import export_progress, summarize
+    from litrad.backup import export_progress, summarize
 
     client, path = env
     enter_profile(client, "Kai", adopt=False)
@@ -338,7 +338,7 @@ def test_rating_and_numbers_are_validated(user):
 
 
 def test_to_number():
-    from litresearch.web.settings import to_number
+    from litrad.web.settings import to_number
 
     assert to_number("3", "int") == 3 and to_number("0.5") == 0.5
     for raw in ("nan", "inf", "-Infinity", "abc"):
@@ -383,7 +383,7 @@ def test_profile_files_must_be_objects(user):
     for url in ("/welcome/load", "/profile/compare"):
         response = client.post(url, files={"file": ("p.json", b"[1, 2]")}, follow_redirects=True)
         assert response.status_code == 200
-        assert "is not a litresearch profile file" in (
+        assert "is not a litrad profile file" in (
             (celebration(response) or {}).get("message", "") + response.text
         )
 

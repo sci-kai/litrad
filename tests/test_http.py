@@ -3,7 +3,7 @@ from datetime import timedelta
 import httpx
 import pytest
 
-from litresearch.sources.http import HttpClient, HttpError, ResponseCache
+from litrad.sources.http import HttpClient, HttpError, ResponseCache
 
 
 def scripted(responses, seen):

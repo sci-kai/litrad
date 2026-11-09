@@ -11,13 +11,13 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlmodel import Session
 
-import litresearch.game as game
-import litresearch.web.app as web
+import litrad.game as game
+import litrad.web.app as web
 from conftest import enter_profile, profile_cfg, rules_form
-from litresearch.config import Config
-from litresearch.db import XpEvent, init_db
-from litresearch.rules import GameRules
-from litresearch.web.settings import SettingsError, friendly_error, parse_topics
+from litrad.config import Config
+from litrad.db import XpEvent, init_db
+from litrad.rules import GameRules
+from litrad.web.settings import SettingsError, friendly_error, parse_topics
 from web_bigdata import populate
 
 PAGES = [
@@ -292,13 +292,13 @@ def test_compare_lists_saved_files_with_dates(user):
     assert 'class="save-list"' in page
     assert re.search(r"<small class=\"muted\">\d{4}-\d{2}-\d{2} \d{2}:\d{2}</small>", page)
     # the saved file is an archive: compared from the list and as an upload
-    name = re.search(r'name="saved" value="(litresearch_profile_[^"]+\.zip)"', page).group(1)
+    name = re.search(r'name="saved" value="(litrad_profile_[^"]+\.zip)"', page).group(1)
     compared = client.post("/profile/compare", data={"saved": name}).text
     assert name in compared and "same rules" in compared and "notice error" not in compared
     saved = next(path.parent.rglob(name))
     uploaded = client.post("/profile/compare", files={"file": ("saved.zip", saved.read_bytes())})
     assert "saved.zip" in uploaded.text and "notice error" not in uploaded.text
-    assert not list(Path(tempfile.gettempdir()).glob("litresearch-upload-*"))  # removed
+    assert not list(Path(tempfile.gettempdir()).glob("litrad-upload-*"))  # removed
 
 
 def test_new_profile_dashboard_shows_first_steps(env):

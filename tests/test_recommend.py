@@ -5,16 +5,16 @@ import pytest
 from sqlmodel import Session, select
 
 from conftest import FakeApis, make_work
-from litresearch.config import Config
-from litresearch.db import (
+from litrad.config import Config
+from litrad.db import (
     Paper,
     QueueItem,
     Reading,
     ReadStatus,
     init_db,
 )
-from litresearch.ingest.pipeline import ingest_library
-from litresearch.recommend.engine import (
+from litrad.ingest.pipeline import ingest_library
+from litrad.recommend.engine import (
     MEETING_ABSTRACT,
     batch_items,
     build_recommendations,

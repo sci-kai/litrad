@@ -1,4 +1,4 @@
-# litresearch
+# litrad
 
 A personal literature radar built on your reference-manager libraries
 (Paperpile, Zotero, Mendeley, EndNote …). Whenever you ask (with a weekly
@@ -27,7 +27,7 @@ Pi). Please [test it](TESTING.md) and report what breaks.
 
 **Desktop app (default):** download the file for your system from the
 latest GitHub release: Windows installer (`.exe`), macOS (`.dmg`) or Linux
-AppImage. Double-click it; litresearch starts on this computer only and opens
+AppImage. Double-click it; litrad starts on this computer only and opens
 in your browser. Quit with **⏻ Quit** in the sidebar. The builds are
 unsigned: Windows *More info → Run anyway*, macOS right-click → *Open*,
 Linux `chmod +x`. Details: [Desktop app](docs/documentation.md#desktop-app).
@@ -37,13 +37,13 @@ devices with a password) needs Linux with Python ≥ 3.11 and git (Debian,
 Ubuntu, Raspberry Pi OS: `sudo apt install git python3-venv`):
 
 ```bash
-git clone <repository-url> litresearch && cd litresearch
+git clone <repository-url> litrad && cd litrad
 python3 install.py                 # checks, installs, offers to start the web UI
-.venv/bin/litresearch serve        # later: start the web UI, open the address it prints
+.venv/bin/litrad serve        # later: start the web UI, open the address it prints
 ```
 
 Options: `--service` (start the web UI automatically), `--repair` (if
-litresearch does not start), `--remove-service`. Details:
+litrad does not start), `--remove-service`. Details:
 [Server mode](docs/documentation.md#server-mode).
 
 In the browser:
@@ -56,12 +56,12 @@ In the browser:
 Everything also works on the command line:
 
 ```bash
-.venv/bin/litresearch profile create "Kai"
-.venv/bin/litresearch library import library.bib --new "Paperpile"
-.venv/bin/litresearch recommend --new
-.venv/bin/litresearch queue add r1
-.venv/bin/litresearch read q1 thorough --rating 5 --note "..."
-.venv/bin/litresearch score
+.venv/bin/litrad profile create "Kai"
+.venv/bin/litrad library import library.bib --new "Paperpile"
+.venv/bin/litrad recommend --new
+.venv/bin/litrad queue add r1
+.venv/bin/litrad read q1 thorough --rating 5 --note "..."
+.venv/bin/litrad score
 ```
 
 Update with `git pull && python3 install.py`; `config/` and `data/` stay.
@@ -73,7 +73,7 @@ built into the web UI (📖):
 
 | Part | Contents |
 |---|---|
-| I. Using litresearch | setup and exports, the weekly loop, profiles, libraries, the web UI and network access |
+| I. Using litrad | setup and exports, the weekly loop, profiles, libraries, the web UI and network access |
 | II. How it works | every recommendation rule and formula; points, penalty, levels and badges |
 | III. Reference | commands, data sources and privacy, configuration, data and backups |
 | IV. How it is built | architecture, development, tests, **credits for all packages, services and literature** |

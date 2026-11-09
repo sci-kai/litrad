@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choose your profile · litrad</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+{% include "_pwa_head.html" %}
+</head>
+<body>
+{% from "macros.html" import rules_fields with context %}
+<main class="welcome">
+  <div class="welcome-head">
+    {% with brand_center = true, brand_big = true %}{% include "_brand.html" %}{% endwith %}
+    <p class="muted">Library, queue and progress belong to a profile.</p>
+  </div>
+
+  {% if profiles %}
+  <section class="card">
+    <h2>👋 Continue with your profile</h2>
+    <div class="profile-cards">
+      {% for p in profiles %}
+      <form method="post" action="/welcome/select" class="profile-card {{ 'current' if p.slug == current }}">
+        <input type="hidden" name="slug" value="{{ p.slug }}">
+        <button class="profile-pick" title="Continue as {{ p.name }}">
+          <span class="avatar big">{{ p.level.icon }}</span>
+          <span class="who"><b>{{ p.name }}</b><br>
+            <small>Lv {{ p.level.number }} · {{ p.level.title }} · {{ p.xp }} XP</small><br>
+            <small class="muted">{{ p.papers_read }} papers read · {{ p.library }} in library{% if p.last_activity %} · active {{ p.last_activity.date().isoformat() }}{% elif p.created_at %} · since {{ p.created_at.date().isoformat() }}{% endif %}</small></span>
+          <span class="go">▶</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if legacy %}
+  <section class="card up-next" style="margin-top:1rem">
+    <span class="badge-next">EXISTING DATA FOUND</span>
+    <h2>📦 Use your existing library for a profile</h2>
+    <p>{{ legacy.library }} library papers and {{ legacy.readings }} reading entries from before profiles (<code>{{ legacy.path }}</code>). The original file stays unchanged.</p>
+    <form method="post" action="/welcome/adopt" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
+      <div class="field" style="margin:0"><label for="adopt-name">Profile name</label><input type="text" id="adopt-name" name="name" value="{{ legacy.name or '' }}" placeholder="e.g. Kai" maxlength="80" required></div>
+      {{ rules_fields(rule_groups, form_rules, levels_text, "adopt") }}
+      <div><button class="primary">📦 Create profile from existing data</button></div>
+    </form>
+  </section>
+  {% endif %}
+
+  <div class="grid two" style="margin-top:1rem; align-items:start">
+    <section class="card">
+      <h2>✨ Create a new profile</h2>
+      <p class="muted">Own library, topics and progress. 🔒 Game rules are locked at creation.</p>
+      <form method="post" action="/welcome/create" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
+        <div class="field" style="margin:0"><label for="create-name">Profile name</label><input type="text" id="create-name" name="name" placeholder="e.g. Kai" maxlength="80" required></div>
+        {{ rules_fields(rule_groups, form_rules, levels_text, "create") }}
+        <div><button class="primary">🔒 Create profile</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>📂 Load a saved profile</h2>
+      <p class="muted">From a backup or a colleague's file, as a new profile. Files edited outside litrad are refused.</p>
+      <form method="post" action="/welcome/load" enctype="multipart/form-data" class="grid" style="gap:.6rem">
+        {% if saves %}
+        <div class="field" style="margin:0"><label for="load-saved">Saved file</label>
+        <select id="load-saved" name="saved"><option value="">Choose a saved file…</option>
+          {% for path, shown in saves %}<option value="{{ path.name }}">{{ shown }}</option>{% endfor %}
+        </select></div>
+        {% endif %}
+        <div class="field" style="margin:0"><label for="load-file">{{ "…or upload a file" if saves else "Profile file (.json)" }}</label>
+        <input type="file" id="load-file" name="file" accept=".zip,.json,application/zip,application/json"></div>
+        <div class="field" style="margin:0"><label for="load-name">Name <small class="muted">(optional; default: the saved name)</small></label>
+        <input type="text" id="load-name" name="name" maxlength="80"></div>
+        <div><button>📂 Load profile</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>📦 Import an archive</h2>
+      <p class="muted">An archive from <i>Export everything</i> becomes a new profile. It is checked first: nothing is created unless all of it is consistent.</p>
+      <form method="post" action="/welcome/import-all" enctype="multipart/form-data" class="grid" style="gap:.6rem">
+        <div class="field" style="margin:0"><label for="archive-file">Archive (.zip)</label>
+        <input type="file" id="archive-file" name="file" accept=".zip,application/zip" required></div>
+        <div class="field" style="margin:0"><label for="archive-name">Name <small class="muted">(optional; default: the archive's name)</small></label>
+        <input type="text" id="archive-name" name="name" maxlength="80"></div>
+        <label><input type="checkbox" name="partial" value="1"> Only the consistent part <small class="muted">(skips records with problems)</small></label>
+        <div><button>📦 Import archive</button></div>
+      </form>
+    </section>
+  </div>
+  {% if desktop %}<form method="post" action="/app/quit" class="row" style="justify-content:center;margin-top:1rem"><button class="small ghost" title="Stop litrad on this computer">⏻ Quit</button></form>{% endif %}
+</main>
+<div class="toasts" aria-live="polite"></div>
+{% if celebration %}<script id="celebration" type="application/json">{{ celebration | tojson }}</script>{% endif %}
+<script src="/static/app.js"></script>
+</body>
+</html>

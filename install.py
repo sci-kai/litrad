@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install litresearch in this folder with one command.
+"""Install litrad in this folder with one command.
 
     python3 install.py                   # virtual environment, dependencies, config
     python3 install.py --service         # ... and start the web UI automatically (systemd)
@@ -27,19 +27,19 @@ HERE = Path(__file__).resolve().parent
 VENV = HERE / ".venv"
 CONFIG = HERE / "config" / "config.yaml"
 EXAMPLE = HERE / "config" / "config.example.yaml"
-SERVICE = Path.home() / ".config" / "systemd" / "user" / "litresearch.service"
+SERVICE = Path.home() / ".config" / "systemd" / "user" / "litrad.service"
 MINIMUM = (3, 11)
 
 UNIT = """\
 [Unit]
-Description=litresearch web UI
+Description=litrad web UI
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 WorkingDirectory={home}
 # --no-choose: no question at start; the network is web.host in config/config.yaml
-ExecStart={venv}/bin/litresearch serve --no-choose -c {home}/config/config.yaml
+ExecStart={venv}/bin/litrad serve --no-choose -c {home}/config/config.yaml
 Restart=on-failure
 
 [Install]
@@ -64,7 +64,7 @@ def check_system() -> None:
     if sys.version_info < MINIMUM:
         version = ".".join(map(str, MINIMUM))
         raise InstallError(
-            f"litresearch needs Python {version} or newer; this is {sys.version.split()[0]}.\n"
+            f"litrad needs Python {version} or newer; this is {sys.version.split()[0]}.\n"
             f"Install a newer Python and run this script with it, e.g. python{version} install.py"
         )
     if importlib.util.find_spec("ensurepip") is None and not (VENV / "bin" / "python").exists():
@@ -85,7 +85,7 @@ def create_venv() -> Path:
 
 
 def install_package(python: Path, dev: bool, repair: bool = False) -> None:
-    step("Installing litresearch and its dependencies (a few minutes on a Raspberry Pi)")
+    step("Installing litrad and its dependencies (a few minutes on a Raspberry Pi)")
     fresh = ["--force-reinstall", "--no-cache-dir"] if repair else []
     run(str(python), "-m", "pip", "install", "--quiet", "--upgrade", "pip")
     # editable: `git pull` updates the code without reinstalling
@@ -104,17 +104,17 @@ def verify() -> str:
     """Run the installed command once; a corrupt download shows up here, not later."""
     step("Checking the installation")
     result = subprocess.run(
-        [str(VENV / "bin" / "litresearch"), "version"], capture_output=True, text=True
+        [str(VENV / "bin" / "litrad"), "version"], capture_output=True, text=True
     )
     version = result.stdout.strip()
     if result.returncode != 0 or version != expected_version():
         detail = (result.stderr.strip().splitlines() or [version or "no output"])[-1]
         raise InstallError(
-            f"litresearch does not start: {detail}\n"
+            f"litrad does not start: {detail}\n"
             "Reinstall all packages without pip's cache with:\n"
             "    python3 install.py --repair"
         )
-    print(f"litresearch {version} works.")
+    print(f"litrad {version} works.")
     return version
 
 
@@ -128,24 +128,24 @@ def create_config() -> None:
 
 def install_service() -> None:
     if shutil.which("systemctl") is None:
-        print("systemd is not available here; start the web UI with `litresearch serve`.")
+        print("systemd is not available here; start the web UI with `litrad serve`.")
         return
     step(f"Installing the systemd user service {SERVICE}")
     SERVICE.parent.mkdir(parents=True, exist_ok=True)
     SERVICE.write_text(UNIT.format(home=HERE, venv=VENV), encoding="utf-8")
     run("systemctl", "--user", "daemon-reload")
-    run("systemctl", "--user", "enable", "--now", "litresearch.service")
+    run("systemctl", "--user", "enable", "--now", "litrad.service")
     print("The web UI now starts with your user session.")
     print("To keep it running after you log out (e.g. on a Pi): sudo loginctl enable-linger $USER")
-    print("Status and logs: systemctl --user status litresearch; journalctl --user -u litresearch")
+    print("Status and logs: systemctl --user status litrad; journalctl --user -u litrad")
 
 
 def remove_service() -> None:
     if not SERVICE.exists():
-        print("No litresearch service is installed.")
+        print("No litrad service is installed.")
         return
     step(f"Removing the systemd user service {SERVICE}")
-    subprocess.run(["systemctl", "--user", "disable", "--now", "litresearch.service"], check=False)
+    subprocess.run(["systemctl", "--user", "disable", "--now", "litrad.service"], check=False)
     SERVICE.unlink()
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
     print("The web UI no longer starts automatically; your data is untouched.")
@@ -153,11 +153,11 @@ def remove_service() -> None:
 
 def next_steps(service: bool) -> None:
     step("Done")
-    command = ".venv/bin/litresearch"
-    print(f"litresearch is installed in {HERE}. Run its commands from this folder:")
+    command = ".venv/bin/litrad"
+    print(f"litrad is installed in {HERE}. Run its commands from this folder:")
     print(f"    cd {HERE}")
     if service:
-        print("The web UI is running; see the address with: systemctl --user status litresearch")
+        print("The web UI is running; see the address with: systemctl --user status litrad")
     else:
         print(f"    {command} serve      # start the web UI, then open the address it prints")
     print("In the browser: create a profile, import your library (Library -> Import),")
@@ -177,7 +177,7 @@ def offer_start() -> None:
         return
     if answer in ("", "y", "yes"):
         os.chdir(HERE)
-        command = str(VENV / "bin" / "litresearch")
+        command = str(VENV / "bin" / "litrad")
         os.execv(command, [command, "serve"])
 
 

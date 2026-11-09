@@ -20,7 +20,7 @@ def venv_dir(tmp_path, monkeypatch):
 
 
 def test_expected_version_matches_the_package():
-    from litresearch import __version__
+    from litrad import __version__
 
     assert install.expected_version() == __version__
 
@@ -91,7 +91,7 @@ def test_config_is_created_once(tmp_path, monkeypatch):
 
 
 def test_remove_service(tmp_path, monkeypatch):
-    service = tmp_path / "litresearch.service"
+    service = tmp_path / "litrad.service"
     service.write_text("[Unit]\n")
     monkeypatch.setattr(install, "SERVICE", service)
     monkeypatch.setattr(install.subprocess, "run", fake_run(0))

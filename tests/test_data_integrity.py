@@ -9,8 +9,8 @@ import pytest
 from sqlmodel import Session, func, select
 
 from conftest import FakeApis
-from litresearch import export, libraries
-from litresearch.backup import (
+from litrad import export, libraries
+from litrad.backup import (
     export_progress,
     import_progress,
     restore,
@@ -18,11 +18,11 @@ from litresearch.backup import (
     run_backup,
     snapshot,
 )
-from litresearch.db import Library, LibraryPaper, Paper, Reading, ReadStatus, init_db
-from litresearch.ingest.formats import read_references
-from litresearch.ingest.pipeline import import_into
-from litresearch.reading import record_reading
-from litresearch.sources.http import CACHE_KEEP, ResponseCache
+from litrad.db import Library, LibraryPaper, Paper, Reading, ReadStatus, init_db
+from litrad.ingest.formats import read_references
+from litrad.ingest.pipeline import import_into
+from litrad.reading import record_reading
+from litrad.sources.http import CACHE_KEEP, ResponseCache
 
 AT = datetime(2026, 1, 5, 9, 0, 0)
 
@@ -284,25 +284,25 @@ def test_backups_over_months(db, cfg):
         run_backup(cfg, session, moment=AT + timedelta(days=30 * day))
     files = sorted(p.name for p in cfg.backup.dir.iterdir())
     assert len(files) == 6, files
-    assert files[-1] == "litresearch_backup_20261002_090000.zip"
+    assert files[-1] == "litrad_backup_20261002_090000.zip"
     assert not [p for p in cfg.backup.dir.iterdir() if p.name.startswith(".")]
 
 
 def test_rotation_by_time_includes_restore_safety_copies(tmp_path):
     """Saved profiles are never rotated; safety copies of restores age like snapshots."""
     for day in range(1, 6):
-        (tmp_path / f"litresearch_2026010{day}_070000.sqlite").write_text("x")
-        (tmp_path / f"litresearch_progress_2026010{day}_070000.json").write_text("{}")
-    (tmp_path / "litresearch_20260101_080000_before_restore.sqlite").write_text("x")
-    (tmp_path / "litresearch_20260105_080000_before_restore.sqlite").write_text("x")
-    (tmp_path / "litresearch_profile_kai_20260101_070000.json").write_text("{}")
+        (tmp_path / f"litrad_2026010{day}_070000.sqlite").write_text("x")
+        (tmp_path / f"litrad_progress_2026010{day}_070000.json").write_text("{}")
+    (tmp_path / "litrad_20260101_080000_before_restore.sqlite").write_text("x")
+    (tmp_path / "litrad_20260105_080000_before_restore.sqlite").write_text("x")
+    (tmp_path / "litrad_profile_kai_20260101_070000.json").write_text("{}")
     rotate(tmp_path, 2)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "litresearch_20260105_070000.sqlite",
-        "litresearch_20260105_080000_before_restore.sqlite",
-        "litresearch_profile_kai_20260101_070000.json",
-        "litresearch_progress_20260104_070000.json",
-        "litresearch_progress_20260105_070000.json",
+        "litrad_20260105_070000.sqlite",
+        "litrad_20260105_080000_before_restore.sqlite",
+        "litrad_profile_kai_20260101_070000.json",
+        "litrad_progress_20260104_070000.json",
+        "litrad_progress_20260105_070000.json",
     ]
 
 
@@ -310,7 +310,7 @@ def test_failed_snapshot_leaves_no_temporary_file(tmp_path):
     broken = tmp_path / "broken.sqlite"
     broken.write_text("not a database" * 100)
     with pytest.raises(sqlite3.DatabaseError):
-        snapshot(broken, tmp_path / "backups" / "litresearch_20260101_070000.sqlite")
+        snapshot(broken, tmp_path / "backups" / "litrad_20260101_070000.sqlite")
     assert list((tmp_path / "backups").iterdir()) == []
 
 
@@ -384,7 +384,7 @@ def test_http_cache_write_while_locked_is_skipped(tmp_path):
 
 
 def test_restore_of_a_missing_file_creates_nothing(cfg, tmp_path):
-    from litresearch.backup import BackupError
+    from litrad.backup import BackupError
 
     cfg.backup.dir = tmp_path / "backups"
     with pytest.raises(BackupError, match="not a valid"):
@@ -410,9 +410,9 @@ class _OneRound:
 
 
 def test_backups_continue_with_an_invalid_profile_settings_file(tmp_path):
-    from litresearch import profiles
-    from litresearch.backup import backup_all
-    from litresearch.config import load_config
+    from litrad import profiles
+    from litrad.backup import backup_all
+    from litrad.config import load_config
 
     path = tmp_path / "config.yaml"
     path.write_text(f"paths:\n  bibtex: x.bib\nbackup:\n  dir: {tmp_path / 'backups'}\n")
@@ -423,13 +423,13 @@ def test_backups_continue_with_an_invalid_profile_settings_file(tmp_path):
     messages = []
     assert backup_all(base, messages.append) == 0, messages
     for slug in ("good", "broken"):
-        assert list((tmp_path / "backups" / slug).glob("litresearch_2*.sqlite")), slug
+        assert list((tmp_path / "backups" / slug).glob("litrad_2*.sqlite")), slug
     (base.paths.profiles_dir / "broken" / "settings.yaml").write_text("queue:\n  max_size: 999\n")
     assert backup_all(base, messages.append) == 0, messages
 
 
 def test_backup_loop_survives_an_invalid_config_file(tmp_path):
-    from litresearch.backup import backup_loop
+    from litrad.backup import backup_loop
 
     path = tmp_path / "config.yaml"
     path.write_text("paths: [broken\n")

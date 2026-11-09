@@ -9,12 +9,12 @@ import pytest
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import SAMPLE_BIB, FakeApis
-from litresearch import examples, libraries
-from litresearch.backup import export_progress, import_progress, load_profile
-from litresearch.config import Config, Selection
-from litresearch.db import (
+from litrad import examples, libraries
+from litrad.backup import export_progress, import_progress, load_profile
+from litrad.config import Config, Selection
+from litrad.db import (
     ExampleChoice,
     Library,
     LibraryPaper,
@@ -23,7 +23,7 @@ from litresearch.db import (
     ReadStatus,
     init_db,
 )
-from litresearch.recommend.engine import build_recommendations
+from litrad.recommend.engine import build_recommendations
 from test_recommend import TODAY, build, setup  # noqa: F401  (fixture)
 
 runner = CliRunner()
@@ -526,7 +526,7 @@ def test_merging_choices_newer_wins(db, tmp_path):
 def plain_console(monkeypatch):
     from rich.console import Console
 
-    import litresearch.cli_library as cli_library
+    import litrad.cli_library as cli_library
 
     console = Console(color_system=None, width=300, highlight=False)
     monkeypatch.setattr(cli, "console", console)
@@ -534,7 +534,7 @@ def plain_console(monkeypatch):
 
 
 def test_cli_examples(tmp_path, plain_console, monkeypatch, make_http):
-    import litresearch.cli_library as cli_library
+    import litrad.cli_library as cli_library
 
     apis = FakeApis()
     monkeypatch.setattr(cli_library, "make_http", lambda cfg: make_http(apis))

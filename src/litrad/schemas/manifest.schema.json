@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://litrad.example/schemas/1/manifest.schema.json",
+  "title": "litrad export manifest",
+  "description": "Format, version, counts and SHA-256 checksums of every file of the archive",
+  "type": "object",
+  "properties": {
+    "format": {
+      "description": "litrad-export; litresearch-export in files written before the rename to litrad",
+      "enum": ["litrad-export", "litresearch-export"]
+    },
+    "format_version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "app_version": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "created": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?$",
+      "description": "ISO 8601 date and time, local time, no offset (YYYY-MM-DDTHH:MM:SS)"
+    },
+    "profile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sha256"
+        ]
+      }
+    }
+  },
+  "required": [
+    "format",
+    "format_version",
+    "created",
+    "files"
+  ]
+}

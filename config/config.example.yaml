@@ -1,4 +1,4 @@
-# litresearch configuration. `litresearch where` shows which file is in use;
+# litrad configuration. `litrad where` shows which file is in use;
 # a git installation keeps it as config/config.yaml (install.py copies this
 # example there), otherwise the first run creates a per-user copy.
 # Dates follow ISO 8601 (YYYY-MM-DD).
@@ -12,16 +12,16 @@ paths:
   # relative paths (also backup.dir) start from here; n/a = the folder that
   # contains config/ (git installation), else this file's folder
   base_dir: n/a
-  # one folder per profile: litresearch.sqlite, library.bib, settings.yaml
+  # one folder per profile: litrad.sqlite, library.bib, settings.yaml
   profiles_dir: data/profiles
   # data from before profiles existed (can be taken over as a profile)
   bibtex: data/paperpile/library.bib
-  database: data/litresearch.sqlite
+  database: data/litrad.sqlite
   cache_dir: data/cache
   # notes as Markdown files: n/a = <profile folder>/notes; or an Obsidian vault
   obsidian_vault: n/a
   # folder inside the vault for the note files
-  notes_subfolder: litresearch
+  notes_subfolder: litrad
 
 library:
   # Paperpile labels without topical meaning (case-insensitive)
@@ -49,7 +49,7 @@ excluded_terms: ["veterinary"]
 
 sources:
   semanticscholar: true
-  # paper search (Library → Find & add, `litresearch search`)
+  # paper search (Library → Find & add, `litrad search`)
   europepmc: true
   pubmed: true
   biorxiv: true
@@ -93,7 +93,7 @@ queue:
 
 game:
   # DEFAULTS FOR A NEW PROFILE. When a profile is created (welcome screen or
-  # `litresearch profile create`), these rules are copied and locked; changing
+  # `litrad profile create`), these rules are copied and locked; changing
   # them later only affects the next profile. All keys (points per level,
   # bonuses, levels, badge_targets, ...) are listed in docs/documentation.md (Gamification).
   # weekly quest: papers read at least to depth "read" / at least "skimmed"
@@ -105,7 +105,7 @@ backup:
   # point this to a cloud-synced folder, but keep paths.database local
   dir: data/backups
   keep: 14
-  # `litresearch serve` backs up at start and then every N hours (0 = off)
+  # `litrad serve` backs up at start and then every N hours (0 = off)
   interval_hours: 24
 
 llm:
@@ -120,12 +120,12 @@ schedule:
   cron: "0 6 * * 1"
 
 web:
-  # where `litresearch serve` listens:
+  # where `litrad serve` listens:
   #   local       = only this computer
   #   all         = every network
-  #   eth0, wlan0 = only that network (see `litresearch serve --list-networks`)
+  #   eth0, wlan0 = only that network (see `litrad serve --list-networks`)
   #   or an IPv4 address of this computer
-  # anything but local needs a password (`litresearch set-password`)
+  # anything but local needs a password (`litrad set-password`)
   host: local
   port: 8080
   password_hash: n/a

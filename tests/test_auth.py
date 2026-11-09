@@ -6,11 +6,11 @@ import yaml
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import SAMPLE_BIB, enter_profile
-from litresearch.config import load_config
-from litresearch.web.app import create_app
-from litresearch.web.auth import (
+from litrad.config import load_config
+from litrad.web.app import create_app
+from litrad.web.auth import (
     COOKIE,
     check_session,
     hash_password,

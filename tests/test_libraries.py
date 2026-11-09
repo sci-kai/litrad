@@ -10,17 +10,17 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, func, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-import litresearch.web.app as web
+import litrad.cli as cli
+import litrad.web.app as web
 from conftest import SAMPLE_BIB, FakeApis, enter_profile, profile_cfg
-from litresearch import export, libraries
-from litresearch.backup import export_progress, import_progress
-from litresearch.db import IngestRun, Library, LibraryPaper, Paper, Reading, ReadStatus, init_db
-from litresearch.ingest.bibtex import BibEntry
-from litresearch.ingest.check import check_entries, check_file
-from litresearch.ingest.formats import detect_format, parse_csl_json, parse_ris, read_references
-from litresearch.ingest.pipeline import import_into, ingest_library, last_ingest, refresh_libraries
-from litresearch.reading import queue_add
+from litrad import export, libraries
+from litrad.backup import export_progress, import_progress
+from litrad.db import IngestRun, Library, LibraryPaper, Paper, Reading, ReadStatus, init_db
+from litrad.ingest.bibtex import BibEntry
+from litrad.ingest.check import check_entries, check_file
+from litrad.ingest.formats import detect_format, parse_csl_json, parse_ris, read_references
+from litrad.ingest.pipeline import import_into, ingest_library, last_ingest, refresh_libraries
+from litrad.reading import queue_add
 
 runner = CliRunner()
 
@@ -323,10 +323,10 @@ def test_exports_round_trip(db, make_http, tmp_path):
         assert {e.doi for e in back} == {p.doi for p, _ in libraries.members(session, lib)}
         assert {e.key for e in back} == {m.citation_key for _, m in libraries.members(session, lib)}
         tags = {t for e in back for t in e.tags}
-        assert {"litresearch-read", "litresearch-rating-4"} <= tags
+        assert {"litrad-read", "litrad-rating-4"} <= tags
         assert any("/" in f for e in back for f in e.folders)  # folders survive
     plain = export.render(items, "bibtex")
-    assert "litresearch-read" not in plain
+    assert "litrad-read" not in plain
     assert export.file_name("Paperpile – cancer", "ris", datetime(2026, 10, 14)) == (
         "paperpile-cancer_20261014.ris"
     )
@@ -438,7 +438,7 @@ def test_library_page_actions(site):
     assert "PP" in page and "renamed" in page and "not used for recommendations" in page
     download = client.get("/library/1/export?format=ris&status=true")
     assert download.headers["content-disposition"].startswith("attachment; filename=pp_")
-    assert "TY  - " in download.text and "litresearch-read" in download.text
+    assert "TY  - " in download.text and "litrad-read" in download.text
     assert (
         "Unknown export format"
         in client.get("/library/1/export?format=x", follow_redirects=True).text
@@ -528,7 +528,7 @@ def test_profile_files_keep_libraries(db, make_http, tmp_path):
 def plain_console(monkeypatch):
     from rich.console import Console
 
-    import litresearch.cli_library as cli_library
+    import litrad.cli_library as cli_library
 
     console = Console(color_system=None, width=300, highlight=False)
     monkeypatch.setattr(cli, "console", console)
@@ -536,7 +536,7 @@ def plain_console(monkeypatch):
 
 
 def test_cli_libraries(tmp_path, plain_console, monkeypatch, make_http):
-    import litresearch.cli_library as cli_library
+    import litrad.cli_library as cli_library
 
     apis = FakeApis()
     monkeypatch.setattr(cli_library, "make_http", lambda cfg: make_http(apis))

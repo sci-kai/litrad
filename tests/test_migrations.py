@@ -11,12 +11,12 @@ from sqlalchemy import text
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
-from litresearch import migrations
-from litresearch.backup import BackupError, check_database, restore
-from litresearch.config import Config
-from litresearch.db import Paper, RecommendationBatch, init_db
-from litresearch.migrations import (
+import litrad.cli as cli
+from litrad import migrations
+from litrad.backup import BackupError, check_database, restore
+from litrad.config import Config
+from litrad.db import Paper, RecommendationBatch, init_db
+from litrad.migrations import (
     SCHEMA_VERSION,
     STEPS,
     MigrationError,
@@ -100,21 +100,21 @@ def test_upgrade_copies_are_rotated_after_a_successful_upgrade(tmp_path):
     folder = tmp_path / migrations.BACKUP_FOLDER
     folder.mkdir()
     for day in range(1, 6):  # copies of earlier upgrades
-        (folder / f"litresearch_2026010{day}_070000_before-schema-0-to-1.sqlite").write_text("x")
+        (folder / f"litrad_2026010{day}_070000_before-schema-0-to-1.sqlite").write_text("x")
     (folder / "my-own-copy.sqlite").write_text("keep")  # not ours: never deleted
     result = migrate(old_database(tmp_path / "old.sqlite"))
     names = sorted(p.name for p in folder.iterdir())
     assert result.snapshot.name in names
     assert len([n for n in names if "_before-schema-" in n]) == migrations.UPGRADE_BACKUPS_KEEP
     assert "my-own-copy.sqlite" in names
-    assert "litresearch_20260101_070000_before-schema-0-to-1.sqlite" not in names
+    assert "litrad_20260101_070000_before-schema-0-to-1.sqlite" not in names
 
 
 def test_a_failed_upgrade_keeps_every_copy(tmp_path):
     folder = tmp_path / migrations.BACKUP_FOLDER
     folder.mkdir()
     for day in range(1, 6):
-        (folder / f"litresearch_2026010{day}_070000_before-schema-0-to-1.sqlite").write_text("x")
+        (folder / f"litrad_2026010{day}_070000_before-schema-0-to-1.sqlite").write_text("x")
 
     def broken(connection):
         raise RuntimeError("boom")
@@ -140,7 +140,7 @@ def test_newer_database_is_refused_and_not_changed(tmp_path):
     connection.commit()
     connection.close()
     before = digest(path)
-    with pytest.raises(SchemaTooNew, match="newer litresearch"):
+    with pytest.raises(SchemaTooNew, match="newer litrad"):
         init_db(path)
     assert digest(path) == before
     assert not (tmp_path / migrations.BACKUP_FOLDER).exists()
@@ -181,7 +181,7 @@ def test_failed_step_rolls_back_and_keeps_the_version(tmp_path):
 @pytest.mark.parametrize("version", ["0.1.0-alpha.1", "0.2.0-dev"])
 def test_released_databases_upgrade_to_the_current_columns(tmp_path, version):
     path = tmp_path / "old.sqlite"
-    shutil.copy(COMPAT / version / "litresearch.sqlite", path)
+    shutil.copy(COMPAT / version / "litrad.sqlite", path)
     init_db(path).dispose()
     init_db(tmp_path / "new.sqlite").dispose()
 
@@ -228,7 +228,7 @@ def test_restore_refuses_a_newer_snapshot(tmp_path):
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 5}")
     connection.commit()
     connection.close()
-    with pytest.raises(BackupError, match="newer litresearch"):
+    with pytest.raises(BackupError, match="newer litrad"):
         restore(cfg, snapshot)
     assert digest(cfg.paths.database) == live
 
@@ -260,8 +260,8 @@ def test_restore_refuses_rows_pointing_to_missing_papers(tmp_path):
 def test_restore_of_an_old_snapshot_upgrades_it(tmp_path):
     cfg = make_cfg(tmp_path)
     init_db(cfg.paths.database).dispose()
-    snapshot = tmp_path / "litresearch_20261001_100000.sqlite"
-    shutil.copy(COMPAT / "0.1.0-alpha.1" / "litresearch.sqlite", snapshot)
+    snapshot = tmp_path / "litrad_20261001_100000.sqlite"
+    shutil.copy(COMPAT / "0.1.0-alpha.1" / "litrad.sqlite", snapshot)
     restore(cfg, snapshot)
     assert read_version(cfg.paths.database)[0] == SCHEMA_VERSION
     engine = init_db(cfg.paths.database)
@@ -279,7 +279,7 @@ def test_check_command_shows_the_schema_version(tmp_path):
     init_db(tmp_path / "db.sqlite").dispose()
     result = runner.invoke(cli.app, ["check", "--config", str(config)])
     assert result.exit_code == 0, result.output
-    assert f"version {SCHEMA_VERSION}, this litresearch: {SCHEMA_VERSION}" in result.output
+    assert f"version {SCHEMA_VERSION}, this litrad: {SCHEMA_VERSION}" in result.output
 
 
 def test_command_line_reports_a_newer_database(tmp_path, monkeypatch, capsys):
@@ -291,8 +291,8 @@ def test_command_line_reports_a_newer_database(tmp_path, monkeypatch, capsys):
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
     connection.commit()
     connection.close()
-    monkeypatch.setattr("sys.argv", ["litresearch", "queue", "--config", str(config)])
+    monkeypatch.setattr("sys.argv", ["litrad", "queue", "--config", str(config)])
     with pytest.raises(SystemExit) as exit_info:
         cli.run()
     assert exit_info.value.code == 2
-    assert "newer litresearch" in capsys.readouterr().out
+    assert "newer litrad" in capsys.readouterr().out

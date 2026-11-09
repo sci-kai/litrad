@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}The Literature Radar Game{% endblock %} · litrad</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+{% include "_pwa_head.html" %}
+</head>
+<body>
+<main class="welcome" id="main">
+  <div class="welcome-head">{% with brand_center = true %}{% include "_brand.html" %}{% endwith %}</div>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

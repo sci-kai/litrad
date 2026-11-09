@@ -13,9 +13,9 @@ import pytest
 from sqlalchemy import event, insert
 from sqlmodel import Session
 
-from litresearch import game
-from litresearch.config import Selection
-from litresearch.db import (
+from litrad import game
+from litrad.config import Selection
+from litrad.db import (
     Embedding,
     Paper,
     Reading,
@@ -26,14 +26,14 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.game import ledger, quest_progress, stats, total_xp, week_progress, week_start
-from litresearch.reading import find_paper, record_reading
-from litresearch.recommend import scoring
-from litresearch.recommend.engine import vectors_for
-from litresearch.recommend.scoring import Candidate, LibraryProfile, knn, rank_candidates
-from litresearch.recommend.text import tfidf_matrix
-from litresearch.rules import GameRules
-from litresearch.sources.semanticscholar import EMBEDDING_MODEL
+from litrad.game import ledger, quest_progress, stats, total_xp, week_progress, week_start
+from litrad.reading import find_paper, record_reading
+from litrad.recommend import scoring
+from litrad.recommend.engine import vectors_for
+from litrad.recommend.scoring import Candidate, LibraryProfile, knn, rank_candidates
+from litrad.recommend.text import tfidf_matrix
+from litrad.rules import GameRules
+from litrad.sources.semanticscholar import EMBEDDING_MODEL
 
 N_PAPERS = 5000
 WEEKS = 110  # two years and a bit, across two year boundaries

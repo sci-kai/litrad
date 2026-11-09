@@ -12,14 +12,14 @@ import yaml
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import within
-from litresearch import archive, examples, libraries, notes, profiles
-from litresearch.archive import ArchiveError, export_archive, import_into, import_new
-from litresearch.backup import profile_settings
-from litresearch.config import load_config
-from litresearch.dataformat import DATA_FORMAT_VERSION, load_schema, schema_names
-from litresearch.db import (
+from litrad import archive, examples, libraries, notes, profiles
+from litrad.archive import ArchiveError, export_archive, import_into, import_new
+from litrad.backup import profile_settings
+from litrad.config import load_config
+from litrad.dataformat import DATA_FORMAT_VERSION, load_schema, schema_names
+from litrad.db import (
     Achievement,
     LibraryPaper,
     NoteFile,
@@ -33,7 +33,7 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.reading import queue_add, record_reading
+from litrad.reading import queue_add, record_reading
 
 runner = CliRunner()
 AT = datetime(2026, 9, 7, 9, 0, 0)
@@ -236,7 +236,7 @@ def test_archive_contains_every_file_with_checksums(exported):
     _, path = exported
     files = members(path)
     manifest = json.loads(files["manifest.json"])
-    assert manifest["format"] == "litresearch-export"
+    assert manifest["format"] == "litrad-export"
     assert manifest["format_version"] == DATA_FORMAT_VERSION
     assert manifest["profile"] == "Source"
     datetime.fromisoformat(manifest["created"])
@@ -332,7 +332,7 @@ def test_round_trip_new_profile(base, exported, tmp_path):
         assert len(rows) == 2 and not any(r.conflict for r in rows)
         for row in rows:
             note = notes.read_note(folder / row.path)
-            assert note.meta["litresearch_id"] == row.paper_id
+            assert note.meta["litrad_id"] == row.paper_id
         report = notes.sync(session, cfg, dry_run=True)
         assert not report.conflicts and not report.orphans
     engine.dispose()
@@ -524,7 +524,7 @@ def test_newer_format_is_refused(base, exported):
         edit_json("manifest.json", lambda d: d.update(format_version="99")),
         fix_checksums=False,
     )
-    with pytest.raises(ArchiveError, match="newer litresearch"):
+    with pytest.raises(ArchiveError, match="newer litrad"):
         import_new(base, newer, "Newer")
 
 
@@ -570,7 +570,7 @@ def test_failure_during_import_into_changes_nothing(base, exported, monkeypatch)
     assert counts() == before
     folder = notes.notes_dir(cfg)
     assert list(folder.rglob("*.md")) == []
-    assert not any(p.name.startswith(".litresearch-import") for p in folder.iterdir())
+    assert not any(p.name.startswith(".litrad-import") for p in folder.iterdir())
 
 
 def test_failure_during_import_new_leaves_no_profile(base, exported, monkeypatch):
@@ -610,7 +610,7 @@ def test_note_files_that_cannot_be_written_after_the_commit(
     assert any("notes sync" in line for line in result.lines())
     folder = notes.notes_dir(cfg)
     assert list(folder.rglob("*.md")) == []
-    assert not any(p.name.startswith(".litresearch-import") for p in folder.iterdir())
+    assert not any(p.name.startswith(".litrad-import") for p in folder.iterdir())
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         with_notes = [r for r in session.exec(select(Reading)).all() if r.notes]
@@ -712,7 +712,7 @@ def test_settings_of_the_profile_are_exported(base, exported):
 def test_web_export_everything_and_import(config_path, base, tmp_path):
     from fastapi.testclient import TestClient
 
-    from litresearch.web.app import create_app
+    from litrad.web.app import create_app
 
     build_profile(base)
     profiles.set_current(base, "source")
@@ -723,7 +723,7 @@ def test_web_export_everything_and_import(config_path, base, tmp_path):
         download = client.get("/profile/export-all")
         assert download.status_code == 200
         assert download.headers["content-type"] == "application/zip"
-        assert "litresearch_export_source_" in download.headers["content-disposition"]
+        assert "litrad_export_source_" in download.headers["content-disposition"]
         archive_file = tmp_path / "web.zip"
         archive_file.write_bytes(download.content)
         assert archive.read_archive(archive_file).manifest["profile"] == "Source"
@@ -774,7 +774,7 @@ def large_profile(base, n_papers=5000, n_read=1500) -> str:
     """A profile of years of use, built with bulk inserts (fast to set up)."""
     from sqlmodel import insert
 
-    from litresearch.db import Library
+    from litrad.db import Library
 
     slug = profiles.create_profile(base, "Large")
     cfg = profiles.profile_config(base, slug)

@@ -1,8 +1,8 @@
 from sqlmodel import Session, select
 
-from litresearch.db import Paper, init_db
-from litresearch.papers import upsert_work
-from litresearch.sources.openalex import Work
+from litrad.db import Paper, init_db
+from litrad.papers import upsert_work
+from litrad.sources.openalex import Work
 
 
 def work(**fields):

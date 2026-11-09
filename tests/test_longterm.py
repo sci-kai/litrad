@@ -7,9 +7,9 @@ import yaml
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import format1_rules
-from litresearch.db import (
+from litrad.db import (
     Achievement,
     Category,
     Paper,
@@ -19,7 +19,7 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.game import (
+from litrad.game import (
     level_for,
     next_read_streak,
     personal_bests,
@@ -32,10 +32,10 @@ from litresearch.game import (
     week_start,
     weekly_summary,
 )
-from litresearch.profile import start_profile
-from litresearch.reading import ReadingError, drop_from_queue, queue_add, record_reading
-from litresearch.recommend.engine import exclusion_sets
-from litresearch.rules import GameRules
+from litrad.profile import start_profile
+from litrad.reading import ReadingError, drop_from_queue, queue_add, record_reading
+from litrad.recommend.engine import exclusion_sets
+from litrad.rules import GameRules
 
 # checked with the numbers of rules format 1 (see test_game.py)
 V1 = format1_rules()

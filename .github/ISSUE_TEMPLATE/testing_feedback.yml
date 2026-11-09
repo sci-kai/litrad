@@ -1,5 +1,5 @@
 name: Testing feedback
-description: How litresearch worked for you after a week or a month of real use
+description: How litrad worked for you after a week or a month of real use
 labels: [testing-feedback]
 body:
   - type: markdown

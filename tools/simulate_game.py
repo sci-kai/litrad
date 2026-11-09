@@ -38,8 +38,8 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from litresearch.config import Config
-from litresearch.db import (
+from litrad.config import Config
+from litrad.db import (
     Achievement,
     Category,
     Paper,
@@ -51,16 +51,16 @@ from litresearch.db import (
     depth,
     init_db,
 )
-from litresearch.game import level_for, stats, total_xp
-from litresearch.profile import profile_rules, start_profile
-from litresearch.reading import ReadingError, drop_from_queue, queue_add, record_reading
-from litresearch.rules import GameRules
+from litrad.game import level_for, stats, total_xp
+from litrad.profile import profile_rules, start_profile
+from litrad.reading import ReadingError, drop_from_queue, queue_add, record_reading
+from litrad.rules import GameRules
 
 START = date(2027, 1, 4)  # a Monday
 REPORT_WEEKS = [1, 2, 4, 8, 12, 26, 52, 104]
 DEPTHS = [ReadStatus.abstract, ReadStatus.skimmed, ReadStatus.read, ReadStatus.thorough]
 NOTE = "Key result, method and how it relates to my project. " * 4  # > 140 characters
-# whether this version can log readings done before using litresearch
+# whether this version can log readings done before using litrad
 HAS_EARLIER = "earlier" in inspect.signature(record_reading).parameters
 
 
@@ -84,7 +84,7 @@ class Persona:
     p_from_rec: float = 0.5
     p_from_library: float = 0.3
     p_deepen: float = 0.1  # per week: a skimmed paper is read again more deeply
-    p_seen_rec: float = 0.0  # a recommendation is a paper read before litresearch
+    p_seen_rec: float = 0.0  # a recommendation is a paper read before litrad
     hours: list[int] = field(default_factory=lambda: [9, 10, 11, 14, 15, 16, 17, 20])
     weekend_share: float = 0.1
     holidays: set[int] = field(default_factory=set)  # weeks without reading
@@ -175,13 +175,13 @@ class Sim:
         self.badge_weeks: dict[str, int] = {}
         self.timeline: dict[int, tuple[int, int, str]] = {}
         self.penalties = 0
-        self.seen: list[Paper] = []  # read before litresearch, not logged yet
+        self.seen: list[Paper] = []  # read before litrad, not logged yet
         self.seen_ids: set[int] = set()
         self.logged_earlier: list[Paper] = []
         self.backlog_level = None
 
     def _profile(self):
-        from litresearch.profile import get_profile
+        from litrad.profile import get_profile
 
         return get_profile(self.session)
 
@@ -274,7 +274,7 @@ class Sim:
         papers = [self.paper(START, 40, in_library=True, hot=1.0) for _ in plan]
         self.logged_earlier += papers
         if HAS_EARLIER:  # the bulk action of a library page, one depth at a time
-            from litresearch.reading import mark_read_earlier
+            from litrad.reading import mark_read_earlier
 
             for status in DEPTHS[::-1]:
                 chosen = [p for p, s in zip(papers, plan, strict=True) if s == status]
@@ -332,7 +332,7 @@ class Sim:
                 top = self.session.exec(select(QueueItem).where(QueueItem.position == 1)).first()
                 if top is not None:
                     paper = self.session.get(Paper, top.paper_id)
-            # a recommendation you had read before litresearch: logged as read earlier
+            # a recommendation you had read before litrad: logged as read earlier
             self.read(paper, status, at, earlier=paper.id in self.seen_ids)
         if self.rng.random() < self.p.p_deepen:
             self.deepen(monday)
@@ -348,7 +348,7 @@ class Sim:
             self.read(recs[-1], ReadStatus.dismissed, at)
 
     def deepen(self, monday: date):
-        from litresearch.db import Reading
+        from litrad.db import Reading
 
         shallow = self.session.exec(
             select(Reading).where(Reading.status == ReadStatus.skimmed).limit(50)
@@ -371,7 +371,7 @@ class Sim:
 
 
 def run(persona: Persona, weeks: int, seed: int = 1, rules: GameRules | None = None) -> dict:
-    with tempfile.TemporaryDirectory(prefix="litresearch-sim-") as folder:
+    with tempfile.TemporaryDirectory(prefix="litrad-sim-") as folder:
         sim = Sim(persona, Path(folder), seed, rules)
         try:
             if persona.backlog:
@@ -566,11 +566,11 @@ def main(argv=None) -> int:
             results = pool.starmap(_run_named, tasks)
     else:
         results = [_run_named(*task) for task in tasks]
-    from litresearch import __version__
+    from litrad import __version__
 
     rules = GameRules()
     header = (
-        f"# Game simulation (litresearch {__version__}, rules {rules.fingerprint()}, "
+        f"# Game simulation (litrad {__version__}, rules {rules.fingerprint()}, "
         f"{args.weeks} weeks, seed {args.seed}, read earlier: {'yes' if HAS_EARLIER else 'no'})\n"
     )
     summary = header + "\nLevel (XP) by week:\n\n" + summary_table(results)

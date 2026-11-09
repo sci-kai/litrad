@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set active = "docs" %}
+{% block title %}{{ chapter.title if chapter else "Documentation" }}{% endblock %}
+{% block heading %}📖 Documentation{% endblock %}
+{% block content %}
+{% if not docs %}
+<div class="card"><p>The documentation file <code>docs/documentation.md</code> was not found. It is part of the repository; run litrad from a clone of it.</p></div>
+{% else %}
+<div class="docs-layout">
+  <nav class="card docs-toc" aria-label="Contents">
+    <a href="/docs" class="{{ 'current' if not chapter }}"><b>Overview</b></a>
+    {% for part, members in docs.parts() %}
+    <div class="docs-part">{{ part }}</div>
+    {% for c in members %}
+    <a href="/docs/{{ c.slug }}" class="{{ 'current' if chapter and c.slug == chapter.slug }}">{{ c.title }}</a>
+    {% if chapter and c.slug == chapter.slug and c.sections %}
+    <div class="docs-sections">
+      {% for s in c.sections if s.level <= 3 %}<a href="#{{ s.slug }}">{{ s.title }}</a>{% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+  </nav>
+
+  <article class="card docs-body">
+    {% if chapter %}
+    <p class="muted docs-crumb"><a href="/docs">Documentation</a> › {{ chapter.part }}</p>
+    <h1 id="top">{{ chapter.title }}</h1>
+    {% if chapter.sections | selectattr("level", "le", 3) | list | length > 2 %}
+    <div class="docs-onpage"><b>On this page:</b>
+      {% for s in chapter.sections if s.level <= 3 %}<a href="#{{ s.slug }}">{{ s.title }}</a>{{ " · " if not loop.last }}{% endfor %}
+    </div>
+    {% endif %}
+    {{ chapter.html | safe }}
+    {% else %}
+    <h1>{{ docs.title }}</h1>
+    {{ docs.intro_html | safe }}
+    <h2>Contents</h2>
+    <div class="docs-overview">
+      {% for part, members in docs.parts() %}
+      <div>
+        <h3>{{ part }}</h3>
+        <ol start="{{ loop.index0 and (docs.chapters.index(members[0]) + 1) or 1 }}">
+          {% for c in members %}
+          <li><a href="/docs/{{ c.slug }}"><b>{{ c.title.split(". ", 1)[-1] }}</b></a>
+            {% if c.sections %}<br><small class="muted">{% for s in c.sections if s.level == 3 %}<a href="/docs/{{ c.slug }}#{{ s.slug }}">{{ s.title }}</a>{{ " · " if not loop.last }}{% endfor %}</small>{% endif %}</li>
+          {% endfor %}
+        </ol>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="row docs-pager">
+      {% if before %}<a class="button" href="/docs/{{ before.slug }}">← {{ before.title }}</a>{% elif chapter %}<a class="button" href="/docs">← Overview</a>{% endif %}
+      <span style="flex:1 1 auto"></span>
+      {% if after %}<a class="button primary" href="/docs/{{ after.slug }}">{{ after.title }} →</a>{% endif %}
+    </div>
+  </article>
+</div>
+{% endif %}
+{% endblock %}

@@ -10,16 +10,16 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-import litresearch.cli as cli
+import litrad.cli as cli
 from conftest import SAMPLE_BIB, enter_profile, profile_cfg, rules_form
-from litresearch import profiles
-from litresearch.backup import BackupError, export_progress
-from litresearch.config import ConfigError, load_config
-from litresearch.db import Paper, Profile, QueueItem, RecommendationBatch, init_db
-from litresearch.profile import profile_rules
-from litresearch.reading import queue_add
-from litresearch.rules import GameRules
-from litresearch.web.app import PROFILE_COOKIE, create_app
+from litrad import profiles
+from litrad.backup import BackupError, export_progress
+from litrad.config import ConfigError, load_config
+from litrad.db import Paper, Profile, QueueItem, RecommendationBatch, init_db
+from litrad.profile import profile_rules
+from litrad.reading import queue_add
+from litrad.rules import GameRules
+from litrad.web.app import PROFILE_COOKIE, create_app
 
 runner = CliRunner()
 
@@ -90,9 +90,9 @@ def test_create_profile_with_locked_rules(base, tmp_path):
     slug = profiles.create_profile(base, "Ada Lovelace", rules)
     assert slug == "ada-lovelace"
     home = tmp_path / "data/profiles/ada-lovelace"
-    assert (home / "litresearch.sqlite").exists() and (home / "settings.yaml").exists()
+    assert (home / "litrad.sqlite").exists() and (home / "settings.yaml").exists()
     cfg = profiles.profile_config(base, slug)
-    assert cfg.paths.database.resolve() == home / "litresearch.sqlite"
+    assert cfg.paths.database.resolve() == home / "litrad.sqlite"
     assert cfg.paths.bibtex.resolve() == home / "library.bib"
     assert cfg.backup.dir == tmp_path / "backups/ada-lovelace"
     # a new profile does not inherit the topics of config.yaml: they are asked for
@@ -290,11 +290,11 @@ def test_load_profile_in_the_browser(client, config_path, tmp_path):
     assert download.json()["settings"]["topics"] == []
     saved = client.post("/profile/save", follow_redirects=True)
     assert "Profile saved" in saved.text
-    saves = list((tmp_path / "backups/ada").glob("litresearch_profile_ada_*.zip"))
+    saves = list((tmp_path / "backups/ada").glob("litrad_profile_ada_*.zip"))
     assert saves  # the archive format
     client.post("/welcome/leave")
     page = client.get("/welcome").text
-    assert "ada/litresearch_profile_ada_" in page  # saved files are offered
+    assert "ada/litrad_profile_ada_" in page  # saved files are offered
     from_saved = client.post(
         "/welcome/load", data={"saved": saves[0].name, "name": "Ada archive"}, follow_redirects=True
     )
@@ -444,8 +444,8 @@ def test_merged_pages(client):
 def plain_console(monkeypatch):
     from rich.console import Console
 
-    import litresearch.cli_data as cli_data
-    import litresearch.cli_reading as cli_reading
+    import litrad.cli_data as cli_data
+    import litrad.cli_reading as cli_reading
 
     console = Console(color_system=None, width=300, highlight=False)
     for module in (cli, cli_data, cli_reading):
@@ -510,7 +510,7 @@ def test_cli_recommend_shows_the_latest_list(config_path, plain_console, monkeyp
     add_batch(config_path, days_ago=10)
     built = []
     monkeypatch.setattr(
-        "litresearch.recommend.engine.build_recommendations",
+        "litrad.recommend.engine.build_recommendations",
         lambda *args, **kwargs: built.append(1),
     )
     result = runner.invoke(cli.app, ["recommend", "-c", str(config_path)])
@@ -522,15 +522,15 @@ def test_cli_recommend_shows_the_latest_list(config_path, plain_console, monkeyp
 
 
 def test_backup_all_profiles(base, tmp_path):
-    from litresearch.backup import backup_all
+    from litrad.backup import backup_all
 
     legacy_data(base)
     profiles.create_profile(base, "Ada")
     messages = []
     assert backup_all(base, messages.append) == 0
     assert [m.split(":")[1].strip() for m in messages] == ["ada", "(no profile)"]
-    assert list((tmp_path / "backups/ada").glob("litresearch_*.sqlite"))
-    archives = sorted((tmp_path / "backups/ada").glob("litresearch_backup_*.zip"))
+    assert list((tmp_path / "backups/ada").glob("litrad_*.sqlite"))
+    archives = sorted((tmp_path / "backups/ada").glob("litrad_backup_*.zip"))
     with zipfile.ZipFile(archives[-1]) as handle:
         assert yaml.safe_load(handle.read("settings.yaml"))["topics"] == []
     profiles.adopt_legacy(base, "Kai")
@@ -575,11 +575,11 @@ def test_cli_save_load_compare_and_merge_archives(config_path, plain_console, tm
     assert run("profile", "create", "Ada", "--yes").exit_code == 0
     saved = run("profile", "save", profile="ada")
     assert saved.exit_code == 0, saved.output
-    archive_file = next((tmp_path / "backups/ada").glob("litresearch_profile_ada_*.zip"))
+    archive_file = next((tmp_path / "backups/ada").glob("litrad_profile_ada_*.zip"))
     assert zipfile.is_zipfile(archive_file)
     legacy = tmp_path / "ada.json"
     assert run("profile", "save", str(legacy), profile="ada").exit_code == 0
-    assert json.loads(legacy.read_text())["format"] == "litresearch-progress"
+    assert json.loads(legacy.read_text())["format"] == "litrad-progress"
 
     compared = run("profile", "compare", str(archive_file), str(legacy), profile="ada")
     assert compared.exit_code == 0, compared.output

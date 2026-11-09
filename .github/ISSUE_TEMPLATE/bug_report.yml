@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for testing litresearch! Please do not paste private data
+        Thanks for testing litrad! Please do not paste private data
         (your BibTeX export, notes, passwords or config with API keys).
   - type: textarea
     id: what
@@ -20,7 +20,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. litresearch serve
+        1. litrad serve
         2. open the welcome screen
         3. ...
     validations:
@@ -34,8 +34,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: litresearch version
-      description: Output of `litresearch version`
+      label: litrad version
+      description: Output of `litrad version`
       placeholder: 0.2.0-dev
     validations:
       required: true

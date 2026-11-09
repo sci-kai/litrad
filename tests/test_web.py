@@ -7,10 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-import litresearch.web.app as web
+import litrad.web.app as web
 from conftest import SAMPLE_BIB, FakeApis, enter_profile, make_work, profile_cfg
-from litresearch.config import load_config
-from litresearch.db import (
+from litrad.config import load_config
+from litrad.db import (
     Paper,
     QueueItem,
     Recommendation,
@@ -18,11 +18,11 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.ingest.pipeline import ingest_library
-from litresearch.web.settings import SettingsError, parse_form
+from litrad.ingest.pipeline import ingest_library
+from litrad.web.settings import SettingsError, parse_form
 
 CONFIG = """\
-# my litresearch config
+# my litrad config
 paths:
   bibtex: {bib}
   database: {db}
@@ -420,7 +420,7 @@ def test_parse_form_units():
 
 
 def test_update_yaml_keeps_comments_and_topic_fields(tmp_path):
-    from litresearch.yamlfile import update_yaml
+    from litrad.yamlfile import update_yaml
 
     path = tmp_path / "c.yaml"
     path.write_text(
@@ -475,9 +475,9 @@ def _browser_accepts(value, minimum, maximum, step) -> bool:
 
 def test_default_values_pass_browser_validation():
     # a rejected value in a collapsed form section blocks the submit without any message
-    from litresearch.config import Config
-    from litresearch.rules import GameRules
-    from litresearch.web.settings import GROUPS, RULE_GROUPS
+    from litrad.config import Config
+    from litrad.rules import GameRules
+    from litrad.web.settings import GROUPS, RULE_GROUPS
 
     rules = GameRules()
     for _, _, fields in RULE_GROUPS:
@@ -499,7 +499,7 @@ def test_default_values_pass_browser_validation():
 def test_documentation_pages(app_env):
     client, _, _ = app_env
     overview = client.get("/docs").text
-    assert "litresearch documentation" in overview and "Part II: How it works" in overview
+    assert "litrad documentation" in overview and "Part II: How it works" in overview
     assert 'href="/docs/5-how-papers-are-recommended"' in overview
     assert 'href="/docs"' in client.get("/queue").text  # in the sidebar
     chapter = client.get("/docs/5-how-papers-are-recommended").text
@@ -512,7 +512,7 @@ def test_documentation_pages(app_env):
 
 
 def test_documentation_links_all_resolve():
-    from litresearch.web.docs import load
+    from litrad.web.docs import load
 
     docs = load()
     ids = {c.slug: c.ids for c in docs.chapters}

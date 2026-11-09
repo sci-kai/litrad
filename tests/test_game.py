@@ -5,8 +5,8 @@ from pydantic import ValidationError
 from sqlmodel import Session, select
 
 from conftest import format1_rules
-from litresearch.config import Config
-from litresearch.db import (
+from litrad.config import Config
+from litrad.db import (
     Achievement,
     Category,
     Paper,
@@ -17,7 +17,7 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.game import (
+from litrad.game import (
     badge_progress,
     grade,
     ledger,
@@ -34,14 +34,14 @@ from litresearch.game import (
     weekly_summaries,
     weeks_of_history,
 )
-from litresearch.reading import queue_add, record_reading
-from litresearch.rules import GameRules
+from litrad.reading import queue_add, record_reading
+from litrad.rules import GameRules
 
 MONDAY = datetime(2026, 10, 5, 9, 0, 0)
 
 
 # the mechanics below are checked with the numbers of rules format 1 (a profile
-# locked by litresearch 1.0 or earlier); the defaults of new profiles: test_backlog.py
+# locked by litrad 1.0 or earlier); the defaults of new profiles: test_backlog.py
 V1 = format1_rules()
 
 

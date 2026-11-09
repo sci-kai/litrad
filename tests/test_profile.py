@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 from conftest import format1_rules
-from litresearch.backup import (
+from litrad.backup import (
     BackupError,
     export_progress,
     import_progress,
@@ -16,8 +16,8 @@ from litresearch.backup import (
     summarize,
     verify_checksum,
 )
-from litresearch.config import Config
-from litresearch.db import (
+from litrad.config import Config
+from litrad.db import (
     Achievement,
     Category,
     Paper,
@@ -31,16 +31,16 @@ from litresearch.db import (
     XpEvent,
     init_db,
 )
-from litresearch.game import level_for, stats, total_xp
-from litresearch.profile import (
+from litrad.game import level_for, stats, total_xp
+from litrad.profile import (
     ProfileError,
     active_rules,
     ensure_profile,
     get_profile,
     start_profile,
 )
-from litresearch.reading import drop_from_queue, queue_add, record_reading
-from litresearch.rules import BADGE_CATALOG, FORMAT2_FIELDS, GameRules, LevelDef
+from litrad.reading import drop_from_queue, queue_add, record_reading
+from litrad.rules import BADGE_CATALOG, FORMAT2_FIELDS, GameRules, LevelDef
 
 MONDAY = datetime(2026, 10, 5, 10, 0, 0)
 runner = CliRunner()
@@ -130,7 +130,7 @@ def test_fingerprint_is_unchanged_for_existing_rules(values):
 
 
 def _stored_v1() -> dict:
-    """The default rules as litresearch 1.0 and earlier stored them (without later rules)."""
+    """The default rules as litrad 1.0 and earlier stored them (without later rules)."""
     data = format1_rules().model_dump(mode="json")
     for name in FORMAT2_FIELDS:
         data.pop(name)
@@ -141,8 +141,8 @@ def test_fingerprint_survives_a_rule_added_later():
     """A 1.x rule with a default must not change fingerprints locked before it."""
     from pydantic import Field
 
-    from litresearch import rules as rules_module
-    from litresearch.rules import BadgeDef, LevelDef
+    from litrad import rules as rules_module
+    from litrad.rules import BadgeDef, LevelDef
 
     class FutureLevel(LevelDef):
         colour: str = "blue"
@@ -180,7 +180,7 @@ def test_fingerprint_survives_a_rule_added_later():
 def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
     import hashlib
 
-    from litresearch.rules import BADGE_CODES_V1
+    from litrad.rules import BADGE_CODES_V1
 
     data = rules.model_dump(mode="json", exclude=set(FORMAT2_FIELDS))
     data["badge_targets"] = {b.code: b.target for b in rules.badges() if b.code in BADGE_CODES_V1}
@@ -190,7 +190,7 @@ def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
 
 def test_fingerprint_baseline_covers_every_current_rule():
     """Every rule is in the baseline of format 1 or 2; later rules must not be added to them."""
-    from litresearch.rules import BADGE_CATALOG, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
+    from litrad.rules import BADGE_CATALOG, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
 
     assert FINGERPRINT_FIELDS[GameRules] | FORMAT2_FIELDS == set(GameRules.model_fields)
     assert FINGERPRINT_FIELDS[LevelDef] == set(LevelDef.model_fields)
@@ -327,7 +327,7 @@ def test_load_replaces_progress(db, tmp_path):
     cfg, session = db
     played(session, cfg)
     path = save_profile_file(session, tmp_path, MONDAY + timedelta(days=1))
-    assert path.name == "litresearch_profile_kai-s-journey_20261006_100000.json"
+    assert path.name == "litrad_profile_kai-s-journey_20261006_100000.json"
     data = json.loads(path.read_text())
     xp = total_xp(session)
     # play on, then go back to the saved state
@@ -400,7 +400,7 @@ def test_version_one_files_still_import(db):
     cfg, session = db
     paper = add(session, "Old", doi="10.1/old")
     data = {
-        "format": "litresearch-progress",
+        "format": "litrad-progress",
         "format_version": 1,
         "papers": {"p1": {"doi": "10.1/old", "title": "Old"}},
         "readings": [
