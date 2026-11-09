@@ -20,16 +20,54 @@
       {% else %}<p class="muted">No abstract available.</p>{% endif %}
     </div>
 
-    <div class="card">
+    <div class="card" id="notes">
       <h2>✍️ Notes</h2>
-      {% if reading and reading.notes %}<div class="abstract">{{ reading.notes }}</div>{% else %}<p class="muted">No notes yet.</p>{% endif %}
-      {% if reading %}
+      <p class="muted"><small>File: {% if note.path %}<code>{{ note.path }}</code>{{ "" if note.exists else " (created when you save)" }}{% else %}<span class="neg">{{ note.problem }}</span>{% endif %}
+        · <a href="/docs/2-the-weekly-loop#notes-and-obsidian">Notes and Obsidian</a></small></p>
+      {% if note.available and note.problem %}<p class="neg"><small>{{ note.problem }}</small></p>{% endif %}
+      {% set conflict = note_conflict or (note.conflict and not note_preview) %}
+      {% if conflict %}
+      {% set theirs = note_conflict.theirs if note_conflict else note.file_body %}
+      {% set mine = note_conflict.mine if note_conflict else note.body %}
+      {% set mine_label = "Yours" if note_conflict else "litresearch" %}
+      <p class="neg"><b>Conflict:</b> the file and {{ "your edit" if note_conflict else "litresearch's copy" }} differ. Nothing was overwritten.</p>
+      <div class="note-conflict">
+        <form method="post" action="/papers/{{ paper.id }}/note">
+          <h3>File</h3>
+          <input type="hidden" name="base" value="{{ note.base }}">
+          <label class="sr-only" for="note-theirs">File version</label>
+          <textarea id="note-theirs" name="text" readonly rows="10">{{ theirs }}</textarea>
+          <button name="action" value="save">📄 Keep file</button>
+        </form>
+        <form method="post" action="/papers/{{ paper.id }}/note">
+          <h3>{{ mine_label }}</h3>
+          <input type="hidden" name="base" value="{{ note.base }}">
+          <label class="sr-only" for="note-mine">{{ mine_label }} version</label>
+          <textarea id="note-mine" name="text" readonly rows="10">{{ mine }}</textarea>
+          <button name="action" value="save">✍️ Keep {{ "mine" if note_conflict else "litresearch's" }}</button>
+        </form>
+      </div>
       <form method="post" action="/papers/{{ paper.id }}/note" class="grid" style="gap:.5rem; margin-top:.6rem">
-        <label class="sr-only" for="note-text">Add a note</label>
-        <textarea id="note-text" name="text" placeholder="Add a note (timestamped; {{ rules.reflection_chars }}+ characters in total: ✍️ +{{ rules.reflection_xp }} XP once)"></textarea>
-        <div><button>💾 Save note</button></div>
+        <input type="hidden" name="base" value="{{ note.base }}">
+        <label for="note-merged">Merged</label>
+        <textarea id="note-merged" name="text" rows="12">{{ note_merged if note_merged is not none else note_files_merge(theirs, mine) }}</textarea>
+        <div class="row"><button name="action" value="save">💾 Save merged</button></div>
       </form>
+      {% else %}
+      {% if note.body %}<div class="note-body">{{ note_html }}</div>{% else %}<p class="muted">No notes yet.</p>{% endif %}
+      {% if reading %}
+      <details class="note-editor" {{ "open" if note_preview is not none }}>
+        <summary>✏️ Edit</summary>
+        <form method="post" action="/papers/{{ paper.id }}/note" class="grid" style="gap:.5rem; margin-top:.6rem">
+          <input type="hidden" name="base" value="{{ note.base }}">
+          <label for="note-text">Markdown · <code>[[citation-key]]</code> links a paper · {{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP once</label>
+          <textarea id="note-text" name="text" rows="12">{{ note_draft }}</textarea>
+          <div class="row"><button name="action" value="preview">👁 Preview</button><button class="primary" name="action" value="save">💾 Save</button></div>
+        </form>
+        {% if note_preview is not none %}<h3>Preview <small class="muted">(not saved)</small></h3><div class="note-body note-preview">{{ note_preview }}</div>{% endif %}
+      </details>
       {% else %}<p class="muted">Log a reading to add notes.</p>{% endif %}
+      {% endif %}
     </div>
 
     {% for rec, batch in recs %}
@@ -53,7 +91,7 @@
       {% if queue_item %}<p><span class="chip queued">📚 queue position q{{ queue_item.position }}</span></p>{% endif %}
       {% if not reading or reading.status.value != "thorough" %}
       <button class="primary" type="button" data-toggle="paper-read">📖 Log reading</button>
-      {{ read_form(paper, "/papers/" ~ paper.id, "paper-read") }}
+      {{ read_form(paper, "/papers/" ~ paper.id, "paper-read", note.base if note.available else "") }}
       {% endif %}
       <div class="row" style="margin-top:.6rem">
         {% if not queue_item and (not reading or depth(reading.status) < 2) %}

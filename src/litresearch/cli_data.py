@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 from sqlmodel import Session, func, select
 
-from litresearch import profiles
+from litresearch import notes, profiles
 from litresearch.backup import (
     BackupError,
     atomic_write_text,
@@ -61,6 +61,7 @@ def export_progress_cmd(
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
+            notes.refresh_quietly(session, cfg)
             data = export_progress(session, settings=profile_settings(cfg))
     finally:
         engine.dispose()
@@ -91,6 +92,8 @@ def import_progress_cmd(
             report = import_progress(session, cfg, data)
             if dry_run:
                 session.rollback()
+            else:
+                notes.refresh_quietly(session, cfg)  # merged notes go into the note files
     except BackupError as error:
         _fail(str(error))
     finally:
@@ -311,6 +314,7 @@ def profile_save_cmd(
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
+            notes.refresh_quietly(session, cfg)
             if target is None:
                 path = save_profile_file(session, cfg.backup.dir, settings=settings)
             else:
@@ -351,6 +355,7 @@ def profile_compare_cmd(
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
+            notes.refresh_quietly(session, cfg)
             rows = [summarize(export_progress(session), cfg, "current")]
     finally:
         engine.dispose()

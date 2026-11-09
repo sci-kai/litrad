@@ -297,6 +297,9 @@ def import_profile_file(base: Config, data: dict, name: str | None = None) -> st
         try:
             with Session(engine) as session:
                 load_profile(session, cfg, data)
+                from litresearch import notes
+
+                notes.refresh_quietly(session, cfg)  # the loaded notes become note files
                 profile = session.exec(select(Profile)).first()
                 if profile is None:
                     start_profile(session, cfg, name or "Imported profile")

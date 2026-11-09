@@ -162,11 +162,15 @@ def test_run_backup_and_rotation(source):
         "litresearch_20261005_090200.sqlite",
         "litresearch_20261005_090300.sqlite",
         "litresearch_20261005_090400.sqlite",
+        # the source has a reading with notes: its note file is archived
+        "litresearch_notes_20261005_090200.zip",
+        "litresearch_notes_20261005_090300.zip",
+        "litresearch_notes_20261005_090400.zip",
         "litresearch_progress_20261005_090200.json",
         "litresearch_progress_20261005_090300.json",
         "litresearch_progress_20261005_090400.json",
     ]
-    assert len(result.removed) == 2
+    assert len(result.removed) == 3  # snapshot, progress and notes of the oldest
     assert latest_backup(cfg) == AT + timedelta(minutes=4)
     assert json.loads(result.progress.read_text())["format"] == "litresearch-progress"
 

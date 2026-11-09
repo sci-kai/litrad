@@ -10,6 +10,8 @@ Two complementary formats are written into ``backup.dir``:
 - ``litresearch_YYYYMMDD_HHMMSS.sqlite``: a complete, consistent snapshot
   made with SQLite's online backup API (safe while the web UI is running).
   Restore it with ``litresearch restore``.
+- ``litresearch_notes_YYYYMMDD_HHMMSS.zip``: the note files (Markdown), if
+  there are any; ``restore`` writes back the ones that are missing.
 - ``litresearch_progress_YYYYMMDD_HHMMSS.json``: only *your* data (reading
   statuses, notes, ratings, history, queue, XP, badges), readable and
   mergeable into any other installation with ``litresearch import-progress``.
@@ -40,6 +42,7 @@ from litresearch.db import (
     ExampleChoice,
     Library,
     LibraryPaper,
+    NoteFile,
     Paper,
     Profile,
     QueueItem,
@@ -57,6 +60,7 @@ FORMAT = "litresearch-progress"
 FORMAT_VERSION = 2  # 2: profile with locked rules, recommendations, checksum
 SNAPSHOT_PREFIX = "litresearch_"
 PROGRESS_PREFIX = "litresearch_progress_"
+NOTES_PREFIX = "litresearch_notes_"
 
 
 class BackupError(RuntimeError):
@@ -132,7 +136,8 @@ def rotate(directory: Path, keep: int) -> list[Path]:
         if not p.name.startswith(PROGRESS_PREFIX)
     )
     exports = sorted(directory.glob(f"{PROGRESS_PREFIX}*.json"))
-    for files in (snapshots, exports):
+    archives = sorted(directory.glob(f"{NOTES_PREFIX}*.zip"))
+    for files in (snapshots, exports, archives):
         for old in files[: max(len(files) - keep, 0)]:
             old.unlink()
             removed.append(old)
@@ -144,18 +149,23 @@ class BackupResult:
     snapshot: Path
     progress: Path
     removed: list[Path]
+    notes: Path | None = None
 
 
 def run_backup(
     cfg: Config, session: Session, moment: datetime | None = None, settings: dict | None = None
 ) -> BackupResult:
+    from litresearch import notes
+
     moment = moment or now()
     directory = cfg.backup.dir
+    notes.refresh_quietly(session, cfg)  # edits made in note files go into the backup
     snap = snapshot(cfg.paths.database, directory / f"{SNAPSHOT_PREFIX}{stamp(moment)}.sqlite")
     progress = directory / f"{PROGRESS_PREFIX}{stamp(moment)}.json"
     data = export_progress(session, moment, settings)
     atomic_write_text(progress, json.dumps(data, indent=1))
-    return BackupResult(snap, progress, rotate(directory, cfg.backup.keep))
+    archive = notes.archive(cfg, directory / f"{NOTES_PREFIX}{stamp(moment)}.zip")
+    return BackupResult(snap, progress, rotate(directory, cfg.backup.keep), archive)
 
 
 def latest_backup(cfg: Config) -> datetime | None:
@@ -196,7 +206,34 @@ def restore(cfg: Config, source: Path, moment: datetime | None = None) -> Path:
     for suffix in ("-journal", "-wal", "-shm"):
         cfg.paths.database.with_name(cfg.paths.database.name + suffix).unlink(missing_ok=True)
     os.replace(tmp, cfg.paths.database)
+    restore_notes(cfg, source)
     return safety
+
+
+def restore_notes(cfg: Config, source: Path) -> None:
+    """After a restore: write back missing note files from the snapshot's notes archive.
+
+    The sync state is forgotten, so a note whose file and restored copy differ
+    becomes a conflict (both kept) instead of one side overwriting the other.
+    """
+    from litresearch import notes
+    from litresearch.db import init_db
+
+    archive = source.with_name(
+        NOTES_PREFIX + source.name.removeprefix(SNAPSHOT_PREFIX).removesuffix(".sqlite") + ".zip"
+    )
+    engine = init_db(cfg.paths.database)
+    try:
+        with Session(engine) as session:
+            notes.forget_sync_state(session)
+            try:
+                if archive.is_file():
+                    notes.restore_archive(cfg, archive)
+            except (notes.NotesError, OSError, ValueError):
+                pass  # the copies in the database stay; `notes sync` writes the files
+            notes.refresh_quietly(session, cfg)
+    finally:
+        engine.dispose()
 
 
 # --- portable progress export ---------------------------------------------------------
@@ -844,6 +881,7 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
 
 
 PERSONAL_TABLES = (
+    NoteFile,
     ExampleChoice,
     Recommendation,
     RecommendationBatch,

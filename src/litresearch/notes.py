@@ -188,10 +188,13 @@ def _yaml() -> YAML:
     return handler
 
 
-def update_front_matter(front: str | None, values: dict, at: datetime) -> tuple[str, bool]:
+def update_front_matter(
+    front: str | None, values: dict, at: datetime, touch: bool = False
+) -> tuple[str, bool]:
     """Front matter with litresearch's values; user keys, comments and order stay.
 
     Returns (YAML text, changed). Tags are only added, never removed.
+    ``updated`` changes with any value, or with ``touch`` (the body was written).
     """
     handler = _yaml()
     data = handler.load(front) if front and front.strip() else None
@@ -217,7 +220,7 @@ def update_front_matter(front: str | None, values: dict, at: datetime) -> tuple[
         elif key not in data or data[key] != value:
             data[key] = value
             changed = True
-    if changed or "updated" not in data:
+    if changed or touch or "updated" not in data:
         data["updated"] = at.replace(microsecond=0).isoformat()
         changed = True
     out = io.StringIO()
@@ -610,7 +613,7 @@ def refresh_paper(
             else:
                 try:
                     front, meta_changed = update_front_matter(
-                        None if note.error else note.front, values, at
+                        None if note.error else note.front, values, at, touch=body is not None
                     )
                 except (NotesError, RuamelError) as exc:
                     state.problem = f"{_rel(folder, path)}: {exc}"
@@ -881,7 +884,9 @@ def save(
     try:
         if state.exists:
             note = read_note(state.path)
-            front, _ = update_front_matter(None if note.error else note.front, values, at)
+            front, _ = update_front_matter(
+                None if note.error else note.front, values, at, touch=True
+            )
             stat = _write(state.path, compose(front, body), expect=note.stat)
         elif body:
             stat = _write(state.path, compose(new_front_matter(values, at), body))
@@ -908,6 +913,15 @@ def save(
     award = award_notes(session, cfg, paper, at)
     session.commit()
     return award
+
+
+def merge(theirs: str, mine: str) -> str:
+    """A starting point for a merged note: the file's paragraphs, then new ones of yours."""
+    paragraphs = [p for p in normalize_body(theirs).split("\n\n") if p.strip()]
+    for paragraph in normalize_body(mine).split("\n\n"):
+        if paragraph.strip() and paragraph not in paragraphs:
+            paragraphs.append(paragraph)
+    return "\n\n".join(paragraphs)
 
 
 def path_for(session: Session, cfg: Config, paper: Paper) -> Path:

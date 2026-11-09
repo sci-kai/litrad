@@ -57,6 +57,7 @@ from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from litresearch import __version__, examples, export, history, libraries, profiles
+from litresearch import notes as note_files
 from litresearch.backup import (
     BackupError,
     export_progress,
@@ -281,6 +282,7 @@ def create_app(
     env.filters["pct"] = lambda v: f"{v * 100:.0f}%"
 
     env.globals["paper_link"] = paper_link
+    env.globals["note_files_merge"] = note_files.merge
 
     def base_config():
         return load_config(config_path)
@@ -899,6 +901,7 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
+                note_files.refresh_quietly(session, cfg)  # the search sees edits in note files
                 f = history_filter(sort, depth, rating, since, until, library, notes, dismissed, q)
                 found = history.rows(session, f)
                 pages = max(1, -(-len(found) // history.PAGE_SIZE))
@@ -1047,6 +1050,50 @@ def create_app(
         finally:
             engine.dispose()
 
+    def render_paper(request: Request, session: Session, cfg, paper: Paper, **note_view):
+        """The paper page; ``note_view``: draft, preview or conflict of the note editor."""
+        paper_id = paper.id
+        note = note_view.pop("note", None) or note_files.refresh_paper(session, cfg, paper)
+        reading = session.get(Reading, paper_id)
+        draft = note_view.get("draft")
+        if draft is None:
+            draft = note.body or (note_files.template(cfg, session, paper) if reading else "")
+        recs = session.exec(
+            select(Recommendation, RecommendationBatch)
+            .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
+            .where(Recommendation.paper_id == paper_id)
+            .order_by(RecommendationBatch.id.desc())
+        ).all()
+        xp_events = session.exec(
+            select(XpEvent).where(XpEvent.paper_id == paper_id).order_by(XpEvent.at)
+        ).all()
+        item = session.get(QueueItem, paper_id)
+        lists = examples.refresh(session, cfg)
+        session.commit()
+        return render(
+            request,
+            "paper.html",
+            session,
+            cfg,
+            paper=paper,
+            reading=reading,
+            note=note,
+            note_html=note_files.render_html(session, note.body),
+            note_draft=draft,
+            note_preview=note_view.get("preview"),
+            note_conflict=note_view.get("conflict"),
+            note_merged=note_view.get("merged"),
+            recs=recs,
+            xp_events=xp_events,
+            queue_item=item,
+            drop_cost=drop_would_cost(session, cfg, paper) if item else 0,
+            papers_by_id=lambda pid: session.get(Paper, pid),
+            example_role=examples.role(lists, paper_id),
+            example_choices={
+                c.kind: c.action for c in examples.choices(session) if c.paper_id == paper_id
+            },
+        )
+
     @app.get("/papers/{paper_id}", response_class=HTMLResponse)
     def paper_page(request: Request, paper_id: int):
         cfg, engine = open_session()
@@ -1055,37 +1102,7 @@ def create_app(
                 paper = session.get(Paper, paper_id)
                 if paper is None:
                     raise HTTPException(404, f"There is no paper with the number {paper_id}.")
-                recs = session.exec(
-                    select(Recommendation, RecommendationBatch)
-                    .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
-                    .where(Recommendation.paper_id == paper_id)
-                    .order_by(RecommendationBatch.id.desc())
-                ).all()
-                xp_events = session.exec(
-                    select(XpEvent).where(XpEvent.paper_id == paper_id).order_by(XpEvent.at)
-                ).all()
-                item = session.get(QueueItem, paper_id)
-                lists = examples.refresh(session, cfg)
-                session.commit()
-                return render(
-                    request,
-                    "paper.html",
-                    session,
-                    cfg,
-                    paper=paper,
-                    reading=session.get(Reading, paper_id),
-                    recs=recs,
-                    xp_events=xp_events,
-                    queue_item=item,
-                    drop_cost=drop_would_cost(session, cfg, paper) if item else 0,
-                    papers_by_id=lambda pid: session.get(Paper, pid),
-                    example_role=examples.role(lists, paper_id),
-                    example_choices={
-                        c.kind: c.action
-                        for c in examples.choices(session)
-                        if c.paper_id == paper_id
-                    },
-                )
+                return render_paper(request, session, cfg, paper)
         finally:
             engine.dispose()
 
@@ -1902,6 +1919,7 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
+                note_files.refresh_quietly(session, cfg)
                 path = save_profile_file(session, cfg.backup.dir, settings=profile_settings(cfg))
             return back(
                 "/profile",
@@ -1920,6 +1938,7 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
+                note_files.refresh_quietly(session, cfg)
                 data = export_progress(session, settings=profile_settings(cfg))
             name = slug((data["profile"] or {}).get("name", "profile"))
             filename = f"litresearch_profile_{name}_{date.today().strftime('%Y%m%d')}.json"
@@ -2022,6 +2041,7 @@ def create_app(
                     settings_file=profiles.folder(base_config(), CURRENT_PROFILE.get())
                     / profiles.PROFILE_SETTINGS,
                     last_backup=latest_backup(cfg),
+                    notes_status=note_files.status(session, cfg),
                 )
         finally:
             engine.dispose()
@@ -2052,6 +2072,7 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
+                note_files.refresh_quietly(session, cfg)
                 data = export_progress(session, settings=profile_settings(cfg))
             name = f"litresearch_progress_{date.today().strftime('%Y%m%d')}.json"
             return Response(
@@ -2174,6 +2195,7 @@ def create_app(
         level: str = Form(...),
         rating: str = Form(""),
         note: str = Form(""),
+        note_base: str = Form(""),
         next_url: str = Form("/queue"),
     ):
         cfg, engine = open_session()
@@ -2188,6 +2210,11 @@ def create_app(
                         raise ReadingError("Use 'not relevant' to dismiss")
                     if rating.strip() and not rating.strip().isdigit():
                         raise ReadingError("Rating must be between 1 and 5")
+                    changed = False
+                    if note.strip() and note_base:
+                        # appending is safe: the entry goes below the file's current text
+                        current = note_files.refresh_paper(session, cfg, paper, award=False)
+                        changed = current.base != note_base
                     outcome = record_reading(
                         session,
                         cfg,
@@ -2199,6 +2226,8 @@ def create_app(
                 except (ReadingError, ValueError) as exc:
                     return error(safe(next_url), str(exc))
                 label = f"{STATUS_ICONS[status.value]} Marked as {status.value}: {paper.title}"
+                if changed:
+                    label += " · the note file had changed: your note was added below its text"
                 return back(safe(next_url), award_payload(outcome.award, label, session))
         finally:
             engine.dispose()
@@ -2254,7 +2283,14 @@ def create_app(
             engine.dispose()
 
     @app.post("/papers/{paper_id}/note")
-    def note_action(paper_id: int, text: str = Form(...)):
+    def note_action(
+        request: Request,
+        paper_id: int,
+        text: str = Form(""),
+        base: str | None = Form(None),
+        action: str = Form("save"),
+    ):
+        """Without ``base``: append a timestamped note. With it: the editor (save/preview)."""
         cfg, engine = open_session()
         url = f"/papers/{paper_id}"
         try:
@@ -2264,12 +2300,52 @@ def create_app(
                     if paper is None:
                         url = "/"  # the paper page would be a 404
                         raise ReadingError("Unknown paper")
-                    if not text.strip():
-                        raise ReadingError("The note is empty")
-                    award = add_note(session, cfg, paper, text)
-                except ReadingError as exc:
+                    if base is None:
+                        if not text.strip():
+                            raise ReadingError("The note is empty")
+                        award = add_note(session, cfg, paper, text)
+                    elif action == "preview":
+                        preview = note_files.render_html(session, text)
+                        return render_paper(
+                            request, session, cfg, paper, draft=text, preview=preview
+                        )
+                    else:
+                        award = note_files.save(session, cfg, paper, text, base)
+                except note_files.NoteConflict as exc:
+                    session.rollback()
+                    note = note_files.refresh_paper(session, cfg, paper)
+                    merged = note_files.merge(exc.theirs, exc.mine)
+                    return render_paper(
+                        request,
+                        session,
+                        cfg,
+                        paper,
+                        note=note,
+                        draft=exc.mine,
+                        conflict=exc,
+                        merged=merged,
+                    )
+                except (ReadingError, note_files.NotesError) as exc:
                     return error(url, str(exc))
                 return back(url, award_payload(award, "Note saved", session))
+        finally:
+            engine.dispose()
+
+    @app.post("/notes/sync")
+    def notes_sync_action():
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                report = note_files.sync(session, cfg)
+            if report.problem:
+                return error("/settings#notes", report.problem)
+            counts = ", ".join(f"{k} {v}" for k, v in sorted(report.counts.items()))
+            message = (
+                f"Notes synced: {counts or 'nothing to do'} · conflicts {len(report.conflicts)}"
+                f" · orphans {len(report.orphans)}"
+            )
+            kind = "warning" if report.conflicts or report.orphans or report.problems else "success"
+            return back("/settings#notes", toast(message, kind))
         finally:
             engine.dispose()
 

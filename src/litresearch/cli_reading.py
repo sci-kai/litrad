@@ -9,6 +9,7 @@ import typer
 from sqlmodel import Session, select
 
 from litresearch import history as read_history
+from litresearch import notes as note_files
 from litresearch.cli import (
     ConfigOpt,
     app,
@@ -352,10 +353,11 @@ def show_paper(session: Session, paper: Paper) -> None:
 @app.command()
 def show(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
     """Show details, status and notes of a paper."""
-    with open_db(config) as (_, session):
+    with open_db(config) as (cfg, session):
         paper = find_paper(session, ref)
         if paper is None:
             raise ReadingError("Unknown paper")
+        note_files.refresh_paper(session, cfg, paper)
         show_paper(session, paper)
 
 
@@ -573,3 +575,51 @@ def read_papers(
                 highlight=False,
                 markup=False,
             )
+
+
+# --- notes (Markdown files) ---------------------------------------------------------------
+
+notes_app = typer.Typer(help="Notes as Markdown files (Obsidian-compatible): sync, path, check.")
+app.add_typer(notes_app, name="notes")
+
+
+def _print_report(report: note_files.SyncReport) -> None:
+    for line in report.lines():
+        console.print(line, markup=False, highlight=False)
+
+
+@notes_app.command("sync")
+def notes_sync(config: Path = ConfigOpt):
+    """Import edits from the note files, write missing files, list conflicts and orphans."""
+    with open_db(config) as (cfg, session):
+        report = note_files.sync(session, cfg)
+    _print_report(report)
+    if report.problem:
+        raise typer.Exit(code=1)
+
+
+@notes_app.command("check")
+def notes_check(config: Path = ConfigOpt):
+    """Show what `notes sync` would do; change nothing (exit 1 on conflicts or problems)."""
+    with open_db(config) as (cfg, session):
+        report = note_files.sync(session, cfg, dry_run=True)
+    console.print("Check only: nothing was changed.")
+    _print_report(report)
+    if report.problem or report.conflicts or report.problems:
+        raise typer.Exit(code=1)
+
+
+@notes_app.command("path")
+def notes_path(ref: str = typer.Argument(..., help=REF_HELP), config: Path = ConfigOpt):
+    """Print the note file of a paper (where it will be created if there is none yet)."""
+    with open_db(config) as (cfg, session):
+        paper = find_paper(session, ref)
+        if paper is None:
+            raise ReadingError("Unknown paper")
+        try:
+            path = note_files.path_for(session, cfg, paper)
+        except note_files.NotesUnavailable as error:
+            raise ReadingError(str(error)) from None
+    print(path)
+    if not path.exists():
+        typer.echo("(no file yet: created when you write a note)", err=True)

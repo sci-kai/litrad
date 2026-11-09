@@ -556,3 +556,13 @@ a.library-card:hover { text-decoration: none; border-color: var(--accent); }
 .head-row { display: flex; justify-content: space-between; align-items: center; gap: .6rem 1rem; flex-wrap: wrap; margin: 1.6rem 0 .3rem; }
 .head-row h2 { margin: 0; }
 .nav .dot { margin-left: auto; flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 3px rgba(245, 165, 36, .25); }
+
+/* notes (Markdown files, see notes.py) */
+.note-body { font-size: .93rem; overflow-wrap: anywhere; }
+.note-body > :first-child { margin-top: 0; }
+.note-body pre { overflow-x: auto; background: var(--surface-2); padding: .5rem; border-radius: 8px; }
+.note-body .wikilink.missing { color: var(--muted, inherit); text-decoration: underline dotted; }
+.note-preview { border-left: 3px solid var(--accent-2); padding-left: .8rem; }
+.note-editor > summary { cursor: pointer; color: var(--accent); margin-top: .6rem; }
+.note-conflict { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; }
+.note-conflict textarea { width: 100%; }

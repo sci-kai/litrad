@@ -20,9 +20,10 @@
 </div>
 {%- endmacro %}
 
-{% macro read_form(paper, next_url, id) -%}
+{% macro read_form(paper, next_url, id, note_base="") -%}
 <form class="read-form" method="post" action="/papers/{{ paper.id }}/read" id="{{ id }}" hidden>
   <input type="hidden" name="next_url" value="{{ next_url }}">
+  {% if note_base %}<input type="hidden" name="note_base" value="{{ note_base }}">{% endif %}
   <div class="levels" role="radiogroup" aria-label="How deeply did you read it?">
     {% for level in ["abstract", "skimmed", "read", "thorough"] %}
     <label><input type="radio" name="level" value="{{ level }}" {{ "checked" if level == "read" }}>
@@ -38,7 +39,7 @@
     <small>optional rating</small>
   </div>
   <label class="sr-only" for="{{ id }}-note">Notes</label>
-  <textarea id="{{ id }}-note" name="note" placeholder="Notes ({{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP)"></textarea>
+  <textarea id="{{ id }}-note" name="note" placeholder="Note, added to the note file ({{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP)"></textarea>
   <div><button class="primary" type="submit">✔ Log reading</button></div>
 </form>
 {%- endmacro %}

@@ -45,6 +45,8 @@
     <tr><td>Database (your progress lives here)</td><td><code>{{ cfg.paths.database.resolve() }}</code></td></tr>
     <tr><td>Libraries</td><td><a href="/library">Libraries</a></td></tr>
     <tr><td>Backup folder</td><td><code>{{ cfg.backup.dir.resolve() }}</code> · keeps {{ cfg.backup.keep }} · automatic every {{ cfg.backup.interval_hours | round(1) }} h while the server runs</td></tr>
+    <tr id="notes"><td>Notes</td><td>{% if notes_status.folder %}<code>{{ notes_status.folder }}</code> · {{ notes_status.files }} file{{ "s" if notes_status.files != 1 }} · {% if notes_status.conflicts %}<span class="neg">{{ notes_status.conflicts | length }} conflict{{ "s" if notes_status.conflicts | length > 1 }}:</span>{% for pid, title in notes_status.conflicts %} <a href="/papers/{{ pid }}#notes">{{ title | truncate(40) }}</a>{{ "," if not loop.last }}{% endfor %}{% else %}no conflicts{% endif %}{% else %}<span class="neg">{{ notes_status.problem }}</span>{% endif %}
+      <form class="inline" method="post" action="/notes/sync"><button class="small">🔄 Sync notes</button></form></td></tr>
     <tr><td>Last backup</td><td>{% if last_backup %}{{ last_backup.isoformat() }}{% else %}<span class="neg">none yet</span>{% endif %}</td></tr>
   </table>
   <div class="row" style="margin-top:.8rem">
