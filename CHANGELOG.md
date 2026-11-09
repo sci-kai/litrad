@@ -7,6 +7,24 @@ All notable changes are listed here. Versions follow
 
 ### Changed
 
+- **One add box, shorter texts in the web UI.** Papers are added with a
+  single box ("DOI, PubMed ID or title") on the Reading queue, Find & add
+  and the example lists: identifiers are fetched as before; title words
+  that match one of your papers add it; several matches or none open
+  Find & add with the title searched (your papers or Europe PMC/PubMed) to
+  pick a result, or to add the title without DOI. The separate "by title
+  only" form is gone; `litrad queue add` with unknown title words now
+  points to `litrad search --title`. Every page was reviewed: explanations
+  of the obvious, repeated hints and texts that belong to the
+  documentation were removed (e.g. the OpenAlex hint, the "Your library"
+  sentence on Libraries, the per-week comments and the grade legend of
+  the weekly reports, now a tooltip on the grade and a "?" link), "open →",
+  "manage →", "change" and "Adjust →" links became icon links (→, ⚙️, ?)
+  with accessible names, and the duplicate quest hint and penalty chip
+  were dropped (the quest card and the Remove button keep them). Visible
+  words dropped by up to 25 % per page (dashboard 648 → 537, queue
+  352 → 296, libraries 224 → 173); pages that are mostly data (progress,
+  read papers, the rule tables) stay about the same.
 - **Renamed to litrad, the Literature Radar Game** (before 1.0, so that
   the compatibility promise starts with the final name), with a new logo: a
   rat with a mortarboard. Renamed: the command `litrad` (and `litrad-app`),

@@ -362,12 +362,18 @@ litrad queue move q4 1           # reorder
 litrad queue drop q3             # remove (costs XP if not at least skimmed)
 ```
 
+- Web: one box (Reading queue, Find & add, the example lists) takes a DOI,
+  `pmid:N`, `PMCn`, a citation key or title words. Unknown DOIs and PubMed
+  IDs are fetched (OpenAlex, Europe PMC, PubMed). Title words that match one
+  of your papers add it; several matches show them, no match searches Europe
+  PMC and PubMed for the title in **Find & add**, where you pick a result or
+  add the title **without DOI** (with an optional link).
 - When the queue is full (`queue.max_size`, default 5) nothing can be added
   until you read or drop something.
 - A paper that leaves the queue before you at least skimmed it (removed or
   marked not relevant) costs the penalty of your profile (default 15 XP),
   wherever it came from. Dismissing a recommendation you never queued is
-  free. The queue shows the cost as a red chip and asks before removing.
+  free. The queue's Remove button shows the cost and asks before removing.
 
 #### Find papers in Europe PMC and PubMed
 
@@ -383,7 +389,8 @@ litrad search clonal -s library                          # only your own librari
 
 Keywords are searched in title and abstract; `--title`, `--author`,
 `--journal`, `--from`/`--to` and `--oa` narrow it; separate several authors or
-journals with `;`. Both databases are searched (those enabled in `sources`)
+journals with `;`; keywords accept `AND`, `OR` and quotes. Only what you
+type is sent. Both databases are searched (those enabled in `sources`)
 and merged; each result shows its DOI or `pmid:`, where it was found, whether
 it is free to read and whether it is already in your library, queue or read.
 The queries sent are shown. Results from your own library (*My library*) are
@@ -399,7 +406,7 @@ paginated, 50 per page.
 | `10.1038/...`, `https://doi.org/...` | DOI |
 | `pmid:35931863`, `PMC5812436` | PubMed / PubMed Central id (fetched if not stored yet) |
 | `Barkley2022-ri` | citation key from one of your libraries |
-| `clonal melanoma` | words from the title (must match exactly one paper) |
+| `clonal melanoma` | words from the title (must match exactly one paper; in the web UI, none or several matches open Find & add to pick from) |
 
 ### 3. Read
 
@@ -696,13 +703,13 @@ login protects your data. Never open the port to the internet directly.
 |---|---|---|
 | | 👋 **Welcome** | choose, create or load a profile; take over existing data |
 | 🏠 | **Dashboard** | the up-next paper with one-click logging, weekly quest, hints, a reminder when recommendations are due, latest recommendations, queue, recent XP, **weekly report cards** |
-| Reading | 📚 **Reading queue** | log a reading (level, rating, note), reorder, remove; add papers by DOI, PubMed ID, citation key or title |
+| Reading | 📚 **Reading queue** | log a reading (level, rating, note), reorder, remove; add papers by DOI, PubMed ID, citation key or title (one box) |
 | Reading | ✅ **Read papers** | every paper you marked with depth, dates, rating, notes snippet, XP and source; sort, filter, search, **Export TSV** ([details](#read-papers)) |
 | Reading | ✨ **Recommendations** | set up topics (first visit); **Get recommendations**; the ranked list with score bars, an **evidence tree** per paper, the filter **funnel**, the settings used and earlier lists; queue or mark not relevant; **How recommendations are made** with your current values |
 | Progress | 🏆 **Progress & XP** | level, streak, Reading Impact Factor, discipline and depth, XP per week, reading calendar, personal bests, badges, career ladder, the **XP ledger** (paginated; filter, totals, TSV export) and the locked rules |
 | Library | 🗂️ **Libraries** | all libraries (papers, read, last update), plus *Reading queue* and *Recommended*; per library: papers (search, folder/label and status filters, 50 per page), **Export**, **Update from file**, edit, delete, import history |
 | Library | ⬆️ **Import** | import a BibTeX, RIS or CSL-JSON file into a new or an existing library; *Check only* first if you like |
-| Library | 🔍 **Find & add** | search Europe PMC, PubMed or your own library and queue a result ([details](#find-papers-in-europe-pmc-and-pubmed)); add any paper by DOI, `pmid:` or PMC id |
+| Library | 🔍 **Find & add** | search Europe PMC, PubMed or your own library and queue a result ([details](#find-papers-in-europe-pmc-and-pubmed)); add any paper by DOI, PubMed ID or title |
 | | ⚙️ **Settings** | topics, excluded terms, every recommendation and queue setting; data & backups |
 | | 📖 **Documentation** | this documentation |
 | (chip) | 🎮 **Profile** | locked rules and fingerprint; save, download, compare profiles; switch or create one |
@@ -729,6 +736,8 @@ Old addresses (`/ledger`, `/how`, `/paperpile`) redirect.
 - Keyboard shortcuts outside text fields: `?` opens the shortcut help (also
   the "⌨️ Shortcuts" button in the sidebar), `n` next paper in the queue,
   `r` recommendations, `p` progress; `Esc` closes dialogs.
+- Icon links: → opens the page, ⚙️ the settings, ? the matching
+  documentation section; hovering shows what they do.
 
 Rewards show as an XP toast listing every bonus or penalty,
 confetti, and a pop-up for level-ups and badges; penalties as a red toast.
@@ -763,7 +772,7 @@ label). On their pages you can **remove** a paper (the rules then skip it;
 citation key or title words), choose the **rules**, their order and the
 **number of examples** (*Save rules*, saved in the profile's
 settings), and **Undo my changes**. Every paper page has *Use as positive /
-negative example* and *Not an example*. These two lists never count as your
+negative example* (👍 Positive / 👎 Negative) and *Not an example*. These two lists never count as your
 library, cannot be deleted or imported into, and are not saved in profile
 files (your choices are, and the lists are rebuilt from them).
 
@@ -1056,7 +1065,8 @@ the higher tiers are still ahead.
   the report card count each paper's new level in that week. The **streak** counts consecutive reading weeks and stays alive
   through the following week, so it does not reset on Monday morning.
 - **Weekly grade:** S = quest complete including a thorough read; A = quest
-  complete; B = at least half the quest; C = something read; - = rest week.
+  complete; B = at least half the quest; C = something read; - = rest week
+  (also the tooltip of each grade badge).
 - **Reading Impact Factor**: average XP per week over the last four weeks.
 - **Discipline**: share of papers read while at the top of the queue.
 - **Depth**: share of papers read at least at "read" depth.
