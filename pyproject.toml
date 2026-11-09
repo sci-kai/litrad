@@ -47,6 +47,9 @@ dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6"]
 [project.scripts]
 litresearch = "litresearch.cli:run"
 
+[project.gui-scripts]
+litresearch-app = "litresearch.desktop:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

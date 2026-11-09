@@ -77,6 +77,7 @@
       </form>
     </section>
   </div>
+  {% if desktop %}<form method="post" action="/app/quit" class="row" style="justify-content:center;margin-top:1rem"><button class="small ghost" title="Stop litresearch on this computer">⏻ Quit</button></form>{% endif %}
 </main>
 <div class="toasts" aria-live="polite"></div>
 {% if celebration %}<script id="celebration" type="application/json">{{ celebration | tojson }}</script>{% endif %}

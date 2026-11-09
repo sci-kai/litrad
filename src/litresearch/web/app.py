@@ -13,6 +13,9 @@ How a request flows:
 3. ``same_origin_only`` rejects POST requests from other websites;
    ``trusted_host_only`` (without password) rejects requests for other host
    names (DNS rebinding).
+   In desktop mode (``litresearch app``, see desktop.py) ``/app/ping`` is
+   open and ``POST /app/quit`` (password if set, no profile, same origin
+   only) stops the server.
 4. Pages are rendered with ``render()``, which adds the header (level, XP,
    streak, queue size, recommendation reminder). Actions post a form and
    redirect back (post/redirect/get); rewards travel as a short-lived token
@@ -28,17 +31,19 @@ import csv
 import hmac
 import io
 import json
+import os
 import secrets
 import shutil
 import tempfile
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import date, datetime
 from itertools import groupby
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode, urlsplit
 
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Query, Request
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
@@ -240,12 +245,18 @@ def award_payload(award: Award | None, message: str, session: Session, kind="suc
     return payload
 
 
-def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -> FastAPI:
+def create_app(
+    config_path: Path,
+    trusted_names: frozenset[str] | None = None,
+    on_quit: Callable[[], None] | None = None,
+) -> FastAPI:
     """Build the FastAPI app for the config file at ``config_path``.
 
     With ``trusted_names`` (``litresearch serve`` passes them), a server without
     password only answers requests addressed to an IP address or one of these
-    names.
+    names. ``on_quit`` (desktop mode only) adds the Quit button and the
+    ``/app/ping`` and ``/app/quit`` routes; it is called after the "stopped"
+    page has been sent.
     """
     config_path = Path(config_path)
     app = FastAPI(title="litresearch", docs_url=None, redoc_url=None, openapi_url=None)
@@ -260,7 +271,10 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
         kind_icons=KIND_ICONS,
         kind_labels=KIND_LABELS,
         status_icons=STATUS_ICONS,
+        desktop=on_quit is not None,
     )
+    desktop_open = frozenset({"/app/ping"} if on_quit else ())  # no login, no profile
+    desktop_no_profile = frozenset({"/app/quit"} if on_quit else ())  # login if set
     env.filters["authors"] = lambda a: (
         "unknown authors" if not a else a[0].split(",")[0] + (" et al." if len(a) > 1 else "")
     )
@@ -308,7 +322,7 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
         base = base_config()
         path = request.url.path
         open_paths = path in ("/login", "/logout") or path in pwa.OPEN_PATHS
-        open_paths = open_paths or path.startswith("/static/")
+        open_paths = open_paths or path.startswith("/static/") or path in desktop_open
         password_hash = base.web.password_hash
         if password_hash and not open_paths:
             if not check_session(request.cookies.get(COOKIE), secret(), password_hash):
@@ -319,6 +333,8 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
                     )
                 return PlainTextResponse("Login required", status_code=401)
         if open_paths or path == "/welcome" or path.startswith("/welcome/"):
+            return await call_next(request)
+        if path in desktop_no_profile:
             return await call_next(request)
         slug = profile_from_cookie(request)
         if slug is None:
@@ -2260,6 +2276,23 @@ def create_app(config_path: Path, trusted_names: frozenset[str] | None = None) -
     def safe(url: str) -> str:
         """Only allow local redirect targets."""
         return url if url.startswith("/") and not url.startswith("//") else "/"
+
+    # ----- desktop mode -----
+    if on_quit is not None:
+
+        @app.get("/app/ping")
+        def ping():
+            """Lets a second start find this instance (see desktop.running_instance)."""
+            return {"app": "litresearch", "pid": os.getpid(), "version": __version__}
+
+        @app.post("/app/quit", response_class=HTMLResponse)
+        def quit_app(request: Request, background: BackgroundTasks):
+            """Stop the server; only from a litresearch page (Origin or Referer required)."""
+            origin = request.headers.get("origin") or request.headers.get("referer")
+            if not origin or urlsplit(origin).netloc != request.url.netloc:
+                return PlainTextResponse("Cross-origin request rejected", status_code=403)
+            background.add_task(on_quit)
+            return templates.TemplateResponse(request, "stopped.html", {})
 
     app.state.celebrations = celebrations
     env.globals.update(Category=Category, depth=depth)

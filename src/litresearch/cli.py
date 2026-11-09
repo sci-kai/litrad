@@ -149,6 +149,12 @@ def where(
     for label, path, why in rows:
         typer.echo(f"{label + ':':<22}{path}")
         typer.echo(f"{'':<22}({why})")
+    from litresearch.desktop import log_file
+
+    rows = [("Desktop app log", log_file(), "litresearch app and the desktop app")]
+    for label, path, why in rows:
+        typer.echo(f"{label + ':':<22}{path}")
+        typer.echo(f"{'':<22}({why})")
     typer.echo(
         f"Per-user folders:     config {locations.user_config_dir()}, "
         f"data {locations.user_data_dir()}"
@@ -483,6 +489,29 @@ def serve(
         port=port,
         log_level="warning",
     )
+
+
+@app.command("app")
+def desktop_app(
+    config: Path = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to config.yaml (default: as for every command)",
+        show_default=False,
+    ),
+    port: int = typer.Option(None, help="Port on 127.0.0.1 (default: 47290 if free, else any)"),
+    browser: bool = typer.Option(
+        True, "--browser/--no-browser", help="Open the browser (also off: LITRESEARCH_NO_BROWSER=1)"
+    ),
+):
+    """Desktop mode: start litresearch on this computer only and open it in your browser.
+
+    Quit with Quit in the sidebar or Ctrl+C. A second start opens the running one.
+    """
+    from litresearch import desktop
+
+    raise typer.Exit(code=desktop.run(config, port, browser))
 
 
 @app.command("set-password")

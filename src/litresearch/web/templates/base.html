@@ -43,6 +43,7 @@
       <button type="button" class="small ghost" data-shortcuts title="Keyboard shortcuts (press ?)">⌨️ Shortcuts <kbd>?</kbd></button>
       <form method="post" action="/welcome/leave"><button class="small ghost">🔁 Switch profile</button></form>
       {% if cfg.web.password_hash %}<form method="post" action="/logout"><button class="small ghost">🔒 Log out</button></form>{% endif %}
+      {% if desktop %}<form method="post" action="/app/quit"><button class="small ghost" title="Stop litresearch on this computer">⏻ Quit</button></form>{% endif %}
       <div class="version">litresearch v{{ version }}</div>
     </div>
   </aside>
