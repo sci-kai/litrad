@@ -69,7 +69,7 @@ def test_service_worker(locked):
     assert "caches.delete" in script  # old versions are cleaned up
     assert '"/offline"' in script and '"/static/app.css"' in script
     # pages with personal data are never stored: only /static is put into the cache
-    assert script.count("cache.put") == 1
+    assert script.count(".put(") == 1
 
 
 def test_open_without_login_and_profile(locked):

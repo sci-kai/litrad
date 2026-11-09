@@ -113,8 +113,9 @@ existing public code: [SCANOSS](https://www.scanoss.com) compares file and
 snippet fingerprints (not the code itself) with its knowledge base of public
 open-source projects, including GitHub. The maintainer reviews the report
 before anything is decided; each match is then rewritten, removed, or kept
-with attribution and a compatible license. The scan runs again for every
-release (CI) and its summary is published with the release.
+with attribution and a compatible license. A one-time check: done on
+2026-11-09 (no copied code found; the one notable match, the common
+service-worker pattern in `sw.js`, was rewritten).
 
 **1.1 · More sources and helpers** (after 1.0, without breaking data):
 

@@ -14,52 +14,56 @@ const PRECACHE = [
   "/static/icon-maskable-512.png",
   "/static/apple-touch-icon.png",
 ];
+// answers that mean "the server is down", not "your request failed"
+const SERVER_DOWN = new Set([502, 503, 504]);
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
-  );
-});
+async function prepare() {
+  const store = await caches.open(CACHE);
+  await store.addAll(PRECACHE);
+  await self.skipWaiting();
+}
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE && key.startsWith("litresearch-")).map((key) => caches.delete(key)))
-      )
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  if (request.method !== "GET") return; // never touch (or cache) POST and friends
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (url.pathname.startsWith("/static/")) {
-    // cache first; the cache name changes with every release
-    event.respondWith(
-      caches.match(request).then(
-        (hit) =>
-          hit ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              caches.open(CACHE).then((cache) => cache.put(request, copy));
-            }
-            return response;
-          })
-      )
-    );
-  } else if (request.mode === "navigate") {
-    // network first; the offline page only when the server cannot be reached
-    event.respondWith(
-      fetch(request).then(
-        (response) => (response.status === 502 || response.status === 503 || response.status === 504 ? caches.match(OFFLINE) : response),
-        () => caches.match(OFFLINE)
-      )
-    );
+async function forgetOldReleases() {
+  for (const name of await caches.keys()) {
+    if (name.startsWith("litresearch-") && name !== CACHE) await caches.delete(name);
   }
+  await self.clients.claim();
+}
+
+// static files: the cache name changes with every release, so a stored copy is current
+async function staticFile(request) {
+  const stored = await caches.match(request);
+  if (stored) return stored;
+  const response = await fetch(request);
+  if (response.ok) {
+    const store = await caches.open(CACHE);
+    await store.put(request, response.clone());
+  }
+  return response;
+}
+
+// pages: always from the server; the offline page only when it cannot answer
+async function page(request) {
+  let response;
+  try {
+    response = await fetch(request);
+  } catch {
+    return caches.match(OFFLINE);
+  }
+  return SERVER_DOWN.has(response.status) ? caches.match(OFFLINE) : response;
+}
+
+function route(request) {
+  if (request.method !== "GET") return null; // never touch (or cache) POST and friends
+  const { origin, pathname } = new URL(request.url);
+  if (origin !== self.location.origin) return null;
+  if (pathname.startsWith("/static/")) return staticFile;
+  return request.mode === "navigate" ? page : null;
+}
+
+self.addEventListener("install", (event) => event.waitUntil(prepare()));
+self.addEventListener("activate", (event) => event.waitUntil(forgetOldReleases()));
+self.addEventListener("fetch", (event) => {
+  const handler = route(event.request);
+  if (handler) event.respondWith(handler(event.request));
 });
