@@ -8,11 +8,11 @@ Each milestone is a GitHub milestone with its issues.
 |---|---|---|
 | 0.1 | Recommendations, reading queue, game, profiles, web UI | released `v0.1.0-alpha.1` (2026-10-09) |
 | 0.2 | Find papers in Europe PMC and PubMed; several libraries, import from any reference manager, export | released as dev `v0.2.0-dev` (2026-10-29), in testing |
-| 0.3 | Desktop app for Windows, macOS and Linux (default); server mode as today; Docker, PyPI, installable phone web app | next |
-| 0.4 | Your reading history | planned |
-| 0.5 | Notes as Markdown, compatible with Obsidian | planned |
-| 0.6 | **Stable, open data formats** and a complete export of everything | planned |
-| 0.7 / 1.0 | Beta (feature freeze), code provenance check, then 1.0 with a compatibility promise | planned |
+| 0.3 | Desktop app for Windows, macOS and Linux (default); server mode as today; Docker, PyPI, installable phone web app | built on dev, in testing |
+| 0.4 | Your reading history | built on dev, in testing |
+| 0.5 | Notes as Markdown, compatible with Obsidian | built on dev, in testing |
+| 0.6 | **Stable, open data formats** and a complete export of everything | built on dev, in testing |
+| 0.7 / 1.0 | Beta (feature freeze), code provenance check (done), then 1.0 with a compatibility promise | planned |
 | 1.1 | PubMed and PubMed Central; summaries by a local LLM; reference managers: write-back and automatic updates | after 1.0 |
 
 ## Principles
@@ -64,8 +64,8 @@ database and Apple's App Store; the web app covers the use).
 
 **0.4 · Reading history.** A **Reading → Read papers** tab: every paper you
 marked, with date, depth, rating, notes and XP; sort, filter, search notes,
-export (TSV). Open: show dismissed papers here? Should unread drops leave
-*Recommended*?
+export (TSV). Dismissed papers are listed too, hidden behind the filter
+*Include not relevant*. Open: should unread drops leave *Recommended*?
 
 **0.5 · Notes, compatible with Obsidian.** One Markdown file per paper with
 front matter and templates, an editor with preview, `[[citation-key]]`

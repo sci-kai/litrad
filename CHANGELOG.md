@@ -7,6 +7,29 @@ All notable changes are listed here. Versions follow
 
 ### Added
 
+- **Stable, open data formats** (documentation: *Data formats*). A data
+  format version (`1`) independent of the app version, and a database schema
+  version (`PRAGMA user_version`): profile databases are upgraded by
+  numbered, tested steps, with a copy in `<profile>/upgrade-backups/`
+  first; a database of a newer litresearch is refused instead of opened.
+- **Export everything**: `litresearch export-all [FILE.zip]` and
+  *📦 Export everything* on the Profile page write one archive per profile:
+  `manifest.json` (versions, counts, SHA-256 of every file), a generated
+  `README.md`, papers, libraries (also as BibTeX and CSL-JSON), readings,
+  reading log, XP ledger, badges, queue, recommendations with evidence,
+  example choices, profile with locked rules, settings, the note files, TSV
+  tables, and a JSON Schema for every JSON file.
+- **Import an archive**: `litresearch import-all FILE.zip [--new NAME |
+  --into PROFILE] [--dry-run] [--partial]` and *Import an archive* on the
+  welcome screen and the Profile page. Checked before anything changes
+  (checksums, JSON Schema, consistency between the files, problems listed by
+  file and record such as `readings.json[12]: paper p77 not in
+  papers.json`); all or nothing, or only the consistent part with
+  `--partial`; merging is idempotent. New dependency: `jsonschema`.
+- Compatibility fixtures of every released version (`tests/data/compat/`,
+  `tools/make_compat_fixtures.py`) that every version must open, upgrade,
+  export and import.
+
 - **Desktop app (the default way to run litresearch)**: downloads on GitHub
   Releases for Windows (per-user installer, no administrator rights; the
   uninstaller keeps your data), macOS (`.dmg`, Apple silicon) and Linux
@@ -93,6 +116,15 @@ All notable changes are listed here. Versions follow
   reference is tightened into lists and tables, still with every value.
 - The evidence tree's filter line no longer claims a paper is "not in your
   library" (unread library papers can be recommended).
+- Progress and profile files (`import-progress`, *Load a saved profile*,
+  *Compare*) are checked against a JSON Schema and for consistency before
+  anything changes; problems are listed by record. They are now *legacy
+  formats*: still written by backups and *Save profile*, always read.
+- `restore` checks the snapshot's schema version and references before
+  replacing anything; `check` shows the schema version.
+- Merging a file keeps identical history and XP entries it contains twice
+  (two logs within a second) instead of merging them into one; papers
+  created from a file keep all their metadata.
 
 ## 0.2.0-dev (2026-10-29)
 

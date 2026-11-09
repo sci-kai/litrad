@@ -26,7 +26,7 @@ python3 install.py --dev          # .venv with test and lint tools, config/confi
 ```
 
 Details on fixtures, the test modules and recording new API responses are in
-the [Development chapter](docs/documentation.md#13-development).
+the [Development chapter](docs/documentation.md#14-development).
 
 ## Development cycle
 
@@ -96,7 +96,16 @@ To release (maintainers):
 4. The release workflow tests again, builds the wheel and source archive and
    publishes a GitHub release with the CHANGELOG section as notes
    (pre-releases for versions with a `-` suffix).
-5. On `dev`, bump to the next `-dev` version in its own commit.
+5. On `dev`, add the release's compatibility fixtures
+   (`tools/make_compat_fixtures.py --tags vX.Y.Z`, folder `tests/data/compat/X.Y.Z/`)
+   and commit them. **Every release adds its fixtures**; fixtures of a
+   released version are never regenerated. They prove that later versions
+   still read what this one wrote. A change of the database models needs a
+   migration step and a higher `SCHEMA_VERSION`
+   (`src/litresearch/migrations.py`); a change of the archive content a
+   higher `DATA_FORMAT_VERSION` (`src/litresearch/dataformat.py`) and its
+   schemas (see the [Data formats chapter](docs/documentation.md#11-data-formats)).
+6. On `dev`, bump to the next `-dev` version in its own commit.
 
 Two more workflows run for every `v*` tag:
 

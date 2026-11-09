@@ -17,8 +17,8 @@ This is the complete documentation. In the web UI it is under
 
 - **Part I: Using litresearch:** [1. Setup](#1-setup) · [2. The weekly loop](#2-the-weekly-loop) · [3. Profiles](#3-profiles) · [4. Web UI](#4-web-ui)
 - **Part II: How it works:** [5. How papers are recommended](#5-how-papers-are-recommended) · [6. Gamification](#6-gamification)
-- **Part III: Reference:** [7. Commands](#7-commands) · [8. Data sources and privacy](#8-data-sources-and-privacy) · [9. Configuration](#9-configuration) · [10. Your data and backups](#10-your-data-and-backups)
-- **Part IV: How it is built:** [11. Architecture](#11-architecture) · [12. Implementation and credits](#12-implementation-and-credits) · [13. Development](#13-development)
+- **Part III: Reference:** [7. Commands](#7-commands) · [8. Data sources and privacy](#8-data-sources-and-privacy) · [9. Configuration](#9-configuration) · [10. Your data and backups](#10-your-data-and-backups) · [11. Data formats](#11-data-formats)
+- **Part IV: How it is built:** [12. Architecture](#12-architecture) · [13. Implementation and credits](#13-implementation-and-credits) · [14. Development](#14-development)
 
 ---
 
@@ -1064,7 +1064,11 @@ paper counts once).
   value highlighted; says whether profiles played by the **same rules**
   (fingerprint) and whether a file was **edited** outside litresearch.
 - Every file has a **checksum**; a file whose content no longer matches is
-  refused. This catches hand edits; it is not a cryptographic proof.
+  refused. This catches hand edits; it is not a cryptographic proof. Loading
+  and comparing also check the file against its schema and for consistency
+  (every reading and XP event points to a paper in the file, totals add up).
+- **Export everything** (Profile page, `export-all`) writes all of it, plus
+  libraries, note files and a README, as one [archive](#11-data-formats).
 - Merging progress from another machine (`import-progress`) only works
   between profiles with the same rules.
 
@@ -1098,7 +1102,9 @@ paper counts once).
 | `set-password [--remove] [--password-file FILE]` | password for network access |
 | `backup`, `restore FILE` | snapshot + progress export / restore a snapshot |
 | `export-progress FILE`, `import-progress FILE [--dry-run]` | move or merge progress between machines |
-| `check` | database integrity, contents, last backup |
+| `export-all [FILE.zip]` | everything of the profile in one documented archive ([Data formats](#the-archive-export-everything)); default: a new file in `backup.dir` |
+| `import-all FILE.zip [--new NAME \| --into PROFILE] [--dry-run] [--partial]` | import an archive as a new profile or merge it; checked first, all or nothing ([details](#importing-an-archive)) |
+| `check` | database integrity, schema version, references, contents, last backup |
 | `where` | the config file, data folder, profiles, backups and cache in use, and why |
 | `db-init`, `version` | create the database / show the version |
 
@@ -1298,6 +1304,7 @@ profile the command line uses.
 | Login cookie key | `data/web_secret` | yes; deleting it logs everyone out |
 | Desktop app log, running-instance lock | `logs/app.log`, `app-instance.json` in the per-user data folder | yes |
 | Backups | `data/backups/<profile>/` (`backup.dir`) | they *are* the copy |
+| Copies made before a database upgrade | `data/profiles/<profile>/upgrade-backups/` | they *are* the copy ([Database upgrades](#database-upgrades)) |
 | Data from before profiles | `data/litresearch.sqlite` | kept as it was |
 
 All paths are settings, so everything can live in one folder of your choice.
@@ -1338,10 +1345,14 @@ Two or three files per backup, named with `YYYYMMDD_HHMMSS`:
 | `litresearch_notes_20261008_070000.zip` | the note files (and `note_template.md`), if there are any | `restore` writes back the missing ones |
 | `litresearch_progress_20261008_070000.json` | the whole **profile**: rules, settings, statuses, ratings, notes, history, queue, XP, badges, recommendations, libraries, example choices (merged: the newer choice wins), enough metadata to find each paper again, and a checksum | `profile load` (new profile) or `import-progress` (merge) |
 
+For a complete copy in open formats (with the libraries as BibTeX and
+CSL-JSON, the note files, tables and a README) use
+[Export everything](#the-archive-export-everything) (`litresearch export-all`).
+
 The oldest files beyond `backup.keep` (default 14 of each) are deleted.
 Profiles you save yourself (`litresearch_profile_<name>_<date>_<time>.json`)
 are never deleted. Files of format version 1 (before game profiles) can still
-be imported.
+be imported ([legacy formats](#legacy-formats)).
 
 ### Restoring
 
@@ -1352,8 +1363,12 @@ litresearch restore /path/to/backups/litresearch_20261008_070000.sqlite
 
 The current database is first saved as `…_before_restore.sqlite`, so a
 restore can be undone; these copies are rotated by time like other snapshots
-and count toward `backup.keep`. Files that are not litresearch databases, and
-paths that do not exist, are refused without changing anything. Note files:
+and count toward `backup.keep`. Before anything changes, the snapshot is
+checked: integrity, a litresearch database at all, a schema version this
+version understands (a snapshot of a newer litresearch is refused; an older
+one is upgraded when it is next opened) and no rows referring to papers,
+libraries or batches that do not exist. Paths that do not exist are refused
+too. Note files:
 missing ones are written back from the notes zip of the same backup (or from
 the restored copy); an existing file whose text differs from the restored
 copy is never overwritten but becomes a [conflict](#notes-and-obsidian).
@@ -1380,7 +1395,13 @@ How the merge works:
 - the profile is taken over if the target has none; otherwise both must have
   the same rules (fingerprint), or the merge is refused;
 - importing the same file twice changes nothing; the target is backed up
-  first; an invalid file changes nothing.
+  first; the file is checked against its schema and for consistency before
+  anything changes (problems are listed as `readings[3]: paper p7 not in
+  papers`), so an invalid file changes nothing.
+
+The same works with an [archive](#importing-an-archive):
+`litresearch import-all FILE.zip --into PROFILE`; it also brings the libraries
+with all metadata and the note files.
 
 To start a profile from a saved file instead, use *Load a saved profile* on
 the welcome screen or `profile load FILE [--name NAME]`.
@@ -1395,12 +1416,148 @@ half-written file. A failed automatic backup is logged and never stops the
 server.
 
 
+## 11. Data formats
+
+Everything you build up in litresearch is stored and exported in plain,
+documented formats, so that later versions keep reading it and other tools
+can use it.
+
+### Versions
+
+Three version numbers are independent of each other:
+
+| Version | Where | Changes when |
+|---|---|---|
+| app version (`0.2.0-dev`) | `litresearch version` | every release |
+| **data format** (`1`) | `format_version` in `manifest.json` of an archive | the content of the archive changes in any way: a new file, a new field, a changed meaning |
+| **database schema** (`1`) | `PRAGMA user_version` of each profile database | a table, column or index changes |
+
+A litresearch version reads every data format and database schema up to its
+own and refuses newer ones with a clear message, so an older version never
+damages data of a newer one. **Compatibility promise from 1.0 on:** every
+1.x version reads and upgrades all data, settings and exports of earlier
+versions; new features only add (optional fields, new files, new tables).
+The promise is forward only: a newer version reads older files, not the
+other way round.
+
+### Database upgrades
+
+When litresearch opens a profile database with an older schema version
+(databases of 0.1 to 0.5 have version 0), it first saves a copy to
+`data/profiles/<profile>/upgrade-backups/litresearch_<date>_<time>_before-schema-<old>-to-<new>.sqlite`
+and then upgrades it by numbered, tested steps, one transaction each: an
+interrupted upgrade resumes where it stopped. Nothing is ever reset. A
+database with a newer schema version is not opened at all: update
+litresearch, or restore a backup made with this version. `litresearch check`
+shows the schema version.
+
+### The archive ("Export everything")
+
+`litresearch export-all [FILE.zip]` or **📦 Export everything** on the Profile
+page writes one zip file per profile. All text is UTF-8, dates and times are
+ISO 8601 local time (`2026-10-09T08:42:05`), every JSON file has a JSON Schema
+(draft 2020-12) in `schemas/`, and papers are referred to by their key `p<id>`
+from `papers.json`.
+
+| File | Content (main fields) |
+|---|---|
+| `manifest.json` | `format` (`litresearch-export`), `format_version`, `app_version`, `schema_version`, `created`, `profile`, `counts`, and `files`: SHA-256 and size of every other file |
+| `README.md` | what each file contains (generated) |
+| `papers.json` | `papers`: every paper any other file refers to: `key`, identifiers (`doi`, `pmid`, `pmcid`, `arxiv_id`, `s2_id`, `openalex_id`, `bibtex_key`), `title`, `authors`, `year`, `pub_date`, `venue`, `abstract`, metrics, `topics`, `folders`, `tags`, `in_library` |
+| `libraries.json` | `libraries`: `name`, `description`, `kind` (imported, recommended), `format`, `use_for_recommendations`, dates, `files`, and `papers` (`paper`, `citation_key`, `folders`, `tags`, `added_at`) |
+| `libraries/<name>.bib`, `.json` | each library as BibTeX and CSL-JSON for reference managers (views of `libraries.json`, checked on import but not read) |
+| `readings.json` | `readings`: `paper`, `status` (abstract, skimmed, read, thorough, dismissed), `rating`, `notes`, `updated_at` |
+| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top`, `at` |
+| `xp_ledger.json` | `total` and `events`: `points`, `kind`, `reason`, `at`, `paper`, running `balance` |
+| `badges.json` | `badges`: `code`, `name`, `unlocked_at` |
+| `queue.json` | `queue`: `paper`, `position` (1 = next), `source`, `added_at` |
+| `recommendations.json` | `batches`: `week_start`, `created_at`, `n_candidates`, `warnings`, `funnel`, `params`, `items` (`paper`, `rank`, `category`, `score`, `breakdown` with the evidence, `reason`) |
+| `example_choices.json` | `example_choices`: `paper`, `kind` (positive, negative), `action` (include, exclude), `at` |
+| `profile.json` | `profile` (`name`, `created_at`, locked `rules`, `fingerprint`, `app_version`) and `xp_total` |
+| `settings.yaml` | the profile's `settings.yaml` (topics, selection, sources, queue, library, paths) |
+| `reading_log.tsv`, `xp_ledger.tsv` | the reading log and the XP ledger as tables for spreadsheets (not read on import) |
+| `notes/…` | the [note files](#notes-and-obsidian) as they are, with `note_template.md` |
+| `schemas/*.schema.json` | the JSON Schemas |
+
+Not included, because litresearch recomputes them or they belong to one
+machine: embeddings, the example lists themselves (your choices are), the
+import log, the sync state of note files. The schemas are also in the
+package (`litresearch/schemas/`).
+
+### Importing an archive
+
+`litresearch import-all FILE.zip` creates a new profile (named as in the
+archive, or `--new NAME`); `--into PROFILE` merges into an existing one
+(after a backup); on the web: *Import an archive* on the welcome screen (new
+profile) or on the Profile page (merge). **Before anything changes**, the
+archive is checked:
+
+1. every file against its SHA-256 in `manifest.json`;
+2. every JSON file against its JSON Schema;
+3. consistency: every paper key used in readings, history, XP, queue,
+   recommendations, example choices, library members and note files
+   (`litresearch_id`) is in `papers.json`; no key, reading, queue entry,
+   badge, library or library member twice; the `.bib`/`.json` copies list
+   the papers of `libraries.json`; the XP `balance` and `total` add up and
+   match `xp_total`; badge XP belongs to an unlocked badge; reading XP to a
+   reading; every badge exists in the rules; the rules match their
+   fingerprint; all dates parse; the settings are valid.
+
+Problems are listed by file and record, e.g.
+`readings.json[12]: paper p77 not in papers.json`, and nothing is imported
+(all or nothing: one database transaction; note files are written only
+after it succeeded). `--partial` (*Only the consistent part*) imports the
+consistent records and lists what was skipped, including everything that
+refers to a skipped record. `--dry-run` checks and shows what would change.
+
+Merging uses the rules of [progress files](#moving-to-another-machine-or-merging-two):
+papers are matched by DOI, PMID, citation key, then title and year; the
+newer reading wins and notes of both sides are kept; importing the same
+archive twice changes nothing. The settings of the archive are only used for
+a new profile, and paths from another machine never.
+
+**Unknown fields** in the JSON files are allowed and ignored with a note
+(e.g. fields a script added). Files of a newer data format are refused.
+
+### Legacy formats
+
+Still read, so nothing written by an earlier version is lost:
+
+- **Progress and profile files** (`litresearch_progress_*.json`,
+  `litresearch_profile_*.json`, format `litresearch-progress` version 2, and
+  version 1 without checksum from before game profiles). Backups and *Save
+  profile* still write version 2; it is described by
+  `schemas/progress.schema.json` and checked like an archive before it is
+  loaded, merged or compared.
+- **Databases** of every version since 0.1.0-alpha.1 (upgraded as above).
+- **Notes in the database** (before 0.5): they become note files.
+
+The test suite keeps a small profile database and the files written by each
+released version (`tests/data/compat/`) and checks that they open, upgrade,
+export and import.
+
+### Reading the database directly
+
+Each profile database is an ordinary SQLite file; the tables are described in
+the [data model](#data-model). Read it without changing it, ideally from a
+backup snapshot:
+
+```bash
+sqlite3 -readonly data/profiles/<profile>/litresearch.sqlite \
+  "SELECT p.title, r.status, r.rating FROM reading r JOIN paper p ON p.id = r.paper_id"
+```
+
+Times are stored as local ISO 8601 text, lists and settings as JSON text.
+Do not write into the live database while litresearch runs; use the archive
+or the commands instead.
+
+
 ---
 
 # Part IV: How it is built
 
 
-## 11. Architecture
+## 12. Architecture
 
 ### Overview
 
@@ -1417,11 +1574,14 @@ domain functions, so their behaviour is identical). Planned stages are in
 | Module | Responsibility |
 |---|---|
 | `config.py` | Pydantic models of `config.yaml`; `n/a` → None; validation; readable `ConfigError` |
-| `db.py` | SQLModel tables, reading levels, embeddings as float32 bytes, additive migrations, indexes, durable SQLite settings |
+| `db.py` | SQLModel tables, reading levels, embeddings as float32 bytes, durable SQLite settings; `init_db` runs the migrations |
+| `migrations.py` | schema version (`PRAGMA user_version`), numbered upgrade steps, snapshot before an upgrade, refusing newer databases |
+| `dataformat.py`, `schemas/` | data format version, JSON Schemas, schema validation with record locations, unknown fields, consistency checks |
+| `archive.py` | "Export everything": writing the archive, checking it (checksums, schemas, consistency), importing it as a new profile or merging (all or nothing, partial, dry run) |
 | `ingest/bibtex.py`, `ingest/formats.py` | BibTeX (LaTeX decoding, Paperpile's month/day format, DOI normalisation, folders/labels), RIS and CSL-JSON parsers, format detection |
 | `ingest/check.py` | checks of an export (required fields, coverage, duplicates) |
 | `ingest/pipeline.py` | import into a library (new, add, replace), matching, DOI resolution, OpenAlex and S2 enrichment, per-source error isolation, import history |
-| `libraries.py`, `export.py`, `cli_library.py` | libraries and memberships, Recommended and queue libraries, uploads, migration; BibTeX/RIS export; `library` and `examples` commands |
+| `libraries.py`, `export.py`, `cli_library.py` | libraries and memberships, Recommended and queue libraries, uploads, migration; BibTeX/RIS/CSL-JSON export; `library` and `examples` commands |
 | `examples.py` | the positive and negative example lists for Semantic Scholar: rules, your choices, regeneration |
 | `sources/http.py` | JSON client: SQLite cache with max age and clean-up, per-host throttling, retries (`Retry-After`, backoff) |
 | `sources/crossref.py`, `openalex.py`, `semanticscholar.py`, `europepmc.py`, `pubmed.py`, `hits.py` | API clients; a common search `Hit` with merging |
@@ -1542,7 +1702,7 @@ profile; without profiles it falls back to `paths.database`, which
   in the redirect URL, removed after display so a reload does not replay it.
 
 
-## 12. Implementation and credits
+## 13. Implementation and credits
 
 ### How it was developed
 
@@ -1562,7 +1722,7 @@ profile; without profiles it falls back to `paths.database`, which
   Paperpile date parser, batched OpenAlex look-ups, rejecting full-text
   search and the meeting-abstract and unknown-venue rules.
 - **Small, verified steps** on `feat-*` branches (CUBI conventions,
-  [Development](#13-development)).
+  [Development](#14-development)).
 
 ### Quality assurance
 
@@ -1572,7 +1732,7 @@ input, data integrity, scale and years of use; about 97 % statement coverage
 at v0.1.0-alpha.1, with scoring, game, reading, config and auth at 100 %.
 Warnings are errors; ruff lints and formats; CI runs on Python 3.11–3.13.
 Each milestone was also run on real data and checked with headless-browser
-screenshots. Details: [Development](#13-development).
+screenshots. Details: [Development](#14-development).
 
 ### Software dependencies
 
@@ -1583,6 +1743,7 @@ licenses that permit use in this project.
 |---|---|---|---|
 | [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) | 2.1.0 | MIT | parsing BibTeX (v2 API, LaTeX decoding and name-splitting middlewares) |
 | [httpx](https://www.python-httpx.org) | 0.28.1 | BSD-3-Clause | HTTP client for all APIs; `MockTransport` in tests |
+| [jsonschema](https://github.com/python-jsonschema/jsonschema) | 4.26.0 | MIT | checking exports, progress and profile files against their JSON Schema (draft 2020-12) before importing |
 | [numpy](https://numpy.org) | 2.5.3 | BSD-3-Clause | embeddings and vector maths (cosine, kNN, MMR, TF-IDF) |
 | [platformdirs](https://github.com/tox-dev/platformdirs) | 4.14.5 | MIT | per-user config and data folders on Linux, macOS and Windows |
 | [pydantic](https://github.com/pydantic/pydantic) | 2.13.5 | MIT | configuration models and validation |
@@ -1602,6 +1763,7 @@ licenses that permit use in this project.
 | *indirect:* [Click](https://click.palletsprojects.com/) | 8.5.0 | BSD-3-Clause | CLI toolkit under Typer |
 | *indirect:* [pylatexenc](https://github.com/phfaist/pylatexenc) | 2.11 | MIT | LaTeX → Unicode for bibtexparser |
 | *indirect:* anyio, h11 | 4.15.1, 0.16.0 | MIT | async I/O and HTTP/1.1 for Starlette, Uvicorn, httpx |
+| *indirect:* referencing, jsonschema-specifications, rpds-py, attrs | 0.37.0, 2025.9.1, 2026.9.1, 26.1.0 | MIT | schema references and meta-schemas for jsonschema |
 | *dev:* [pytest](https://docs.pytest.org/) | 9.1.1 | MIT | tests |
 | *dev:* [pytest-cov](https://github.com/pytest-dev/pytest-cov) | 7.1.0 | MIT | coverage |
 | *dev:* [Ruff](https://docs.astral.sh/ruff) | 0.16.10 | MIT | lint and format |
@@ -1686,7 +1848,7 @@ hosting, consulting or support) whose value comes mainly from it. To cite litres
 Scholar/SPECTER2 (see Literature) when you report results based on it.
 
 
-## 13. Development
+## 14. Development
 
 ### Development cycle
 
@@ -1740,10 +1902,25 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
 | `test_backup.py`, `test_profile.py`, `test_profiles.py` | snapshots, rotation, merge, restore; rules, locking, checksums, comparison; profile folders, welcome screen, separation |
 | `test_cli.py`, `test_web.py`, `test_web_usecases.py`, `test_web_polish.py`, `test_auth.py` | interfaces, every page, settings round trip, user flows, login |
 | `test_config.py`, `test_db.py` | validation, schema, migration |
+| `test_migrations.py`, `test_compat.py` | schema versions, upgrade steps, snapshots, refusing newer databases, restore checks; files and databases of every released version (`tests/data/compat/`, made by `tools/make_compat_fixtures.py`) |
+| `test_archive.py` | Export everything: contents, schemas, round trip, merge, every consistency rule, all or nothing, `--partial`, dry run, CLI, web, 5000 papers |
 | `test_robustness.py`, `test_data_integrity.py` | crashes, concurrency, broken and hostile inputs; matching and merge correctness |
 | `test_scale.py`, `test_import_scale.py`, `test_longterm.py` | large libraries and years of use (`web_bigdata.py` builds the data) |
 | `test_network.py`, `test_live.py` | network interfaces for `serve`; real APIs (`--network`) |
 | `test_desktop.py` | desktop mode: port, single instance, Quit, browser, log; packaging files |
+
+### Compatibility fixtures
+
+`tests/data/compat/<version>/` holds what each released version wrote: a
+small profile database, progress and profile files, from 0.6 on an archive,
+and the counts that version computed (`expected.json`).
+`tools/make_compat_fixtures.py --tags vX.Y.Z` checks the tag out into a
+temporary worktree, installs it into a fresh virtual environment and builds
+the profile offline with that version's own code. **Every release adds its
+fixtures; fixtures of a released version are never regenerated.** A change
+of the database models needs a new migration step, a higher
+`SCHEMA_VERSION` and its entry in `tests/data/compat/schema.json`
+(`test_migrations.py` fails otherwise).
 
 ### Desktop builds
 
