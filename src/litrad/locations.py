@@ -310,6 +310,7 @@ def _rewrite_yaml(path: Path, moved: dict[Path, Path], sections: dict[str, tuple
         return False
     yaml = YAML()
     yaml.preserve_quotes = True
+    yaml.width = 4096  # long paths stay on one line
     try:
         document = yaml.load(path.read_text(encoding="utf-8"))
     except Exception as error:  # an invalid file is reported when it is used

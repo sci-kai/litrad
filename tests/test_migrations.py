@@ -181,7 +181,7 @@ def test_failed_step_rolls_back_and_keeps_the_version(tmp_path):
 @pytest.mark.parametrize("version", ["0.1.0-alpha.1", "0.2.0-dev"])
 def test_released_databases_upgrade_to_the_current_columns(tmp_path, version):
     path = tmp_path / "old.sqlite"
-    shutil.copy(COMPAT / version / "litrad.sqlite", path)
+    shutil.copy(COMPAT / version / "litresearch.sqlite", path)
     init_db(path).dispose()
     init_db(tmp_path / "new.sqlite").dispose()
 
@@ -261,7 +261,7 @@ def test_restore_of_an_old_snapshot_upgrades_it(tmp_path):
     cfg = make_cfg(tmp_path)
     init_db(cfg.paths.database).dispose()
     snapshot = tmp_path / "litrad_20261001_100000.sqlite"
-    shutil.copy(COMPAT / "0.1.0-alpha.1" / "litrad.sqlite", snapshot)
+    shutil.copy(COMPAT / "0.1.0-alpha.1" / "litresearch.sqlite", snapshot)
     restore(cfg, snapshot)
     assert read_version(cfg.paths.database)[0] == SCHEMA_VERSION
     engine = init_db(cfg.paths.database)

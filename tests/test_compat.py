@@ -56,7 +56,8 @@ def install(base, version: str) -> str:
     """The fixture database as a profile, exactly as that version left it."""
     home = base.paths.profiles_dir / "old"
     home.mkdir(parents=True)
-    shutil.copy(COMPAT / version / "litresearch.sqlite", home / profiles.PROFILE_DB)
+    # under its name before the rename: opening the profile renames it to litrad.sqlite
+    shutil.copy(COMPAT / version / "litresearch.sqlite", home / profiles.LEGACY_PROFILE_DB)
     shutil.copy(COMPAT / version / "settings.yaml", home / profiles.PROFILE_SETTINGS)
     return "old"
 

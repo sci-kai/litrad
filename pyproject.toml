@@ -56,6 +56,8 @@ litresearch-app = "litrad.desktop:main_legacy"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+# src/litresearch only serves old editable installs after `git pull` (see its docstring)
+exclude = ["litresearch*"]
 
 [tool.setuptools.package-data]
 "litrad" = ["config.example.yaml"]

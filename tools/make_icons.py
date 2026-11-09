@@ -181,7 +181,8 @@ def read_png(path: Path) -> tuple[int, int, list[bytearray]]:
 
 def write_png(path: Path, width: int, height: int, rows: list[bytes]) -> None:
     def chunk(kind: bytes, body: bytes) -> bytes:
-        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+        crc = struct.pack(">I", zlib.crc32(kind + body))
+        return struct.pack(">I", len(body)) + kind + body + crc
 
     header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)  # 8-bit RGBA
     raw = b"".join(b"\x00" + bytes(row) for row in rows)  # filter type: none
