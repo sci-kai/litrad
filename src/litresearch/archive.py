@@ -195,8 +195,12 @@ def _ledger_tsv(rows: list[dict], titles: dict[str, str]) -> str:
 def collect(session: Session, cfg: Config, settings_text: str | None = None) -> dict[str, bytes]:
     """Every file of the archive except the manifest, as bytes."""
     from litresearch import export, history, notes
+    from litresearch import libraries as library_module
     from litresearch.rules import GameRules
 
+    # a database of 0.1 keeps its library only as flags: make it "My library" first,
+    # as every other part of litresearch does on first use
+    library_module.migrate(session, cfg)
     files: dict[str, bytes] = {}
     libraries = [
         lib

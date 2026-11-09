@@ -1,0 +1,660 @@
+{
+ "format": "litresearch-progress",
+ "format_version": 2,
+ "app_version": "0.2.0-dev",
+ "exported_at": "2026-11-01T08:00:00",
+ "profile": {
+  "name": "Compat 0.2.0-dev",
+  "created_at": "2026-09-01T09:00:00",
+  "rules": {
+   "xp_abstract": 5,
+   "xp_skimmed": 15,
+   "xp_read": 40,
+   "xp_thorough": 80,
+   "frog_bonus": 0.5,
+   "streak_step": 0.05,
+   "streak_max_steps": 10,
+   "classic_percentile": 99.0,
+   "classic_xp": 20,
+   "hot_days": 30,
+   "hot_xp": 10,
+   "recommendation_xp": 15,
+   "rating_xp": 2,
+   "reflection_chars": 140,
+   "reflection_xp": 10,
+   "inbox_zero_xp": 10,
+   "weekly_detail_goal": 1,
+   "weekly_skim_goal": 2,
+   "quest_xp": 50,
+   "badge_xp": 25,
+   "drop_penalty": 15,
+   "levels": [
+    {
+     "xp": 0,
+     "title": "Curious Undergrad",
+     "icon": "\ud83c\udf93"
+    },
+    {
+     "xp": 60,
+     "title": "Bachelor Student",
+     "icon": "\ud83d\udcd8"
+    },
+    {
+     "xp": 140,
+     "title": "Lab Rotation Student",
+     "icon": "\ud83e\uddea"
+    },
+    {
+     "xp": 250,
+     "title": "Master's Student",
+     "icon": "\ud83d\udcd7"
+    },
+    {
+     "xp": 400,
+     "title": "Research Assistant",
+     "icon": "\ud83e\uddeb"
+    },
+    {
+     "xp": 600,
+     "title": "PhD Candidate",
+     "icon": "\ud83d\udcda"
+    },
+    {
+     "xp": 850,
+     "title": "Journal Club Regular",
+     "icon": "\u2615"
+    },
+    {
+     "xp": 1150,
+     "title": "Poster Presenter",
+     "icon": "\ud83e\udea7"
+    },
+    {
+     "xp": 1500,
+     "title": "Conference Speaker",
+     "icon": "\ud83c\udfa4"
+    },
+    {
+     "xp": 1900,
+     "title": "Doctor of Philosophy",
+     "icon": "\ud83d\udcdc"
+    },
+    {
+     "xp": 2400,
+     "title": "Postdoc",
+     "icon": "\ud83d\udd2c"
+    },
+    {
+     "xp": 3000,
+     "title": "Senior Postdoc",
+     "icon": "\ud83e\uddec"
+    },
+    {
+     "xp": 3700,
+     "title": "Research Fellow",
+     "icon": "\ud83e\uddd1\u200d\ud83d\udd2c"
+    },
+    {
+     "xp": 4500,
+     "title": "Junior Group Leader",
+     "icon": "\ud83c\udf31"
+    },
+    {
+     "xp": 5400,
+     "title": "Group Leader",
+     "icon": "\ud83d\udc69\u200d\ud83d\udd2c"
+    },
+    {
+     "xp": 6500,
+     "title": "Associate Professor",
+     "icon": "\ud83c\udfeb"
+    },
+    {
+     "xp": 7800,
+     "title": "Professor",
+     "icon": "\ud83c\udfa9"
+    },
+    {
+     "xp": 9300,
+     "title": "Department Head",
+     "icon": "\ud83c\udfdb\ufe0f"
+    },
+    {
+     "xp": 11000,
+     "title": "Review Editor",
+     "icon": "\ud83d\udd8b\ufe0f"
+    },
+    {
+     "xp": 13000,
+     "title": "Hallmarks Author",
+     "icon": "\ud83c\udfc6"
+    }
+   ],
+   "badge_targets": {}
+  },
+  "fingerprint": "03369bd65b5d09bc"
+ },
+ "papers": {
+  "p1": {
+   "doi": "10.1038/s41588-022-01141-9",
+   "pmid": "35931863",
+   "bibtex_key": "Barkley2022-ri",
+   "title": "Overlapping paper with the BibTeX library",
+   "authors": [
+    "Doe, Jane"
+   ],
+   "year": 2020,
+   "venue": "Nature Genetics",
+   "url": "http://dx.doi.org/10.1038/s41588-022-01141-9",
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [
+    "Projects/Example A/Interactions",
+    "01 Biology / Medicine/Cancer/Tumor Microenvironment"
+   ],
+   "in_library": true,
+   "pub_date": "2022-08-01"
+  },
+  "p2": {
+   "doi": "10.1126/science.aaf6546",
+   "pmid": null,
+   "bibtex_key": "Cheung2016-vl",
+   "title": "A collective route to metastasis: Seeding by tumor cell clusters",
+   "authors": [
+    "Cheung, Kevin J",
+    "Ewald, Andrew J"
+   ],
+   "year": 2016,
+   "venue": "Science",
+   "url": "https://doi.org/10.1126/SCIENCE.AAF6546",
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [
+    "01 Biology / Medicine/Cancer/Metastasis"
+   ],
+   "in_library": true,
+   "pub_date": "2016-04-01"
+  },
+  "p3": {
+   "doi": "10.1038/s41591-021-01323-8",
+   "pmid": null,
+   "bibtex_key": "Bassez2021-fu",
+   "title": "A single-cell map of intratumoral changes during anti-PD1 treatment of patients with breast cancer",
+   "authors": [
+    "Bassez, Ayse",
+    "Vos, Hanne",
+    "Lambrechts, Diether"
+   ],
+   "year": 2021,
+   "venue": null,
+   "url": null,
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [
+    "01 Biology / Medicine/Cancer/Immunology"
+   ],
+   "in_library": true,
+   "pub_date": null
+  },
+  "p4": {
+   "doi": null,
+   "pmid": null,
+   "bibtex_key": "Johnson_undated-wl",
+   "title": "Watching cancer cells evolve",
+   "authors": [
+    "Johnson, Sarah C",
+    "Mcclelland, Sarah E"
+   ],
+   "year": null,
+   "venue": "Nature News and Views",
+   "url": null,
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [
+    "01 Biology / Medicine/Cancer/Evolution"
+   ],
+   "in_library": true,
+   "pub_date": null
+  },
+  "p5": {
+   "doi": null,
+   "pmid": "14678978",
+   "bibtex_key": "Hofmann2003-af",
+   "title": "Matrix metalloproteinases in human melanoma",
+   "authors": [
+    "Hofmann, Uwe B",
+    "Westphal, J\u00fcrgen R"
+   ],
+   "year": 2003,
+   "venue": "Cancer Research",
+   "url": null,
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [],
+   "in_library": true,
+   "pub_date": "2003-12-15"
+  },
+  "p6": {
+   "doi": null,
+   "pmid": null,
+   "bibtex_key": "Turajlic2017-zn",
+   "title": "Cancer evolution and metastasis: Metastasis as an evolutionary process",
+   "authors": [
+    "Turajlic, Samra"
+   ],
+   "year": 2017,
+   "venue": "ESMO Annual Meeting",
+   "url": null,
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [
+    "01 Biology / Medicine/Cancer/Metastasis"
+   ],
+   "in_library": true,
+   "pub_date": null
+  },
+  "p7": {
+   "doi": null,
+   "pmid": null,
+   "bibtex_key": "Olivero2018-ol",
+   "title": "Identification of Human Cutaneous Squamous Cell Carcinoma Cancer Stem Cells",
+   "authors": [
+    "Olivero, Carlotta",
+    "Morgan, Huw",
+    "Patel, Girish K"
+   ],
+   "year": 2018,
+   "venue": null,
+   "url": null,
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [],
+   "in_library": true,
+   "pub_date": "2018-05-01"
+  },
+  "p8": {
+   "doi": "10.1234/compat.second",
+   "pmid": null,
+   "bibtex_key": "ris-2",
+   "title": "A paper only in the second library",
+   "authors": [
+    "Roe, Richard"
+   ],
+   "year": 2021,
+   "venue": "Journal of Fixtures",
+   "url": null,
+   "citation_percentile": null,
+   "topics": [],
+   "folders": [],
+   "in_library": true,
+   "pub_date": null
+  }
+ },
+ "libraries": [
+  {
+   "name": "My library",
+   "description": "",
+   "kind": "imported",
+   "format": "bibtex",
+   "use_for_recommendations": true,
+   "created_at": "2026-11-09T14:31:11",
+   "papers": [
+    {
+     "paper": "p1",
+     "key": "Barkley2022-ri",
+     "folders": [
+      "Projects/Example A/Interactions",
+      "01 Biology / Medicine/Cancer/Tumor Microenvironment"
+     ],
+     "tags": []
+    },
+    {
+     "paper": "p2",
+     "key": "Cheung2016-vl",
+     "folders": [
+      "01 Biology / Medicine/Cancer/Metastasis"
+     ],
+     "tags": [
+      "metastasis",
+      "circulating tumor cells"
+     ]
+    },
+    {
+     "paper": "p3",
+     "key": "Bassez2021-fu",
+     "folders": [
+      "01 Biology / Medicine/Cancer/Immunology"
+     ],
+     "tags": []
+    },
+    {
+     "paper": "p4",
+     "key": "Johnson_undated-wl",
+     "folders": [
+      "01 Biology / Medicine/Cancer/Evolution"
+     ],
+     "tags": []
+    },
+    {
+     "paper": "p5",
+     "key": "Hofmann2003-af",
+     "folders": [],
+     "tags": []
+    },
+    {
+     "paper": "p6",
+     "key": "Turajlic2017-zn",
+     "folders": [
+      "01 Biology / Medicine/Cancer/Metastasis"
+     ],
+     "tags": [
+      "conference - ESMO 2017"
+     ]
+    },
+    {
+     "paper": "p7",
+     "key": "Olivero2018-ol",
+     "folders": [],
+     "tags": [
+      "Stemness"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Recommended",
+   "description": "Recommendations you put on your reading queue.",
+   "kind": "recommended",
+   "format": null,
+   "use_for_recommendations": false,
+   "created_at": "2026-11-09T14:31:12",
+   "papers": [
+    {
+     "paper": "p7",
+     "key": null,
+     "folders": [],
+     "tags": []
+    }
+   ]
+  },
+  {
+   "name": "Compat second library",
+   "description": "",
+   "kind": "imported",
+   "format": "ris",
+   "use_for_recommendations": true,
+   "created_at": "2026-11-09T14:31:12",
+   "papers": [
+    {
+     "paper": "p1",
+     "key": "ris-1",
+     "folders": [],
+     "tags": []
+    },
+    {
+     "paper": "p8",
+     "key": "ris-2",
+     "folders": [],
+     "tags": []
+    }
+   ]
+  }
+ ],
+ "readings": [
+  {
+   "paper": "p1",
+   "status": "thorough",
+   "rating": 5,
+   "notes": "[2026-09-08T12:00:00] Reflection on the study design and what it means for my own work. Reflection on the study design and what it means for my own work. Reflection on the study design and what it means for my own work.",
+   "updated_at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": "p2",
+   "status": "read",
+   "rating": 4,
+   "notes": "[2026-09-15T12:00:00] Short note.",
+   "updated_at": "2026-09-15T12:00:00"
+  },
+  {
+   "paper": "p3",
+   "status": "skimmed",
+   "rating": 3,
+   "notes": "",
+   "updated_at": "2026-09-22T12:00:00"
+  },
+  {
+   "paper": "p4",
+   "status": "abstract",
+   "rating": null,
+   "notes": "",
+   "updated_at": "2026-09-29T12:00:00"
+  },
+  {
+   "paper": "p5",
+   "status": "dismissed",
+   "rating": null,
+   "notes": "",
+   "updated_at": "2026-10-06T12:00:00"
+  }
+ ],
+ "status_events": [
+  {
+   "paper": "p1",
+   "status": "thorough",
+   "was_queue_top": false,
+   "at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": "p2",
+   "status": "read",
+   "was_queue_top": true,
+   "at": "2026-09-15T12:00:00"
+  },
+  {
+   "paper": "p3",
+   "status": "skimmed",
+   "was_queue_top": false,
+   "at": "2026-09-22T12:00:00"
+  },
+  {
+   "paper": "p4",
+   "status": "abstract",
+   "was_queue_top": false,
+   "at": "2026-09-29T12:00:00"
+  },
+  {
+   "paper": "p5",
+   "status": "dismissed",
+   "was_queue_top": false,
+   "at": "2026-10-06T12:00:00"
+  }
+ ],
+ "queue": [
+  {
+   "paper": "p6",
+   "position": 1,
+   "source": "manual",
+   "added_at": "2026-11-09T14:31:12"
+  },
+  {
+   "paper": "p7",
+   "position": 2,
+   "source": "recommendation",
+   "added_at": "2026-11-09T14:31:12"
+  }
+ ],
+ "xp_events": [
+  {
+   "paper": "p1",
+   "points": 80,
+   "kind": "read",
+   "reason": "thorough: Cancer cell states recur across tumor types and form specifi",
+   "at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": "p1",
+   "points": 15,
+   "kind": "recommended",
+   "reason": "Read a paper from your recommendations",
+   "at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": "p1",
+   "points": 2,
+   "kind": "rating",
+   "reason": "Rated a paper",
+   "at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": "p1",
+   "points": 10,
+   "kind": "reflection",
+   "reason": "Wrote substantial notes",
+   "at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": null,
+   "points": 25,
+   "kind": "badge",
+   "reason": "Badge: First Steps",
+   "at": "2026-09-08T12:00:00"
+  },
+  {
+   "paper": "p2",
+   "points": 40,
+   "kind": "read",
+   "reason": "read: A collective route to metastasis: Seeding by tumor cell clus",
+   "at": "2026-09-15T12:00:00"
+  },
+  {
+   "paper": "p2",
+   "points": 2,
+   "kind": "streak",
+   "reason": "2-week streak x1.05",
+   "at": "2026-09-15T12:00:00"
+  },
+  {
+   "paper": "p2",
+   "points": 20,
+   "kind": "frog",
+   "reason": "Ate the frog: read your top paper first",
+   "at": "2026-09-15T12:00:00"
+  },
+  {
+   "paper": "p2",
+   "points": 2,
+   "kind": "rating",
+   "reason": "Rated a paper",
+   "at": "2026-09-15T12:00:00"
+  },
+  {
+   "paper": "p3",
+   "points": 15,
+   "kind": "read",
+   "reason": "skimmed: A single-cell map of intratumoral changes during anti-PD1 tr",
+   "at": "2026-09-22T12:00:00"
+  },
+  {
+   "paper": "p3",
+   "points": 2,
+   "kind": "streak",
+   "reason": "3-week streak x1.10",
+   "at": "2026-09-22T12:00:00"
+  },
+  {
+   "paper": "p3",
+   "points": 2,
+   "kind": "rating",
+   "reason": "Rated a paper",
+   "at": "2026-09-22T12:00:00"
+  },
+  {
+   "paper": "p4",
+   "points": 5,
+   "kind": "read",
+   "reason": "abstract: Watching cancer cells evolve",
+   "at": "2026-09-29T12:00:00"
+  },
+  {
+   "paper": "p4",
+   "points": 1,
+   "kind": "streak",
+   "reason": "3-week streak x1.10",
+   "at": "2026-09-29T12:00:00"
+  }
+ ],
+ "settings": {
+  "topics": [
+   {
+    "name": "tumor-evolution",
+    "weight": 1.0,
+    "queries": [
+     "clonal evolution cancer"
+    ],
+    "mesh_terms": [
+     "Clonal Evolution"
+    ],
+    "seed_dois": []
+   },
+   {
+    "name": "liquid-biopsy",
+    "weight": 0.8,
+    "queries": [
+     "circulating tumor DNA"
+    ]
+   }
+  ],
+  "excluded_terms": [
+   "veterinary"
+  ]
+ },
+ "achievements": [
+  {
+   "code": "first_read",
+   "unlocked_at": "2026-09-08T12:00:00"
+  }
+ ],
+ "recommendations": [
+  {
+   "week_start": "2026-09-07",
+   "created_at": "2026-09-07T06:00:00",
+   "n_candidates": 40,
+   "warnings": [],
+   "funnel": {
+    "candidates": 40,
+    "after_filters": 12,
+    "selected": 2
+   },
+   "params": {
+    "n_recommendations": 2
+   },
+   "items": [
+    {
+     "paper": "p1",
+     "rank": 1,
+     "category": "open",
+     "score": 0.91,
+     "breakdown": {
+      "relevance": 0.91,
+      "impact": 0.5,
+      "timeliness": 0.3
+     },
+     "reason": "Fixture recommendation"
+    },
+    {
+     "paper": "p7",
+     "rank": 2,
+     "category": "open",
+     "score": 0.74,
+     "breakdown": {
+      "relevance": 0.74,
+      "impact": 0.5,
+      "timeliness": 0.3
+     },
+     "reason": "Fixture recommendation"
+    }
+   ]
+  }
+ ],
+ "checksum": "b52e65fe1317be139465cf1ce6032be2e11ad4e01bc982b704b6f4d5512c9775"
+}
