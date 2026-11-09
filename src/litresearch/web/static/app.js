@@ -211,6 +211,14 @@
       });
     });
 
+    // "all on this page": select every checkbox of a form
+    document.querySelectorAll("[data-select-all]").forEach((box) => {
+      box.addEventListener("change", () => {
+        document.querySelectorAll(`input[name="paper"][form="${box.dataset.selectAll}"]`)
+          .forEach((item) => { item.checked = box.checked; });
+      });
+    });
+
     // toggles for inline forms
     document.querySelectorAll("[data-toggle]").forEach((button) => {
       button.addEventListener("click", () => {

@@ -121,6 +121,7 @@ from litresearch.reading import (
     drop_would_cost,
     fetch_paper,
     find_paper,
+    mark_read_earlier,
     queue_add,
     queue_items,
     queue_move,
@@ -177,6 +178,7 @@ STALE_LIBRARY_DAYS = 30
 
 KIND_ICONS = {
     "read": "📖",
+    "earlier": "🕰️",
     "streak": "🔥",
     "frog": "🐸",
     "classic": "🏛️",
@@ -214,6 +216,17 @@ class Celebrations:
 
     def pop(self, token: str | None) -> dict | None:
         return self._items.pop(token, None) if token else None
+
+
+def parse_read_on(value: str) -> date | None:
+    """The optional "read on" date of a reading logged as read earlier."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise ReadingError(f"'{value}' is not a date (YYYY-MM-DD)") from error
 
 
 def award_payload(award: Award | None, message: str, session: Session, kind="success") -> dict:
@@ -1745,6 +1758,60 @@ def create_app(
         finally:
             engine.dispose()
 
+    @app.post("/library/{library_id}/read-earlier")
+    async def library_read_earlier(library_id: int, request: Request):
+        """Mark the selected papers of a library as read before litresearch."""
+        form = await request.form()
+        url = safe(str(form.get("next_url") or f"/library/{library_id}"))
+        cfg, engine = open_session()
+        try:
+            with Session(engine) as session:
+                library = session.get(Library, library_id)
+                if library is None:
+                    return error("/library", "That library does not exist")
+                try:
+                    status = ReadStatus(str(form.get("level", "")))
+                    read_day = parse_read_on(str(form.get("read_on", "")))
+                    ids = {int(v) for v in form.getlist("paper") if str(v).isdigit()}
+                except ValueError as exc:
+                    return error(
+                        url, str(exc) if isinstance(exc, ReadingError) else "Choose a depth"
+                    )
+                if not ids:
+                    return error(url, "Select the papers you read earlier")
+                members = set(
+                    session.exec(
+                        select(LibraryPaper.paper_id).where(
+                            LibraryPaper.library_id == library.id,
+                            LibraryPaper.paper_id.in_(ids),
+                        )
+                    ).all()
+                )
+                papers = [session.get(Paper, pid) for pid in sorted(members)]
+                try:
+                    outcome = mark_read_earlier(session, cfg, papers, status, read_day)
+                except ReadingError as exc:
+                    return error(url, str(exc))
+                label = f"🕰️ {len(outcome.logged)} marked as read earlier ({status.value})"
+                if outcome.skipped:
+                    label += f" · {len(outcome.skipped)} already read at least that deeply"
+                payload = award_payload(outcome.award, label, session)
+                # one line for the papers instead of one per paper
+                logged = [e for e in payload["events"] if e["kind"] == "earlier"]
+                if logged:
+                    payload["events"] = [
+                        {
+                            "icon": KIND_ICONS["earlier"],
+                            "points": sum(e["points"] for e in logged),
+                            "reason": f"Read earlier: {len(logged)} papers",
+                            "kind": "earlier",
+                        },
+                        *[e for e in payload["events"] if e["kind"] != "earlier"],
+                    ]
+                return back(url, payload)
+        finally:
+            engine.dispose()
+
     @app.get("/library/{library_id}/export")
     def library_export(library_id: int, format: str = "bibtex", status: bool = False):
         if format not in EXPORT_FORMATS:
@@ -2365,6 +2432,8 @@ def create_app(
         note: str = Form(""),
         note_base: str = Form(""),
         next_url: str = Form("/queue"),
+        earlier: str = Form(""),
+        read_on: str = Form(""),
     ):
         cfg, engine = open_session()
         try:
@@ -2376,6 +2445,7 @@ def create_app(
                     status = ReadStatus(level)
                     if status == ReadStatus.dismissed:
                         raise ReadingError("Use 'not relevant' to dismiss")
+                    read_day = parse_read_on(read_on)
                     if rating.strip() and not rating.strip().isdigit():
                         raise ReadingError("Rating must be between 1 and 5")
                     changed = False
@@ -2390,10 +2460,13 @@ def create_app(
                         status,
                         int(rating) if rating.strip() else None,
                         note.strip() or None,
+                        earlier=bool(earlier) or read_day is not None,
+                        read_on=read_day,
                     )
                 except (ReadingError, ValueError) as exc:
                     return error(safe(next_url), str(exc))
-                label = f"{STATUS_ICONS[status.value]} Marked as {status.value}: {paper.title}"
+                how = " (read earlier)" if earlier or read_day else ""
+                label = f"{STATUS_ICONS[status.value]} Marked as {status.value}{how}: {paper.title}"
                 if changed:
                     label += " · the note file had changed: your note was added below its text"
                 return back(safe(next_url), award_payload(outcome.award, label, session))

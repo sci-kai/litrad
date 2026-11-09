@@ -40,6 +40,10 @@
   </div>
   <label class="sr-only" for="{{ id }}-note">Notes</label>
   <textarea id="{{ id }}-note" name="note" placeholder="Note, added to the note file ({{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP)"></textarea>
+  <div class="row">
+    <label class="row" style="font-weight:400" title="read before you used litresearch: {{ (rules.backlog_share * 100) | round | int }} % of the points, no streak, quest or bonus"><input type="checkbox" name="earlier" value="1" style="width:auto"> 🕰️ read earlier</label>
+    <label class="row" style="font-weight:400"><small>on</small> <input type="date" name="read_on" aria-label="Read on (optional)" style="width:auto"></label>
+  </div>
   <div><button class="primary" type="submit">✔ Log reading</button></div>
 </form>
 {%- endmacro %}

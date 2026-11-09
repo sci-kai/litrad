@@ -7,7 +7,7 @@ position 1 is *the* paper to read next. Reading a paper to at least
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlmodel import Session, select
 
@@ -25,7 +25,7 @@ from litresearch.db import (
     depth,
     now,
 )
-from litresearch.game import Award, award_reading, level_for, total_xp
+from litresearch.game import Award, award_reading, level_for, total_xp, unlock_badges
 from litresearch.ingest.bibtex import normalize_doi
 from litresearch.papers import upsert_hit, upsert_work
 from litresearch.profile import active_rules, ensure_profile, profile_rules
@@ -371,13 +371,28 @@ def record_reading(
     rating: int | None = None,
     note: str | None = None,
     at: datetime | None = None,
+    earlier: bool = False,
+    read_on: date | None = None,
+    unlock: bool = True,
 ) -> ReadingOutcome:
-    """Store a reading status (plus rating/note) and award points."""
+    """Store a reading status (plus rating/note) and award points.
+
+    ``earlier``: you read the paper before you used litresearch (``read_on``:
+    when, if you know it; implies ``earlier``). It earns the base points at the
+    profile's ``backlog_share`` and counts for papers read, depth, topics,
+    badges and levels, but not for streaks, quests, report cards, pace badges
+    or the bonuses for when and how you read.
+    """
     if rating is not None and not 1 <= rating <= 5:
         raise ReadingError("Rating must be between 1 and 5")
     at = at or now()
+    earlier = earlier or read_on is not None
+    if earlier and status == ReadStatus.dismissed:
+        raise ReadingError("A paper read earlier needs a depth (abstract to thorough)")
+    if read_on is not None and read_on > at.date():
+        raise ReadingError(f"'Read earlier' needs a date in the past, not {read_on.isoformat()}")
     items = queue_items(session)
-    was_top = bool(items) and items[0][0].paper_id == paper.id
+    was_top = not earlier and bool(items) and items[0][0].paper_id == paper.id
     previous_depth = deepest_depth(session, paper.id)
 
     reading = session.get(Reading, paper.id)
@@ -395,7 +410,16 @@ def record_reading(
         append_note(reading, note, at)
     reading.updated_at = at
     session.add(reading)
-    session.add(StatusEvent(paper_id=paper.id, status=status, was_queue_top=was_top, at=at))
+    session.add(
+        StatusEvent(
+            paper_id=paper.id,
+            status=status,
+            was_queue_top=was_top,
+            at=at,
+            earlier=earlier,
+            read_on=read_on,
+        )
+    )
     session.flush()
 
     removed = None
@@ -416,6 +440,8 @@ def record_reading(
         rated,
         emptied,
         at,
+        earlier=earlier,
+        unlock=unlock,
     )
     award.profile_started = started
     if status == ReadStatus.dismissed:
@@ -428,6 +454,54 @@ def record_reading(
     _push_note(session, cfg, paper)
     session.refresh(reading)
     return ReadingOutcome(reading, previous, left_queue, award)
+
+
+@dataclass
+class EarlierOutcome:
+    logged: list[Paper]
+    skipped: list[Paper]  # already read at least this deeply
+    award: Award
+
+
+def mark_read_earlier(
+    session: Session,
+    cfg: Config,
+    papers: list[Paper],
+    status: ReadStatus,
+    read_on: date | None = None,
+    at: datetime | None = None,
+) -> EarlierOutcome:
+    """Log many papers as read before litresearch (e.g. from a library page).
+
+    Papers already read at least at ``status`` are skipped; badges are checked
+    once at the end.
+    """
+    if status == ReadStatus.dismissed:
+        raise ReadingError("A paper read earlier needs a depth (abstract to thorough)")
+    at = at or now()
+    logged, skipped = [], []
+    total = Award()
+    for paper in papers:
+        if deepest_depth(session, paper.id) >= depth(status):
+            skipped.append(paper)
+            continue
+        outcome = record_reading(
+            session, cfg, paper, status, at=at, earlier=True, read_on=read_on, unlock=False
+        )
+        if total.level_before is None:
+            total.level_before = outcome.award.level_before
+        total.profile_started = total.profile_started or outcome.award.profile_started
+        total.events += outcome.award.events
+        logged.append(paper)
+    profile, started = ensure_profile(session, cfg, at)
+    rules = profile_rules(profile)
+    if total.level_before is None:
+        total.level_before = level_for(total_xp(session), rules)
+    total.badges = unlock_badges(session, rules, at.date(), at, total.events)
+    session.commit()
+    total.profile_started = total.profile_started or started
+    total.level_after = level_for(total_xp(session), rules)
+    return EarlierOutcome(logged, skipped, total)
 
 
 def add_note(session: Session, cfg: Config, paper: Paper, text: str, at: datetime | None = None):

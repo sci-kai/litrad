@@ -369,6 +369,7 @@ def check_data(
                 deepest.get(item["paper"], 0), DEPTHS.get(item.get("status"), 0)
             )
         when("status_events", i, item, "at", required=True)
+        when("status_events", i, item, "read_on", kind="date")
         identity = (item.get("paper"), item.get("at"), item.get("status"))
         events[identity] += 1
         if events[identity] == 2:

@@ -5,6 +5,7 @@
   <table>
     <thead><tr><th>Action</th><th class="num">XP</th></tr></thead>
     {% for level, xp in base_xp.items() %}<tr><td>{{ status_icons[level] }} {{ level }}</td><td class="num">+{{ xp }}</td></tr>{% endfor %}
+    <tr><td>🕰️ read earlier (before litresearch): no streak, quest or bonus</td><td class="num">{{ (rules.backlog_share * 100) | round | int }} % of base</td></tr>
     <tr><td>🐸 paper was up next (q1), ≥ skimmed</td><td class="num">+{{ (rules.frog_bonus * 100) | round | int }} % of base</td></tr>
     <tr><td>🔥 weekly streak</td><td class="num">+{{ (rules.streak_step * 100) | round(1) }} % per week, max +{{ (rules.streak_step * rules.streak_max_steps * 100) | round | int }} %</td></tr>
     <tr><td>🏛️ landmark (≥ {{ rules.classic_percentile }}th percentile) read ≥ read</td><td class="num">+{{ rules.classic_xp }}</td></tr>

@@ -320,6 +320,13 @@ def restore_notes(cfg: Config, source: Path) -> None:
 # --- portable progress export ---------------------------------------------------------
 
 
+def earlier_fields(event) -> dict:
+    """The optional "read earlier" fields of a status event (only when set)."""
+    if not getattr(event, "earlier", False):
+        return {}
+    return {"earlier": True, "read_on": event.read_on.isoformat() if event.read_on else None}
+
+
 def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
 
@@ -470,6 +477,7 @@ def export_progress(
                 "status": e.status.value,
                 "was_queue_top": e.was_queue_top,
                 "at": _iso(e.at),
+                **earlier_fields(e),
             }
             for e in events
             if ref(e.paper_id)
@@ -823,6 +831,10 @@ def merge(
                         "status": status,
                         "was_queue_top": item.get("was_queue_top", False),
                         "at": at,
+                        "earlier": bool(item.get("earlier", False)),
+                        "read_on": date.fromisoformat(item["read_on"])
+                        if item.get("read_on")
+                        else None,
                     }
                 )
         if rows:

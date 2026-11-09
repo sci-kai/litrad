@@ -401,6 +401,8 @@ class GameRules(BaseModel):
 
     model_config = {"extra": "forbid", "allow_inf_nan": False}
 
+    # share of the base points for a paper read before litresearch ("read earlier")
+    backlog_share: float = Field(1.0, ge=0, le=1)
     # base points per reading level (paid up to the deepest level ever reached)
     xp_abstract: int = Field(5, ge=0, le=10000)
     xp_skimmed: int = Field(15, ge=0, le=10000)

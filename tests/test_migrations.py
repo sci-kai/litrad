@@ -153,22 +153,27 @@ def test_failed_step_rolls_back_and_keeps_the_version(tmp_path):
         connection.execute(text("CREATE TABLE half_done (id INTEGER)"))
         raise RuntimeError("boom")
 
-    steps = (STEPS[0], Step(2, "broken", broken))
+    last = SCHEMA_VERSION
+    steps = (*STEPS, Step(last + 1, "broken", broken))
     original = migrations.SCHEMA_VERSION
-    migrations.SCHEMA_VERSION = 2
+    migrations.SCHEMA_VERSION = last + 1
     try:
-        with pytest.raises(MigrationError, match="stays at version 1"):
+        with pytest.raises(MigrationError, match=f"stays at version {last}"):
             migrate(path, steps)
-        assert read_version(path)[0] == 1
+        assert read_version(path)[0] == last
         connection = sqlite3.connect(path)
         tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master")}
         connection.close()
         assert "half_done" not in tables and "paper" in tables
         # fixed step: resumes at the failed one
-        fixed = (STEPS[0], Step(2, "fixed", lambda c: c.execute(text("CREATE TABLE extra (x)"))))
+        fixed = (
+            *STEPS,
+            Step(last + 1, "fixed", lambda c: c.execute(text("CREATE TABLE extra (x)"))),
+        )
         result = migrate(path, fixed)
-        assert result.from_version == 1 and [a[:2] for a in result.applied] == ["2:"]
-        assert read_version(path)[0] == 2
+        assert result.from_version == last
+        assert [a.split(":")[0] for a in result.applied] == [str(last + 1)]
+        assert read_version(path)[0] == last + 1
     finally:
         migrations.SCHEMA_VERSION = original
 

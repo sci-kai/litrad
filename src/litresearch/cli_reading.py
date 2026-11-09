@@ -367,16 +367,38 @@ def read(
     level: Level = typer.Argument(..., help="How deeply you read it"),
     rating: int = typer.Option(None, "--rating", "-r", min=1, max=5, help="1-5 stars"),
     note: str = typer.Option(None, "--note", "-n", help="A note to keep"),
+    earlier: bool = typer.Option(
+        False, "--earlier", help="Read before you used litresearch (counts as read earlier)"
+    ),
+    when: str = typer.Option(
+        "", "--date", help="With --earlier: when you read it (YYYY-MM-DD, optional)"
+    ),
     config: Path = ConfigOpt,
 ):
     """Log that you read a paper and earn points."""
+    read_on = None
+    if when:
+        try:
+            read_on = date.fromisoformat(when)
+        except ValueError as error:
+            raise ReadingError(f"--date: '{when}' is not a date (YYYY-MM-DD)") from error
     with open_db(config) as (cfg, session):
         paper = find_paper(session, ref)
         if paper is None:
             raise ReadingError("Unknown paper; add it to the queue first")
-        outcome = record_reading(session, cfg, paper, ReadStatus(level.value), rating, note)
+        outcome = record_reading(
+            session,
+            cfg,
+            paper,
+            ReadStatus(level.value),
+            rating,
+            note,
+            earlier=earlier or read_on is not None,
+            read_on=read_on,
+        )
         left = " (left the queue)" if outcome.left_queue else ""
-        console.print(f"[bold]✔ {level.value}[/bold]: {paper.title}{left}")
+        how = " (read earlier)" if earlier or read_on else ""
+        console.print(f"[bold]✔ {level.value}[/bold]{how}: {paper.title}{left}")
         show_award(session, outcome.award)
         show_next(session)
 
@@ -507,9 +529,14 @@ def history(
             )
             when = datetime.isoformat(event.at)
             colour = "green" if points >= 0 else "red"
+            earlier = ""
+            if event.earlier:
+                earlier = " (read earlier" + (
+                    f" {event.read_on.isoformat()})" if event.read_on else ")"
+                )
             console.print(
                 f"{when}  {event.status.value:<9} [{colour}]{points:>+4}[/{colour}]  "
-                f"{paper.title[:70]}"
+                f"{paper.title[:70]}{earlier}"
             )
 
 

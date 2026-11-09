@@ -94,6 +94,10 @@ def test_invalid_rules(values, message):
         GameRules.model_validate(values)
 
 
+# rules added after rules format 1 (with a default: they leave fingerprints unchanged)
+LATER_RULES = {"backlog_share"}
+
+
 def test_fingerprint():
     assert GameRules().fingerprint() == GameRules().fingerprint()
     assert GameRules(xp_read=41).fingerprint() != GameRules().fingerprint()
@@ -105,7 +109,7 @@ def _fingerprint_until_0_6(rules: GameRules) -> str:
     """The fingerprint algorithm of 0.1 to 0.6 (hash of the complete dump)."""
     import hashlib
 
-    data = rules.model_dump(mode="json")
+    data = rules.model_dump(mode="json", exclude=LATER_RULES)
     data["badge_targets"] = {badge.code: badge.target for badge in rules.badges()}
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -169,7 +173,7 @@ def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
 
     from litresearch.rules import BADGE_CODES_V1
 
-    data = rules.model_dump(mode="json")
+    data = rules.model_dump(mode="json", exclude=LATER_RULES)
     data["badge_targets"] = {b.code: b.target for b in rules.badges() if b.code in BADGE_CODES_V1}
     assert code not in data["badge_targets"]
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
@@ -179,7 +183,7 @@ def test_fingerprint_baseline_covers_every_current_rule():
     """Every rule of format 1 is in the baseline; new rules must not be added to it."""
     from litresearch.rules import BADGE_CODES, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
 
-    assert FINGERPRINT_FIELDS[GameRules] == set(GameRules.model_fields)
+    assert FINGERPRINT_FIELDS[GameRules] == set(GameRules.model_fields) - LATER_RULES
     assert FINGERPRINT_FIELDS[LevelDef] == set(LevelDef.model_fields)
     assert BADGE_CODES_V1 == BADGE_CODES
 

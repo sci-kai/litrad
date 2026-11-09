@@ -73,11 +73,20 @@
     </select>
     <button class="primary">Filter</button>
   </form>
+  {% if rows %}
+  <form method="post" action="/library/{{ library.id }}/read-earlier" id="read-earlier" class="row" style="margin-bottom:.6rem">
+    <input type="hidden" name="next_url" value="{{ here }}&page={{ page }}">
+    <label class="row" style="font-weight:400"><input type="checkbox" data-select-all="read-earlier" style="width:auto"> all on this page</label>
+    <select name="level" aria-label="depth" style="width:auto">{% for level in ["abstract", "skimmed", "read", "thorough"] %}<option value="{{ level }}" {{ "selected" if level == "skimmed" }}>{{ status_icons[level] }} {{ level }}</option>{% endfor %}</select>
+    <input type="date" name="read_on" aria-label="Read on (optional)" style="width:auto">
+    <button class="small" title="papers you read before using litresearch: {{ (rules.backlog_share * 100) | round | int }} % of the points, no streak, quest or bonus">🕰️ Mark as read earlier</button>
+  </form>
+  {% endif %}
   <div class="table-wrap"><table>
     <thead><tr><th>Paper</th><th>Folders &amp; labels</th><th>Status</th><th></th></tr></thead>
     {% for row in rows %}{% set paper = row.paper %}{% set tags = row.entry.folders + row.entry.tags %}
     <tr>
-      <td><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br>{{ paper_meta(paper, library_chip=False) }}</td>
+      <td><label class="sr-only" for="sel-{{ paper.id }}">Select</label><input type="checkbox" id="sel-{{ paper.id }}" name="paper" value="{{ paper.id }}" form="read-earlier" style="width:auto; float:left; margin:.2rem .5rem 0 0"><a href="/papers/{{ paper.id }}"><b>{{ paper.title }}</b></a><br>{{ paper_meta(paper, library_chip=False) }}</td>
       <td>{% for f in tags[:3] %}<span class="chip">📁 {{ f }}</span> {% endfor %}{% if tags | length > 3 %}<small class="muted">+{{ tags | length - 3 }}</small>{% endif %}</td>
       <td style="white-space:nowrap">{% if row.reading %}{{ status_icons[row.reading.status.value] }} {{ row.reading.status.value }}{% elif row.queued %}📚 queued{% else %}<span class="muted">unread</span>{% endif %}</td>
       <td style="white-space:nowrap">

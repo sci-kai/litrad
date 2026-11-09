@@ -42,6 +42,8 @@ EARLY_HOURS = {5, 6, 7}
 SCOOP_DAYS = 7
 OLD_PAPER_YEARS = 25
 COMEBACK_WEEKS = 4
+# XP kind of the base points for a paper read before litresearch ("read earlier")
+EARLIER_KIND = "earlier"
 
 
 def as_rules(rules_or_cfg) -> GameRules:
@@ -120,16 +122,32 @@ def deeper_reads(events) -> list[tuple]:
 
 def _events_in_order(session: Session, *where):
     return session.exec(
-        select(StatusEvent.paper_id, StatusEvent.status, StatusEvent.at, StatusEvent.was_queue_top)
+        select(
+            StatusEvent.paper_id,
+            StatusEvent.status,
+            StatusEvent.at,
+            StatusEvent.was_queue_top,
+            StatusEvent.earlier,
+            StatusEvent.read_on,
+        )
         .where(*where)
         .order_by(StatusEvent.at, StatusEvent.id)
     ).all()
 
 
 def reading_weeks(session: Session) -> list[date]:
-    """Weeks (Mondays) in which a paper first reached skimmed or a deeper level."""
+    """Weeks (Mondays) in which a paper first reached skimmed or a deeper level.
+
+    Readings logged as read earlier (before using litresearch) make no reading week.
+    """
     events = _events_in_order(session, StatusEvent.status.in_(READ_STATUSES))
-    return sorted({week_start(e.at.date()) for e, level in deeper_reads(events) if level >= 2})
+    return sorted(
+        {
+            week_start(e.at.date())
+            for e, level in deeper_reads(events)
+            if level >= 2 and not e.earlier
+        }
+    )
 
 
 def streaks(weeks: list[date], today: date) -> tuple[int, int]:
@@ -178,13 +196,16 @@ def week_progress(session: Session, rules, day: date) -> dict:
 
 
 def _week_depths(session: Session, events, start: datetime) -> dict[int, int]:
-    """Deepest new level each paper of one week's ``events`` reached in that week."""
+    """Deepest new level each paper of one week's ``events`` reached in that week.
+
+    Readings logged as read earlier do not count for the week (quest, report card).
+    """
     before: list = []
     for chunk in _chunks(sorted({e.paper_id for e in events})):
         before += _events_in_order(session, StatusEvent.paper_id.in_(chunk), StatusEvent.at < start)
     week: dict[int, int] = {}
     for event, level in deeper_reads([*before, *events]):
-        if event.at >= start:
+        if event.at >= start and not event.earlier:
             week[event.paper_id] = max(week.get(event.paper_id, 0), level)
     return week
 
@@ -259,6 +280,11 @@ def stats(session: Session, today: date, rules=None) -> dict:
     # only steps to a deeper level count; re-logging a paper earns nothing
     for event, level in deeper_reads(events):
         deepest[event.paper_id] = level
+        if event.earlier:
+            # read before litresearch: counts for papers, depth and topics, not for time
+            if level >= 2:
+                first_read.setdefault(event.paper_id, event)
+            continue
         in_week = week_depths.setdefault(week_start(event.at.date()), {})
         in_week[event.paper_id] = max(in_week.get(event.paper_id, 0), level)
         if level < 2:
@@ -283,15 +309,20 @@ def stats(session: Session, today: date, rules=None) -> dict:
         label = (paper.topics or paper.folders or [None])[0]
         if label:
             topics.add(label)
-        read_at = first_read[pid].at.date()
-        if paper.pub_date and 0 <= (read_at - paper.pub_date).days <= SCOOP_DAYS:
+        first = first_read[pid]
+        read_at = (first.read_on or first.at.date()) if first.earlier else first.at.date()
+        if (
+            not first.earlier
+            and paper.pub_date
+            and 0 <= (read_at - paper.pub_date).days <= SCOOP_DAYS
+        ):
             scoops += 1
         published = paper.pub_date or (date(paper.year, 7, 1) if paper.year else None)
         if published and (read_at - published).days >= OLD_PAPER_YEARS * 365.25:
             old += 1
         if paper.in_library:
             from_library += 1
-        elif pid in recommended:
+        elif pid in recommended and not first.earlier:
             from_recs += 1
         else:
             manual += 1
@@ -306,7 +337,13 @@ def stats(session: Session, today: date, rules=None) -> dict:
     grades = Counter(
         grade(quest_progress(week_depths[monday].values(), rules), True)[0] for monday in weeks
     )
-    frogs = len({e.paper_id for e, level in deeper_reads(events) if e.was_queue_top and level >= 2})
+    frogs = len(
+        {
+            e.paper_id
+            for e, level in deeper_reads(events)
+            if e.was_queue_top and level >= 2 and not e.earlier
+        }
+    )
     return {
         "xp": total_xp(session),
         "papers_read": len(read_ids),
@@ -349,12 +386,15 @@ def header_stats(session: Session, today: date, rules=None) -> dict:
 
 
 def reading_impact_factor(session: Session, today: date, weeks: int = 4) -> float:
-    """Average XP per week over the last ``weeks`` weeks (current week included)."""
+    """Average XP per week over the last ``weeks`` weeks (current week included).
+
+    XP for papers read earlier (before litresearch) is not part of the pace.
+    """
     since = datetime.combine(week_start(today) - timedelta(weeks=weeks - 1), datetime.min.time())
     until = datetime.combine(week_start(today) + timedelta(weeks=1), datetime.min.time())
     xp = session.exec(
         select(func.coalesce(func.sum(XpEvent.points), 0)).where(
-            XpEvent.at >= since, XpEvent.at < until
+            XpEvent.at >= since, XpEvent.at < until, XpEvent.kind != EARLIER_KIND
         )
     ).one()
     return xp / weeks
@@ -396,10 +436,16 @@ def award_reading(
     rated: bool,
     queue_emptied: bool,
     at: datetime,
+    earlier: bool = False,
+    unlock: bool = True,
 ) -> Award:
     """Points for a status change that has already been stored.
 
     ``previous_depth`` is the deepest level this paper had reached before.
+    ``earlier``: the paper was read before litresearch; it earns the base points
+    at ``rules.backlog_share`` and none of the bonuses for when and how you read
+    (streak, frog, fresh paper, recommendation, inbox zero). ``unlock=False``
+    leaves the badges to the caller (one ``unlock_badges`` after many readings).
     """
     rules = as_rules(rules)
     base_xp = rules.base_xp()
@@ -416,7 +462,11 @@ def award_reading(
     new_depth = depth(status)
     # reading bonuses need a step to a deeper level, never a re-log of the same one
     deeper = new_depth > previous_depth
-    if deeper:
+    if deeper and earlier:
+        previous_xp = base_xp[READ_LEVELS[previous_depth - 1].value] if previous_depth else 0
+        base = round((base_xp[status.value] - previous_xp) * rules.backlog_share)
+        add(base, EARLIER_KIND, f"read earlier, {status.value}: {paper.title[:60]}")
+    elif deeper:
         previous_xp = base_xp[READ_LEVELS[previous_depth - 1].value] if previous_depth else 0
         base = base_xp[status.value] - previous_xp
         add(base, "read", f"{status.value}: {paper.title[:60]}")
@@ -439,13 +489,14 @@ def award_reading(
             )
     if (
         deeper
+        and not earlier
         and new_depth >= 2
         and paper.pub_date
         and 0 <= (today - paper.pub_date).days <= rules.hot_days
     ):
         if not _already(session, "hot", paper.id):
             add(rules.hot_xp, "hot", f"Hot off the press: published within {rules.hot_days} days")
-    if deeper and new_depth >= 2 and not _already(session, "recommended", paper.id):
+    if deeper and not earlier and new_depth >= 2 and not _already(session, "recommended", paper.id):
         recommended = session.exec(
             select(Recommendation).where(Recommendation.paper_id == paper.id)
         ).first()
@@ -458,7 +509,7 @@ def award_reading(
         if not _already(session, "reflection", paper.id):
             add(rules.reflection_xp, "reflection", "Wrote substantial notes")
     inbox = f"Inbox zero {today.isoformat()}"
-    if queue_emptied and not _already(session, "inbox_zero", reason=inbox):
+    if queue_emptied and not earlier and not _already(session, "inbox_zero", reason=inbox):
         add(rules.inbox_zero_xp, "inbox_zero", inbox, None)
 
     for event in events:
@@ -473,7 +524,8 @@ def award_reading(
         events.append(event)
         session.flush()
 
-    award.badges = unlock_badges(session, rules, today, at, events)
+    if unlock:
+        award.badges = unlock_badges(session, rules, today, at, events)
     session.flush()
     award.level_after = level_for(total_xp(session), rules)
     return award
@@ -527,6 +579,7 @@ def queue_top_waiting_days(session: Session, today: date) -> int | None:
 
 KIND_LABELS = {
     "read": "Reading",
+    EARLIER_KIND: "Read earlier",
     "streak": "Streak bonus",
     "frog": "Ate the frog",
     "classic": "Classic paper",
@@ -646,7 +699,7 @@ def reading_calendar(session: Session, today: date, weeks: int = 26) -> list[lis
     xp: dict[date, int] = {}
     since = datetime.combine(first, datetime.min.time())
     for event, _ in deeper_reads(_events_in_order(session)):
-        if event.at >= since:
+        if event.at >= since and not event.earlier:
             counts[event.at.date()] = counts.get(event.at.date(), 0) + 1
     for event in session.exec(
         select(XpEvent).where(XpEvent.at >= datetime.combine(first, datetime.min.time()))
@@ -673,7 +726,10 @@ def reading_calendar(session: Session, today: date, weeks: int = 26) -> list[lis
 def personal_bests(session: Session, rules, today: date, current: dict | None = None) -> dict:
     """Best week, busiest week, longest streak and totals (``current``: see badge_progress)."""
     rules = as_rules(rules)
-    events = session.exec(select(XpEvent.at, XpEvent.points)).all()
+    # the pace of reading here: XP for papers read earlier is left out
+    events = session.exec(
+        select(XpEvent.at, XpEvent.points).where(XpEvent.kind != EARLIER_KIND)
+    ).all()
     per_week: dict[date, int] = {}
     for event in events:
         monday = week_start(event.at.date())
@@ -681,7 +737,7 @@ def personal_bests(session: Session, rules, today: date, current: dict | None = 
     best_week = max(per_week.items(), key=lambda kv: kv[1], default=(None, 0))
     papers_per_week: dict[date, set[int]] = {}
     for event, level in deeper_reads(_events_in_order(session)):
-        if level >= 2:
+        if level >= 2 and not event.earlier:
             papers_per_week.setdefault(week_start(event.at.date()), set()).add(event.paper_id)
     busiest = max(papers_per_week.items(), key=lambda kv: len(kv[1]), default=(None, set()))
     s = current if current is not None else stats(session, today, rules)

@@ -31,7 +31,7 @@ from sqlalchemy import JSON, create_engine, event, inspect, text
 from sqlalchemy.engine import Connection
 from sqlmodel import SQLModel
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BACKUP_FOLDER = "upgrade-backups"
 # copies from before an upgrade that are kept per profile (the newest; older ones
 # are deleted after an upgrade succeeded, so a failed series keeps all of them)
@@ -105,6 +105,12 @@ STEPS: tuple[Step, ...] = (
         "Versioned schema: databases of 0.1.0-alpha.1 to 0.5 get every table, column and "
         "index of 0.6 (additive only, nothing is removed)",
         _baseline,
+    ),
+    Step(
+        2,
+        "Read earlier: status events get 'earlier' (read before using litresearch) and "
+        "'read_on' (when, if known); existing events are not earlier",
+        sync_schema,
     ),
 )
 

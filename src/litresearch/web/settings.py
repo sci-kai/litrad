@@ -403,6 +403,7 @@ RULE_GROUPS = (
             ("xp_skimmed", "📄 skimmed", "int", 0, 1000, 1),
             ("xp_read", "📖 read", "int", 0, 1000, 1),
             ("xp_thorough", "🔬 thorough", "int", 0, 1000, 1),
+            ("backlog_share", "🕰️ read earlier: share of base points", "float", 0, 1, 0.05),
         ),
     ),
     (

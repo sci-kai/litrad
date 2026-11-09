@@ -53,6 +53,7 @@ from litresearch.backup import (
     BackupError,
     ImportReport,
     _iso,
+    earlier_fields,
     merge,
 )
 from litresearch.config import Config
@@ -273,6 +274,7 @@ def collect(session: Session, cfg: Config, settings_text: str | None = None) -> 
                     "status": e.status.value,
                     "was_queue_top": e.was_queue_top,
                     "at": _iso(e.at),
+                    **earlier_fields(e),
                 }
                 for e in session.exec(
                     select(StatusEvent).order_by(StatusEvent.at, StatusEvent.id)
@@ -495,7 +497,8 @@ FILE_DOCS = {
     "readings.json": "Per paper: current `status` (abstract, skimmed, read, thorough, "
     "dismissed), `rating` (1-5), `notes` (the note body) and `updated_at`.",
     "status_events.json": "The reading log: every status change with `at` and "
-    "`was_queue_top` (it was the top of the queue).",
+    "`was_queue_top` (it was the top of the queue); optional, not in older files: "
+    "`earlier: true` marks a paper read before litresearch, `read_on` when it was read.",
     "xp_ledger.json": "Every XP transaction in time order: `points`, `kind`, `reason`, `at`, "
     "the `paper` if any and the running `balance`; `total` is the sum.",
     "badges.json": "Unlocked badges: `code`, `name`, `unlocked_at`.",

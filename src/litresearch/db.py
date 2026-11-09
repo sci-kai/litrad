@@ -161,6 +161,11 @@ class StatusEvent(SQLModel, table=True):
     # True if the paper was at the top of the reading queue at that moment
     was_queue_top: bool = False
     at: NaiveDatetime = Field(default_factory=now, index=True)
+    # read before you used litresearch ("read earlier", logged at ``at``): counts
+    # for papers read, depth and levels, never for streaks, quests or pace
+    earlier: bool = False
+    # when it was read, if known (only for ``earlier``)
+    read_on: date | None = None
 
 
 class QueueItem(SQLModel, table=True):
