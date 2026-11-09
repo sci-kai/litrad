@@ -128,6 +128,7 @@ def where(
     """Show which config file and data folders are used, and why."""
     from litresearch import locations
     from litresearch.config import config_base_dir
+    from litresearch.migrations import BACKUP_FOLDER, UPGRADE_BACKUPS_KEEP
 
     choice = locations.find_config(config)
     rows = [("Config file", choice.path, choice.description)]
@@ -144,6 +145,11 @@ def where(
         cfg = load_config(choice.path)
         rows += [
             ("Profiles", cfg.paths.profiles_dir, "paths.profiles_dir"),
+            (
+                "Upgrade copies",
+                cfg.paths.profiles_dir / "<profile>" / BACKUP_FOLDER,
+                f"copies from before a database upgrade, newest {UPGRADE_BACKUPS_KEEP} kept",
+            ),
             ("Backups", cfg.backup.dir, "backup.dir"),
             ("Cache", cfg.paths.cache_dir, "paths.cache_dir"),
             ("Data before profiles", cfg.paths.database, "paths.database"),

@@ -6,7 +6,8 @@ Every profile database carries its schema version in SQLite's
 
 - a new, empty file gets the current tables and ``SCHEMA_VERSION``;
 - an older database is first copied (``backup.snapshot``) to
-  ``<database folder>/upgrade-backups/``, then upgraded by the steps it has
+  ``<database folder>/upgrade-backups/`` (the newest ``UPGRADE_BACKUPS_KEEP``
+  copies are kept), then upgraded by the steps it has
   not had yet, one transaction per step; the version is raised with the step,
   so an interrupted upgrade resumes at the step that failed;
 - a database with a *newer* version than this app knows is refused
@@ -32,6 +33,9 @@ from sqlmodel import SQLModel
 
 SCHEMA_VERSION = 1
 BACKUP_FOLDER = "upgrade-backups"
+# copies from before an upgrade that are kept per profile (the newest; older ones
+# are deleted after an upgrade succeeded, so a failed series keeps all of them)
+UPGRADE_BACKUPS_KEEP = 3
 
 
 class SchemaTooNew(RuntimeError):
@@ -225,4 +229,14 @@ def migrate(path: Path, steps: tuple[Step, ...] | None = None) -> MigrationResul
                 result.to_version = step.version
     finally:
         engine.dispose()
+    rotate_upgrade_backups(path.parent / BACKUP_FOLDER)
     return result
+
+
+def rotate_upgrade_backups(folder: Path, keep: int = UPGRADE_BACKUPS_KEEP) -> list[Path]:
+    """Delete all but the newest ``keep`` copies made before upgrades."""
+    copies = sorted(Path(folder).glob("litresearch_*_before-schema-*.sqlite"))
+    removed = copies[: max(len(copies) - keep, 0)]
+    for old in removed:
+        old.unlink(missing_ok=True)
+    return removed

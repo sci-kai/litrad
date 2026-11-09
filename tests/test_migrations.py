@@ -96,6 +96,42 @@ def test_old_database_is_snapshotted_then_upgraded(tmp_path):
     engine.dispose()
 
 
+def test_upgrade_copies_are_rotated_after_a_successful_upgrade(tmp_path):
+    folder = tmp_path / migrations.BACKUP_FOLDER
+    folder.mkdir()
+    for day in range(1, 6):  # copies of earlier upgrades
+        (folder / f"litresearch_2026010{day}_070000_before-schema-0-to-1.sqlite").write_text("x")
+    (folder / "my-own-copy.sqlite").write_text("keep")  # not ours: never deleted
+    result = migrate(old_database(tmp_path / "old.sqlite"))
+    names = sorted(p.name for p in folder.iterdir())
+    assert result.snapshot.name in names
+    assert len([n for n in names if "_before-schema-" in n]) == migrations.UPGRADE_BACKUPS_KEEP
+    assert "my-own-copy.sqlite" in names
+    assert "litresearch_20260101_070000_before-schema-0-to-1.sqlite" not in names
+
+
+def test_a_failed_upgrade_keeps_every_copy(tmp_path):
+    folder = tmp_path / migrations.BACKUP_FOLDER
+    folder.mkdir()
+    for day in range(1, 6):
+        (folder / f"litresearch_2026010{day}_070000_before-schema-0-to-1.sqlite").write_text("x")
+
+    def broken(connection):
+        raise RuntimeError("boom")
+
+    with pytest.raises(MigrationError):
+        migrate(old_database(tmp_path / "old.sqlite"), (Step(1, "broken", broken),))
+    assert len(list(folder.iterdir())) == 6  # five old ones and the new copy
+
+
+def test_where_names_the_upgrade_copies(tmp_path, monkeypatch):
+    path = tmp_path / "config.yaml"
+    path.write_text(f"paths:\n  profiles_dir: {tmp_path}/profiles\n")
+    result = runner.invoke(cli.app, ["where", "--config", str(path)])
+    assert result.exit_code == 0, result.output
+    assert migrations.BACKUP_FOLDER in result.output and "Upgrade copies" in result.output
+
+
 def test_newer_database_is_refused_and_not_changed(tmp_path):
     path = tmp_path / "newer.sqlite"
     init_db(path).dispose()
