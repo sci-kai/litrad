@@ -1515,7 +1515,9 @@ archive is checked:
 Problems are listed by file and record, e.g.
 `readings.json[12]: paper p77 not in papers.json`, and nothing is imported
 (all or nothing: one database transaction; note files are written only
-after it succeeded). `--partial` (*Only the consistent part*) imports the
+after it succeeded; a note file that cannot be written then, e.g. on a full
+disk, is listed, its note stays in the database and `litresearch notes sync`
+writes it later). `--partial` (*Only the consistent part*) imports the
 consistent records and lists what was skipped, including everything that
 refers to a skipped record. `--dry-run` checks and shows what would change.
 

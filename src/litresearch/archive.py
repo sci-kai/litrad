@@ -958,6 +958,7 @@ class ImportResult:
     slug: str | None = None
     notes_written: int = 0
     notes_kept: int = 0
+    notes_failed: list[Path] = field(default_factory=list)
     dry_run: bool = False
     backup: Path | None = None
 
@@ -970,6 +971,11 @@ class ImportResult:
         out.append(f"Note files written:        {self.notes_written}")
         if self.notes_kept:
             out.append(f"Note files kept (exist):   {self.notes_kept}")
+        if self.notes_failed:
+            out.append(
+                f"Note files NOT written:    {len(self.notes_failed)} (the notes are in the "
+                "database; run 'litresearch notes sync' to write them)"
+            )
         if self.backup is not None:
             out.append(f"Backup before the import:  {self.backup}")
         return out + self.report.lines()
@@ -1058,21 +1064,31 @@ def _stage_notes(
     return moves, kept
 
 
-def _place(moves: list[tuple[Path, Path]]) -> int:
-    """Move staged note files into place; an existing file is never overwritten."""
+def _place(moves: list[tuple[Path, Path]], failed: list[Path] | None = None) -> int:
+    """Move staged note files into place; an existing file is never overwritten.
+
+    Runs after the database transaction was committed, so a file that cannot be
+    written (disk full, permissions) is collected in ``failed`` instead of raising:
+    the note stays in the database and ``notes sync`` writes the file later.
+    """
     written = 0
     for staged, target in moves:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            continue
         try:
-            os.link(staged, target)  # fails instead of overwriting a file created meanwhile
-        except FileExistsError:
-            continue
-        except OSError:
+            target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists():
                 continue
-            shutil.copy2(staged, target)
+            try:
+                os.link(staged, target)  # fails instead of overwriting a file created meanwhile
+            except FileExistsError:
+                continue
+            except OSError:
+                if target.exists():
+                    continue
+                shutil.copy2(staged, target)
+        except OSError:
+            if failed is not None:
+                failed.append(target)
+            continue
         written += 1
     return written
 
@@ -1178,7 +1194,7 @@ def import_new(
                     stored.name = name
                     session.add(stored)
                     session.commit()
-                result.notes_written = _place(moves)
+                result.notes_written = _place(moves, result.notes_failed)
                 notes.refresh_quietly(session, cfg)
         finally:
             if staging is not None:
@@ -1232,7 +1248,7 @@ def import_into(
                 session.rollback()
                 return result
             session.commit()
-            result.notes_written = _place(moves)
+            result.notes_written = _place(moves, result.notes_failed)
             notes.refresh_quietly(session, cfg)
     finally:
         if staging is not None:

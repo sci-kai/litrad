@@ -584,6 +584,45 @@ def test_failure_during_import_new_leaves_no_profile(base, exported, monkeypatch
     assert not (base.paths.profiles_dir / "copy").exists()
 
 
+@pytest.mark.parametrize("new_profile", [False, True])
+def test_note_files_that_cannot_be_written_after_the_commit(
+    base, exported, monkeypatch, new_profile
+):
+    """The import stays committed; the notes stay in the database; notes sync writes them."""
+    _, path = exported
+    real_link, real_copy = archive.os.link, archive.shutil.copy2
+
+    def broken(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(archive.os, "link", broken)
+    monkeypatch.setattr(archive.shutil, "copy2", broken)
+    monkeypatch.setattr(notes, "refresh_quietly", lambda session, cfg: None)  # still failing
+    if new_profile:
+        result = import_new(base, path, "Copy")
+        cfg = profiles.profile_config(base, result.slug)
+    else:
+        cfg = profiles.profile_config(base, profiles.create_profile(base, "Target"))
+        result = import_into(cfg, path, backup=False)
+    assert result.notes_failed and result.notes_written == 0
+    assert any("notes sync" in line for line in result.lines())
+    folder = notes.notes_dir(cfg)
+    assert list(folder.rglob("*.md")) == []
+    assert not any(p.name.startswith(".litresearch-import") for p in folder.iterdir())
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        with_notes = [r for r in session.exec(select(Reading)).all() if r.notes]
+        assert with_notes  # the rows were kept
+        monkeypatch.setattr(archive.os, "link", real_link)
+        monkeypatch.setattr(archive.shutil, "copy2", real_copy)
+        report = notes.sync(session, cfg)
+        written = list(folder.rglob("*.md"))
+        assert len(written) >= len(with_notes), report
+        texts = "\n".join(p.read_text() for p in written)
+        assert all(r.notes.strip() in texts for r in with_notes)
+    engine.dispose()
+
+
 def test_partial_imports_only_the_consistent_records(base, exported):
     _, path = exported
 
