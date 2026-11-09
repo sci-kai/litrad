@@ -248,7 +248,14 @@ def test_large_library_is_paginated(big):
     library = ids["libraries"][0]
     page = client.get(f"/library/{library}").text
     assert page.count('action="/library/') and "page 1/40" in page  # 2000 papers, 50 per page
-    assert len(re.findall(r'<tr>\s*<td><a href="/papers/', page)) == 50
+    assert (
+        len(
+            re.findall(
+                r'<tr>\s*<td>(?:<label[^>]*>[^<]*</label><input[^>]*>)?<a href="/papers/', page
+            )
+        )
+        == 50
+    )
     last = client.get(f"/library/{library}?page=999").text
     assert "page 40/40" in last and "No papers match" not in last
     filtered = client.get(f"/library/{library}?folder=folder3&status=unread").text

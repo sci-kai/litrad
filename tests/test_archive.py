@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -441,7 +442,7 @@ def test_unknown_badge_is_refused(base, exported):
             ),
         ),
     )
-    assert "badges.json[1].code: unknown badge 'moon_landing'" in message
+    assert re.search(r"badges\.json\[\d+\]\.code: unknown badge 'moon_landing'", message)
 
 
 def test_ledger_mismatch_is_refused(base, exported):

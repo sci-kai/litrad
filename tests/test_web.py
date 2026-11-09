@@ -281,7 +281,8 @@ def test_invalid_read_and_note(app_env):
     assert payload["kind"] == "error" and "Mark the paper first" in payload["message"]
     post(client, f"/papers/{pid}/read", {"level": "abstract"})
     assert celebration(post(client, f"/papers/{pid}/note", {"text": "  "}))["kind"] == "error"
-    assert celebration(post(client, f"/papers/{pid}/note", {"text": "y" * 150}))["points"] == 10
+    payload = celebration(post(client, f"/papers/{pid}/note", {"text": "y" * 150}))
+    assert {e["kind"]: e["points"] for e in payload["events"]}["reflection"] == 10
 
 
 def test_dismiss(app_env):

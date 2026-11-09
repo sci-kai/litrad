@@ -198,8 +198,10 @@ def test_record_reading_stays_cheap_after_years(engine, cfg):
     with Session(engine) as session:
         # the first reading starts the profile and unlocks a pile of badges at once
         record_reading(session, cfg, session.get(Paper, 1), ReadStatus.read, at=at)
+        # the second one completes the weekly quest (1 deep read + 1 skim by default)
+        record_reading(session, cfg, session.get(Paper, 2), ReadStatus.read, at=at)
         with counting(engine) as counts:
-            paper = session.get(Paper, 2)
+            paper = session.get(Paper, 3)
             record_reading(session, cfg, paper, ReadStatus.read, at=at + timedelta(hours=1))
     assert counts["queries"] < 40, counts
     assert counts["papers"] < 1500  # the read papers for the badge statistics, not all 5000
