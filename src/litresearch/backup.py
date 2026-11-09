@@ -680,11 +680,15 @@ def merge(
         incoming_profile = data.get("profile")
         local_profile = session.exec(select(Profile).order_by(Profile.id)).first()
         if incoming_profile and local_profile:
-            if incoming_profile["fingerprint"] != local_profile.fingerprint:
+            # recomputed from the rules, not the stored strings: only a real rule
+            # difference refuses the merge (see rules.FINGERPRINT_FIELDS)
+            theirs = GameRules.model_validate(incoming_profile["rules"]).fingerprint()
+            ours = GameRules.model_validate(local_profile.rules).fingerprint()
+            if theirs != ours:
                 if not allow_different_rules:
                     raise BackupError(
                         "The file was played with different game rules "
-                        f"({incoming_profile['fingerprint']} vs. {local_profile.fingerprint}); "
+                        f"({theirs} vs. {ours}); "
                         "merging would mix incomparable points. Load it as a profile instead."
                     )
         elif incoming_profile:
@@ -1096,7 +1100,7 @@ def summarize_session(
         "name": profile.name if profile else "(no profile)",
         "started": profile.created_at if profile else None,
         "exported_at": moment,
-        "fingerprint": profile.fingerprint if profile else None,
+        "fingerprint": rules.fingerprint() if profile else None,
         "checksum_ok": checksum_ok,
         "xp": figures["xp"],
         "level": level,

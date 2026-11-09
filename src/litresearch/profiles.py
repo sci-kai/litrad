@@ -162,7 +162,7 @@ def describe(base: Config, slug: str) -> ProfileInfo:
                 slug=slug,
                 name=profile.name if profile else slug,
                 created_at=profile.created_at if profile else None,
-                fingerprint=profile.fingerprint if profile else "",
+                fingerprint=rules.fingerprint() if profile else "",
                 xp=xp,
                 level=level_for(xp, rules),
                 papers_read=read,

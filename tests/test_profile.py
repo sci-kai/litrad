@@ -101,6 +101,115 @@ def test_fingerprint():
     assert GameRules(badge_targets={"bookworm": 26}).fingerprint() != GameRules().fingerprint()
 
 
+def _fingerprint_until_0_6(rules: GameRules) -> str:
+    """The fingerprint algorithm of 0.1 to 0.6 (hash of the complete dump)."""
+    import hashlib
+
+    data = rules.model_dump(mode="json")
+    data["badge_targets"] = {badge.code: badge.target for badge in rules.badges()}
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {},
+        {"xp_read": 41, "frog_bonus": 0.75},
+        {"badge_targets": {"bookworm": 30, "critic": 5}},
+        {"levels": [{"xp": 0, "title": "Start"}, {"xp": 10, "title": "Ünïcode 🎓", "icon": "🔬"}]},
+    ],
+)
+def test_fingerprint_is_unchanged_for_existing_rules(values):
+    rules = GameRules.model_validate(values)
+    assert rules.fingerprint() == _fingerprint_until_0_6(rules)
+
+
+def test_fingerprint_survives_a_rule_added_later():
+    """A 1.x rule with a default must not change fingerprints locked before it."""
+    from pydantic import Field
+
+    from litresearch import rules as rules_module
+    from litresearch.rules import BadgeDef, LevelDef
+
+    class FutureLevel(LevelDef):
+        colour: str = "blue"
+
+    class FutureRules(GameRules):
+        coffee_xp: int = Field(0, ge=0)
+        levels: list[FutureLevel] = Field(
+            default_factory=lambda: [FutureLevel(xp=0, title="Start")]
+        )
+
+    locked = GameRules(xp_read=50, levels=[LevelDef(xp=0, title="Start")])
+    stored = locked.model_dump(mode="json")  # as an older version locked it
+    future = FutureRules.model_validate(stored)
+    assert future.fingerprint() == locked.fingerprint()
+    # setting the new rule to something else is a real difference
+    assert future.model_copy(update={"coffee_xp": 5}).fingerprint() != locked.fingerprint()
+    other_level = FutureRules.model_validate(
+        {**stored, "levels": [{"xp": 0, "title": "Start", "colour": "red"}]}
+    )
+    assert other_level.fingerprint() != locked.fingerprint()
+
+    # a badge added to the catalogue later counts only with a non-default target
+    extra = BadgeDef("future", "Future", "x", "papers_read", 7, "🔮", "Reading")
+    catalogue, targets = rules_module.BADGE_CATALOG, rules_module._CATALOG_TARGETS
+    try:
+        rules_module.BADGE_CATALOG = [*catalogue, extra]
+        rules_module._CATALOG_TARGETS = {**targets, "future": 7}
+        assert locked.fingerprint() == _fingerprint_until_0_6_without("future", locked)
+        changed = locked.model_copy(update={"badge_targets": {"future": 8}})
+        assert changed.fingerprint() != locked.fingerprint()
+    finally:
+        rules_module.BADGE_CATALOG, rules_module._CATALOG_TARGETS = catalogue, targets
+
+
+def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
+    import hashlib
+
+    from litresearch.rules import BADGE_CODES_V1
+
+    data = rules.model_dump(mode="json")
+    data["badge_targets"] = {b.code: b.target for b in rules.badges() if b.code in BADGE_CODES_V1}
+    assert code not in data["badge_targets"]
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def test_fingerprint_baseline_covers_every_current_rule():
+    """Every rule of format 1 is in the baseline; new rules must not be added to it."""
+    from litresearch.rules import BADGE_CODES, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
+
+    assert FINGERPRINT_FIELDS[GameRules] == set(GameRules.model_fields)
+    assert FINGERPRINT_FIELDS[LevelDef] == set(LevelDef.model_fields)
+    assert BADGE_CODES_V1 == BADGE_CODES
+
+
+@pytest.mark.parametrize("version", ["0.1.0-alpha.1", "0.2.0-dev", "dev-20261109"])
+def test_stored_fingerprints_of_older_versions_verify(version):
+    from pathlib import Path
+
+    folder = Path(__file__).parent / "data" / "compat" / version
+    for name in ("profile.json", "progress.json"):
+        profile = json.loads((folder / name).read_text(encoding="utf-8"))["profile"]
+        assert GameRules.model_validate(profile["rules"]).fingerprint() == profile["fingerprint"]
+
+
+def test_merge_compares_rules_not_stored_fingerprint_strings(db, tmp_path):
+    """A stale fingerprint string (e.g. written by another version) is not a difference."""
+    cfg, session = db
+    played(session, cfg)
+    data = export_progress(session)
+    data["profile"]["fingerprint"] = "0000000000000000"
+    data.pop("checksum", None)
+    engine = init_db(tmp_path / "other.sqlite")
+    with Session(engine) as fresh:
+        start_profile(fresh, cfg, "Same rules")
+        report = import_progress(fresh, cfg, data, allow_modified=True)
+        assert report.xp_added > 0
+        assert summarize(data, cfg)["fingerprint"] == cfg.game.fingerprint()
+    engine.dispose()
+
+
 def test_custom_ladder_and_badge_targets():
     rules = GameRules(
         levels=[LevelDef(xp=0, title="Rookie", icon="🐣"), LevelDef(xp=10, title="Pro")],

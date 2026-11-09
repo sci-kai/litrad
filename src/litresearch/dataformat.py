@@ -335,8 +335,9 @@ def check_data(
         else:
             stated = profile.get("fingerprint")
             if stated and stated != rules.fingerprint():
-                # a note, not an error: a rule added by a later version (with its
-                # default) changes the fingerprint of rules locked earlier
+                # a note, not an error: the stored string is informative only, merges
+                # and comparisons recompute it from the rules (stable across versions,
+                # see rules.FINGERPRINT_FIELDS); a mismatch means it was edited
                 note(
                     naming.at("profile", None, ".fingerprint"),
                     f"{stated} differs from the fingerprint of the rules here "

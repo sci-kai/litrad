@@ -932,6 +932,10 @@ planned to read first), not volume.
 2. The rules are copied into the profile's database and **locked**. Their
    **fingerprint** (a short hash of the rule set) is on the profile page. All
    points use these stored rules; editing the config cannot inflate them.
+   The fingerprint is stable across versions: a rule added by a later
+   version counts only when a profile sets it to something other than its
+   default, so profiles locked earlier keep their fingerprint and stay
+   comparable and mergeable.
 3. **Different rules** need another profile; the old one stays and you can
    switch back at any time.
 
@@ -1501,9 +1505,9 @@ archive is checked:
    the papers of `libraries.json`; the XP `balance` and `total` add up and
    match `xp_total`; badge XP belongs to an unlocked badge; reading XP to a
    reading; every badge exists in the rules; the rules are valid; all
-   dates parse; the settings are valid. A rules fingerprint that differs
-   from the one computed here is only a note (rules added by later versions
-   change it).
+   dates parse; the settings are valid. A stored rules fingerprint that
+   differs from the one computed from the rules is only a note (the string
+   was edited); merges and comparisons always use the computed one.
 
 Problems are listed by file and record, e.g.
 `readings.json[12]: paper p77 not in papers.json`, and nothing is imported
@@ -1666,7 +1670,10 @@ Rules in [Gamification](#6-gamification). Design notes: the frog bonus is a
 nod to Brian Tracy's "eat that frog"; anti-farming invariants (base points
 only up to the deepest level, paper bonuses once, frog bonus on new base
 points) are checked by a randomised test over long sessions; all rules form
-one `GameRules` object frozen per profile with a SHA-256-based fingerprint;
+one `GameRules` object frozen per profile with a SHA-256-based fingerprint
+(over the rules of rules format 1, `rules.FINGERPRINT_FIELDS`; later rules
+enter only with a non-default value, so the fingerprint never changes for a
+locked profile);
 profile files carry a SHA-256 checksum, and comparisons load each file into a
 throw-away in-memory SQLite database; streaks count weeks, not days, to
 motivate without guilt.

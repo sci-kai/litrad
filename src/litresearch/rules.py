@@ -382,6 +382,7 @@ BADGE_CATALOG = [
     BadgeDef("high_five", "High Five", "Earn {target} XP", "xp", 5000, "🖐️", "Experience"),
 ]
 BADGE_CODES = {b.code for b in BADGE_CATALOG}
+_CATALOG_TARGETS = {b.code: b.target for b in BADGE_CATALOG}
 
 
 @dataclass(frozen=True)
@@ -495,9 +496,92 @@ class GameRules(BaseModel):
         return result
 
     def fingerprint(self) -> str:
-        """Short hash of the complete rule set (equal rules = equal fingerprint)."""
-        data = self.model_dump(mode="json")
-        # resolved targets: writing a default explicitly must not change the fingerprint
-        data["badge_targets"] = {badge.code: badge.target for badge in self.badges()}
-        canonical = json.dumps(data, sort_keys=True)
-        return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+        """Short hash of the complete rule set (equal rules = equal fingerprint).
+
+        Stable across versions: see ``FINGERPRINT_FIELDS``.
+        """
+        return rules_fingerprint(self)
+
+
+# Rules format 1: the fields every fingerprint covers, as of litresearch 1.0 (and
+# unchanged since 0.1). A rule added later (with a default) enters the hash only
+# when a profile sets it to a value other than its default, so rules locked by
+# an older version keep their fingerprint in every newer one. Never remove or
+# rename a name here (that would change all fingerprints: 2.0 only).
+FINGERPRINT_FIELDS = {
+    GameRules: frozenset(
+        {
+            "xp_abstract",
+            "xp_skimmed",
+            "xp_read",
+            "xp_thorough",
+            "frog_bonus",
+            "streak_step",
+            "streak_max_steps",
+            "classic_percentile",
+            "classic_xp",
+            "hot_days",
+            "hot_xp",
+            "recommendation_xp",
+            "rating_xp",
+            "reflection_chars",
+            "reflection_xp",
+            "inbox_zero_xp",
+            "weekly_detail_goal",
+            "weekly_skim_goal",
+            "quest_xp",
+            "badge_xp",
+            "drop_penalty",
+            "levels",
+            "badge_targets",
+        }
+    ),
+    LevelDef: frozenset({"xp", "title", "icon"}),
+}
+# the badge catalogue of rules format 1: a badge added later counts only with a
+# target other than its catalogue default
+BADGE_CODES_V1 = frozenset(
+    """first_read page_turner bookworm bibliophile centurion living_library deep_diver
+    abyss_explorer scribe novelist critic fan_club frog_eater frog_prince inbox_zero
+    minimalist curator streak_4 streak_12 streak_26 streak_52 questing quest_master
+    quest_legend straight_a perfectionist comeback marathon binge_week night_owl
+    early_riser weekend_warrior classicist canon_keeper early_bird scoop archaeologist
+    polymath renaissance trailblazer library_diver free_spirit thousand_club
+    high_five""".split()
+)
+
+
+def _canonical(model: BaseModel):
+    """The model as JSON data without later-added fields that hold their default."""
+    baseline = next(
+        (fields for cls, fields in FINGERPRINT_FIELDS.items() if isinstance(model, cls)),
+        None,
+    )
+    data = {}
+    for name, info in type(model).model_fields.items():
+        value = getattr(model, name)
+        if baseline is not None and name not in baseline:
+            default = info.get_default(call_default_factory=True)
+            if value == default:
+                continue
+        if isinstance(value, BaseModel):
+            value = _canonical(value)
+        elif isinstance(value, list):
+            value = [_canonical(v) if isinstance(v, BaseModel) else v for v in value]
+        data[name] = value
+    return data
+
+
+def rules_fingerprint(rules: "GameRules") -> str:
+    """The fingerprint of ``rules``; see ``FINGERPRINT_FIELDS``."""
+    data = _canonical(rules)
+    # resolved targets: writing a default explicitly must not change the fingerprint;
+    # a badge added to the catalogue later enters only with a non-default target
+    resolved = {badge.code: badge.target for badge in rules.badges()}
+    data["badge_targets"] = {
+        code: target
+        for code, target in resolved.items()
+        if code in BADGE_CODES_V1 or target != _CATALOG_TARGETS[code]
+    }
+    canonical = json.dumps(data, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(canonical.encode()).hexdigest()[:16]
