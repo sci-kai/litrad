@@ -7,6 +7,22 @@ All notable changes are listed here. Versions follow
 
 ### Added
 
+- **Read earlier**: log papers you read before using litresearch with the
+  🕰️ checkbox (and an optional date) in the *Log reading* dialog,
+  `litresearch read REF LEVEL --earlier [--date YYYY-MM-DD]`, or *Mark as
+  read earlier* for the selected papers of a library page. They earn the
+  base points (new rule `backlog_share`, default 1.0) and count for papers
+  read, depth, topics, badges of counts and levels, but not for streaks,
+  quests, report cards, the calendar, pace and time badges or the frog,
+  fresh-paper, recommendation and inbox-zero bonuses; the history shows them
+  as *read earlier*. Database schema version 2 (migration step 2 adds
+  `earlier` and `read_on` to the reading log); progress files and archives
+  carry them as optional fields, so older files stay valid.
+- `tools/simulate_game.py`: plays typical readers (new researcher,
+  experienced researcher with a backlog, binge, very regular) for two years
+  on the real game code and prints levels, badges, quest rate, penalties and
+  the gaps between rewards.
+
 - **Stable, open data formats** (documentation: *Data formats*). A data
   format version (`1`) independent of the app version, and a database schema
   version (`PRAGMA user_version`): profile databases are upgraded by
@@ -95,6 +111,16 @@ All notable changes are listed here. Versions follow
   creates one from the example with the data in your per-user data folder
   (Linux, macOS, Windows; new dependency `platformdirs`). New command
   `litresearch where` shows the files and folders in use and why.
+
+### Changed
+
+- **Rebalanced game defaults for new profiles** (rules format 2): 60 levels
+  instead of 20 (a level-up in the first week and every week or two for
+  regular readers; the top after about 2.4 years of steady reading), 129
+  badges instead of 44 (more tiers, total reading weeks, papers looked at),
+  weekly quest of 1 deep read + 1 more skim (was 2). Chosen by simulation;
+  see the documentation, *Gamification*. Profiles locked before keep their
+  rules, badges and fingerprint (rules format 1).
 
 ### Changed
 
