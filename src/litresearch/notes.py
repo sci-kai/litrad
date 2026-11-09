@@ -1107,18 +1107,24 @@ def archive(cfg: Config, destination: Path) -> Path | None:
     return destination
 
 
-def restore_archive(cfg: Config, source: Path) -> int:
-    """Write the files of a notes archive that are missing; never overwrites one."""
+def restore_archive(cfg: Config, source: Path, prefix: str = "") -> int:
+    """Write the files of a notes archive that are missing; never overwrites one.
+
+    ``prefix``: only members below this folder (``notes/`` in an export archive).
+    """
     folder = notes_dir(cfg)
     written = 0
     with zipfile.ZipFile(source) as handle:
-        for name in handle.namelist():
+        for member in handle.namelist():
+            if not member.startswith(prefix):
+                continue
+            name = member[len(prefix) :]
             target = (folder / name).resolve()
             if not target.is_relative_to(folder.resolve()) or not name.endswith(".md"):
                 continue
             if target.exists():
                 continue
-            _write(target, normalize_text(handle.read(name).decode("utf-8", errors="replace")))
+            _write(target, normalize_text(handle.read(member).decode("utf-8", errors="replace")))
             written += 1
     return written
 

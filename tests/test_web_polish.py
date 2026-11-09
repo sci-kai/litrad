@@ -2,7 +2,9 @@
 
 import json
 import re
+import tempfile
 from html.parser import HTMLParser
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -284,11 +286,19 @@ def test_library_deletion_asks_once(big):
 
 
 def test_compare_lists_saved_files_with_dates(user):
-    client, _ = user
+    client, path = user
     client.post("/profile/save")
     page = client.get("/profile/compare").text
     assert 'class="save-list"' in page
     assert re.search(r"<small class=\"muted\">\d{4}-\d{2}-\d{2} \d{2}:\d{2}</small>", page)
+    # the saved file is an archive: compared from the list and as an upload
+    name = re.search(r'name="saved" value="(litresearch_profile_[^"]+\.zip)"', page).group(1)
+    compared = client.post("/profile/compare", data={"saved": name}).text
+    assert name in compared and "same rules" in compared and "notice error" not in compared
+    saved = next(path.parent.rglob(name))
+    uploaded = client.post("/profile/compare", files={"file": ("saved.zip", saved.read_bytes())})
+    assert "saved.zip" in uploaded.text and "notice error" not in uploaded.text
+    assert not list(Path(tempfile.gettempdir()).glob("litresearch-upload-*"))  # removed
 
 
 def test_new_profile_dashboard_shows_first_steps(env):

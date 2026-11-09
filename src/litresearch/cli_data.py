@@ -18,7 +18,8 @@ from litresearch.backup import (
     profile_settings,
     restore,
     run_backup,
-    save_profile_file,
+    save_profile_archive,
+    settings_text,
     summarize,
 )
 from litresearch.cli import ConfigOpt, app, console, load_cfg
@@ -47,7 +48,7 @@ def backup(config: Path = ConfigOpt):
     finally:
         engine.dispose()
     console.print(f"Snapshot: {result.snapshot}")
-    console.print(f"Progress: {result.progress}")
+    console.print(f"Archive:  {result.archive}")
     if result.removed:
         console.print(f"Removed {len(result.removed)} old file(s) (keeping {cfg.backup.keep}).")
 
@@ -72,14 +73,30 @@ def export_progress_cmd(
     )
 
 
+def save_profile_archive_to(session, cfg, target: Path, settings: dict) -> Path:
+    from litresearch.archive import export_archive
+
+    return export_archive(session, cfg, target, settings_text(cfg, settings)).path
+
+
 @app.command("import-progress")
 def import_progress_cmd(
-    source: Path = typer.Argument(..., help="JSON file from export-progress or backup"),
+    source: Path = typer.Argument(..., help="Archive (.zip) or JSON file from a backup"),
     dry_run: bool = typer.Option(False, help="Show what would change, write nothing"),
     config: Path = ConfigOpt,
 ):
     """Merge progress from another machine (idempotent; notes from both sides are kept)."""
+    from litresearch import archive
+
     cfg = load_cfg(config)
+    if archive.is_archive(source):  # the same as import-all --into this profile
+        try:
+            result = archive.import_into(cfg, source, dry_run=dry_run)
+        except BackupError as error:
+            _fail(str(error))
+        for line in result.lines():
+            console.print(line, markup=False, highlight=False)
+        return
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -409,11 +426,13 @@ def profile_save_cmd(
         with Session(engine) as session:
             notes.refresh_quietly(session, cfg)
             if target is None:
-                path = save_profile_file(session, cfg.backup.dir, settings=settings)
-            else:
+                path = save_profile_archive(session, cfg, cfg.backup.dir, settings=settings)
+            elif target.suffix.lower() == ".json":  # the progress JSON of earlier versions
                 data = export_progress(session, settings=settings)
                 atomic_write_text(target, json.dumps(data, indent=1))
                 path = target
+            else:
+                path = save_profile_archive_to(session, cfg, target, settings)
     finally:
         engine.dispose()
     console.print(f"Saved: {path}")
@@ -421,12 +440,22 @@ def profile_save_cmd(
 
 @profile_app.command("load")
 def profile_load_cmd(
-    source: Path = typer.Argument(..., help="A saved profile (JSON)"),
+    source: Path = typer.Argument(..., help="A saved profile (.zip archive or JSON)"),
     name: str = typer.Option(None, help="Name of the new profile (default: the saved name)"),
     config: Path = ConfigOpt,
 ):
     """Load a saved profile as a new profile (existing profiles are not changed)."""
+    from litresearch import archive
+    from litresearch.migrations import SchemaTooNew
+
     base = load_config(config)
+    if archive.is_archive(source):
+        try:
+            result = archive.import_new(base, source, name)
+        except (profiles.ProfilesError, BackupError, ProfileError, SchemaTooNew) as error:
+            _fail(str(error))
+        _created(base, result.slug)
+        return
     try:
         data = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -452,9 +481,15 @@ def profile_compare_cmd(
             rows = [summarize(export_progress(session), cfg, "current")]
     finally:
         engine.dispose()
+    from litresearch import archive
+
     for path in files:
         try:
-            rows.append(summarize(json.loads(path.read_text(encoding="utf-8")), cfg, path.name))
+            if archive.is_archive(path):
+                rows.append(archive.summarize_file(path, cfg, path.name))
+            else:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                rows.append(summarize(data, cfg, path.name))
         except (OSError, json.JSONDecodeError, BackupError) as error:
             console.print(f"[yellow]{path}: {error}[/yellow]")
     reference = rows[0]["fingerprint"]

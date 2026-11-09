@@ -162,17 +162,56 @@ def test_run_backup_and_rotation(source):
         "litresearch_20261005_090200.sqlite",
         "litresearch_20261005_090300.sqlite",
         "litresearch_20261005_090400.sqlite",
-        # the source has a reading with notes: its note file is archived
-        "litresearch_notes_20261005_090200.zip",
-        "litresearch_notes_20261005_090300.zip",
-        "litresearch_notes_20261005_090400.zip",
-        "litresearch_progress_20261005_090200.json",
-        "litresearch_progress_20261005_090300.json",
-        "litresearch_progress_20261005_090400.json",
+        # the documented archive of "export everything", with the note files
+        "litresearch_backup_20261005_090200.zip",
+        "litresearch_backup_20261005_090300.zip",
+        "litresearch_backup_20261005_090400.zip",
     ]
-    assert len(result.removed) == 3  # snapshot, progress and notes of the oldest
+    assert len(result.removed) == 2  # snapshot and archive of the oldest
     assert latest_backup(cfg) == AT + timedelta(minutes=4)
-    assert json.loads(result.progress.read_text())["format"] == "litresearch-progress"
+    from litresearch import archive
+
+    checked = archive.check_file(result.archive, cfg)
+    assert not checked.report.errors
+    assert checked.notes  # the note files are in the archive
+    assert result.progress == result.archive  # the name before 1.0
+
+
+def test_rotation_counts_legacy_and_new_backups_together(tmp_path):
+    """Backups from before 1.0 (progress JSON + notes zip) age out with the archives."""
+    for day in range(1, 4):
+        (tmp_path / f"litresearch_progress_2026010{day}_070000.json").write_text("{}")
+        (tmp_path / f"litresearch_notes_2026010{day}_070000.zip").write_text("")
+    for day in range(4, 6):
+        (tmp_path / f"litresearch_backup_2026010{day}_070000.zip").write_text("")
+    (tmp_path / "litresearch_export_kai_20260101_070000.zip").write_text("")  # yours
+    (tmp_path / "litresearch_profile_kai_20260101_070000.zip").write_text("")  # yours
+    rotate(tmp_path, keep=3)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "litresearch_backup_20260104_070000.zip",
+        "litresearch_backup_20260105_070000.zip",
+        "litresearch_export_kai_20260101_070000.zip",
+        "litresearch_notes_20260103_070000.zip",
+        "litresearch_profile_kai_20260101_070000.zip",
+        "litresearch_progress_20260103_070000.json",
+    ]
+
+
+def test_latest_backup_reads_archives_and_legacy_files(tmp_path):
+    cfg = make_cfg(tmp_path)
+    cfg.backup.dir.mkdir(parents=True)
+    (cfg.backup.dir / "litresearch_progress_20261001_070000.json").write_text("{}")
+    assert latest_backup(cfg) == datetime(2026, 10, 1, 7)
+    (cfg.backup.dir / "litresearch_backup_20261002_070000.zip").write_text("")
+    assert latest_backup(cfg) == datetime(2026, 10, 2, 7)
+
+
+def test_restore_refuses_an_archive_with_a_hint(source, tmp_path):
+    cfg, engine = source
+    with Session(engine) as session:
+        result = run_backup(cfg, session, AT)
+    with pytest.raises(BackupError, match="is an archive"):
+        restore(cfg, result.archive)
 
 
 def test_rotate_ignores_other_files(tmp_path):

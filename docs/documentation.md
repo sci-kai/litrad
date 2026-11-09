@@ -1056,25 +1056,27 @@ paper counts once).
 
 ### Saving, loading and comparing profiles
 
-- **Save** (Profile page, `litresearch profile save`): a file with the
-  profile and its locked rules, every status, rating and note, history,
-  queue, XP, badges, recommendation batches with evidence, and the libraries
-  with their papers. Automatic backups contain the same.
-- **Load** (welcome screen, `profile load FILE`): becomes a *new* profile;
-  nothing is replaced.
+- **Save** (Profile page, `litresearch profile save [FILE]`): an
+  [archive](#the-archive-export-everything) (`.zip`) with the profile and its
+  locked rules, every status, rating and note (also the note files),
+  history, queue, XP, badges, recommendation batches with evidence, and the
+  libraries with their papers. Automatic backups contain the same. A `FILE`
+  ending in `.json` gets the progress JSON of earlier versions instead.
+- **Load** (welcome screen, `profile load FILE`): an archive or a progress
+  JSON file becomes a *new* profile; nothing is replaced.
 - **Compare** (Profile → Compare, `profile compare FILE ...`): level, XP,
   papers read, thorough reads, longest streak, quests, badges, discipline,
   depth, Reading Impact Factor, notes and active weeks side by side, the best
   value highlighted; says whether profiles played by the **same rules**
   (fingerprint) and whether a file was **edited** outside litresearch.
-- Every file has a **checksum**; a file whose content no longer matches is
-  refused. This catches hand edits; it is not a cryptographic proof. Loading
+- Every file has a **checksum** (archives: a SHA-256 per file); a file whose
+  content no longer matches is refused. This catches hand edits; it is not a cryptographic proof. Loading
   and comparing also check the file against its schema and for consistency
   (every reading and XP event points to a paper in the file, totals add up).
-- **Export everything** (Profile page, `export-all`) writes all of it, plus
-  libraries, note files and a README, as one [archive](#11-data-formats).
-- Merging progress from another machine (`import-progress`) only works
-  between profiles with the same rules.
+- **Export everything** (Profile page, `export-all`) writes the same archive
+  under another name ([Data formats](#11-data-formats)).
+- Merging progress from another machine (`import-progress`, `import-all
+  --into`) only works between profiles with the same rules.
 
 
 ---
@@ -1341,22 +1343,19 @@ export/import below to move progress.
 
 ### What a backup contains
 
-Two or three files per backup, named with `YYYYMMDD_HHMMSS`:
+Two files per backup, named with `YYYYMMDD_HHMMSS`:
 
 | File | Content | Use |
 |---|---|---|
 | `litresearch_20261008_070000.sqlite` | complete database snapshot (SQLite online backup API, consistent while the server writes, integrity-checked) | `litresearch restore FILE` |
-| `litresearch_notes_20261008_070000.zip` | the note files (and `note_template.md`), if there are any | `restore` writes back the missing ones |
-| `litresearch_progress_20261008_070000.json` | the whole **profile**: rules, settings, statuses, ratings, notes, history, queue, XP, badges, recommendations, libraries, example choices (merged: the newer choice wins), enough metadata to find each paper again, and a checksum | `profile load` (new profile) or `import-progress` (merge) |
+| `litresearch_backup_20261008_070000.zip` | the whole **profile** as an [archive](#the-archive-export-everything) (the same as *Export everything*): rules, settings, statuses, ratings, notes and note files, history, queue, XP, badges, recommendations, libraries, example choices | `profile load` (new profile), `import-all --into` (merge); `restore` takes the note files from it |
 
-For a complete copy in open formats (with the libraries as BibTeX and
-CSL-JSON, the note files, tables and a README) use
-[Export everything](#the-archive-export-everything) (`litresearch export-all`).
-
-The oldest files beyond `backup.keep` (default 14 of each) are deleted.
-Profiles you save yourself (`litresearch_profile_<name>_<date>_<time>.json`)
-are never deleted. Files of format version 1 (before game profiles) can still
-be imported ([legacy formats](#legacy-formats)).
+The oldest files beyond `backup.keep` (default 14 of each kind) are
+deleted. Backups made before 1.0 (`litresearch_progress_<date>_<time>.json`
+and `litresearch_notes_<date>_<time>.zip`) are still read, and age out
+together with the new ones. Profiles you save yourself
+(`litresearch_profile_<name>_<date>_<time>.zip`) and *Export everything*
+files are never deleted.
 
 ### Restoring
 
@@ -1380,10 +1379,13 @@ copy is never overwritten but becomes a [conflict](#notes-and-obsidian).
 ### Moving to another machine, or merging two
 
 ```bash
-litresearch export-progress progress.json             # old machine (or take the latest backup JSON)
-litresearch import-progress progress.json --dry-run   # new machine: preview
-litresearch import-progress progress.json
+litresearch export-all export.zip                     # old machine (or take the latest backup archive)
+litresearch import-all export.zip --into PROFILE --dry-run   # new machine: preview
+litresearch import-all export.zip --into PROFILE
 ```
+
+`import-progress FILE` does the same for the current profile and also takes
+the progress JSON of `export-progress` and of backups before 1.0.
 
 How the merge works:
 
@@ -1449,7 +1451,8 @@ other way round.
 When litresearch opens a profile database with an older schema version
 (databases of 0.1 to 0.5 have version 0), it first saves a copy to
 `data/profiles/<profile>/upgrade-backups/litresearch_<date>_<time>_before-schema-<old>-to-<new>.sqlite`
-and then upgrades it by numbered, tested steps, one transaction each: an
+(the newest 3 copies are kept; older ones are deleted after an upgrade
+succeeded; `litresearch where` shows the folder) and then upgrades it by numbered, tested steps, one transaction each: an
 interrupted upgrade resumes where it stopped. Nothing is ever reset. A
 database with a newer schema version is not opened at all: update
 litresearch, or restore a backup made with this version. `litresearch check`
@@ -1532,9 +1535,13 @@ Still read, so nothing written by an earlier version is lost:
 - **Progress and profile files** (`litresearch_progress_*.json`,
   `litresearch_profile_*.json`, format `litresearch-progress` version 2, and
   version 1 without checksum from before game profiles). Backups and *Save
-  profile* still write version 2; it is described by
+  profile* wrote version 2 until 1.0 and write archives since;
+  `export-progress`, *Download* on the Profile page and a `profile save` to a
+  `.json` file still write it. It is described by
   `schemas/progress.schema.json` and checked like an archive before it is
   loaded, merged or compared.
+- **Notes zips of backups** (`litresearch_notes_*.zip`, before 1.0): `restore`
+  still takes the note files from them.
 - **Databases** of every version since 0.1.0-alpha.1 (upgraded as above).
 - **Notes in the database** (before 0.5): they become note files.
 

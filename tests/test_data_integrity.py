@@ -284,7 +284,7 @@ def test_backups_over_months(db, cfg):
         run_backup(cfg, session, moment=AT + timedelta(days=30 * day))
     files = sorted(p.name for p in cfg.backup.dir.iterdir())
     assert len(files) == 6, files
-    assert files[-1] == "litresearch_progress_20261002_090000.json"
+    assert files[-1] == "litresearch_backup_20261002_090000.zip"
     assert not [p for p in cfg.backup.dir.iterdir() if p.name.startswith(".")]
 
 

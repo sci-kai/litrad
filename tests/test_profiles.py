@@ -1,6 +1,7 @@
 """Several profiles side by side: folders, settings, the welcome screen and the CLI."""
 
 import json
+import zipfile
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -289,10 +290,24 @@ def test_load_profile_in_the_browser(client, config_path, tmp_path):
     assert download.json()["settings"]["topics"] == []
     saved = client.post("/profile/save", follow_redirects=True)
     assert "Profile saved" in saved.text
-    assert list((tmp_path / "backups/ada").glob("litresearch_profile_ada_*.json"))
+    saves = list((tmp_path / "backups/ada").glob("litresearch_profile_ada_*.zip"))
+    assert saves  # the archive format
     client.post("/welcome/leave")
     page = client.get("/welcome").text
     assert "ada/litresearch_profile_ada_" in page  # saved files are offered
+    from_saved = client.post(
+        "/welcome/load", data={"saved": saves[0].name, "name": "Ada archive"}, follow_redirects=True
+    )
+    assert "Loaded profile Ada archive" in from_saved.text
+    client.post("/welcome/leave")
+    uploaded = client.post(
+        "/welcome/load",
+        data={"name": "Ada upload"},
+        files={"file": ("ada.zip", saves[0].read_bytes())},
+        follow_redirects=True,
+    )
+    assert "Loaded profile Ada upload" in uploaded.text
+    client.post("/welcome/leave")
     response = client.post(
         "/welcome/load",
         data={"name": "Ada copy"},
@@ -515,8 +530,9 @@ def test_backup_all_profiles(base, tmp_path):
     assert backup_all(base, messages.append) == 0
     assert [m.split(":")[1].strip() for m in messages] == ["ada", "(no profile)"]
     assert list((tmp_path / "backups/ada").glob("litresearch_*.sqlite"))
-    progress = sorted((tmp_path / "backups/ada").glob("litresearch_progress_*.json"))
-    assert yaml.safe_load(progress[-1].read_text())["settings"]["topics"] == []
+    archives = sorted((tmp_path / "backups/ada").glob("litresearch_backup_*.zip"))
+    with zipfile.ZipFile(archives[-1]) as handle:
+        assert yaml.safe_load(handle.read("settings.yaml"))["topics"] == []
     profiles.adopt_legacy(base, "Kai")
     messages.clear()
     backup_all(base, messages.append)
@@ -547,3 +563,33 @@ def test_invalid_profile_settings_are_reported(config_path, base, plain_console,
     result = runner.invoke(cli.app, ["queue", "-c", str(config_path)])
     assert isinstance(result.exception, ConfigError) and message in str(result.exception)
     assert [info.name for info in profiles.list_profiles(base)] == ["Ada"]
+
+
+def test_cli_save_load_compare_and_merge_archives(config_path, plain_console, tmp_path):
+    """Save profile writes an archive; load, compare and import-progress take it."""
+
+    def run(*args, profile=None):
+        prefix = ["--profile", profile] if profile else []
+        return runner.invoke(cli.app, [*prefix, *args, "-c", str(config_path)])
+
+    assert run("profile", "create", "Ada", "--yes").exit_code == 0
+    saved = run("profile", "save", profile="ada")
+    assert saved.exit_code == 0, saved.output
+    archive_file = next((tmp_path / "backups/ada").glob("litresearch_profile_ada_*.zip"))
+    assert zipfile.is_zipfile(archive_file)
+    legacy = tmp_path / "ada.json"
+    assert run("profile", "save", str(legacy), profile="ada").exit_code == 0
+    assert json.loads(legacy.read_text())["format"] == "litresearch-progress"
+
+    compared = run("profile", "compare", str(archive_file), str(legacy), profile="ada")
+    assert compared.exit_code == 0, compared.output
+    assert compared.stdout.count("same rules") == 3 and "unmodified" in compared.stdout
+
+    loaded = run("profile", "load", str(archive_file), "--name", "Ada copy")
+    assert loaded.exit_code == 0, loaded.output
+    assert "Ada copy" in run("profile", "list").stdout
+    merged = run("import-progress", str(archive_file), profile="ada")
+    assert merged.exit_code == 0, merged.output  # idempotent merge of the same data
+
+    restored = run("restore", str(archive_file), "--yes", profile="ada")
+    assert restored.exit_code == 1 and "is an archive" in restored.stdout

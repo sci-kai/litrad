@@ -5,18 +5,20 @@ and point ``backup.dir`` to a cloud-synced folder. Syncing the live SQLite
 file itself is unsafe: a sync client may copy it in the middle of a write, and
 two machines using it create conflict copies.
 
-Two complementary formats are written into ``backup.dir``:
+Two complementary files are written into ``backup.dir`` per backup:
 
 - ``litresearch_YYYYMMDD_HHMMSS.sqlite``: a complete, consistent snapshot
   made with SQLite's online backup API (safe while the web UI is running).
   Restore it with ``litresearch restore``.
-- ``litresearch_notes_YYYYMMDD_HHMMSS.zip``: the note files (Markdown), if
-  there are any; ``restore`` writes back the ones that are missing.
-- ``litresearch_progress_YYYYMMDD_HHMMSS.json``: only *your* data (reading
-  statuses, notes, ratings, history, queue, XP, badges), readable and
-  mergeable into any other installation with ``litresearch import-progress``.
+- ``litresearch_backup_YYYYMMDD_HHMMSS.zip``: the documented archive of
+  "export everything" (``archive.py``): your data in open formats with the note
+  files, loadable as a new profile or mergeable into another installation.
   Papers are matched by DOI, PMID, citation key or title, because internal
   ids differ between machines.
+
+Before 1.0 the second file was the progress JSON (``litresearch_progress_*.json``,
+format ``litresearch-progress`` 2) plus ``litresearch_notes_*.zip``; both are
+still read and rotated.
 """
 
 import hashlib
@@ -27,6 +29,7 @@ import re
 import shutil
 import sqlite3
 import tempfile
+import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -61,6 +64,8 @@ FORMAT_VERSION = 2  # 2: profile with locked rules, recommendations, checksum
 SNAPSHOT_PREFIX = "litresearch_"
 PROGRESS_PREFIX = "litresearch_progress_"
 NOTES_PREFIX = "litresearch_notes_"
+BACKUP_ARCHIVE_PREFIX = "litresearch_backup_"
+_STAMP = re.compile(r"(\d{8}_\d{6})")
 
 
 class BackupError(RuntimeError):
@@ -159,18 +164,35 @@ def snapshot(database: Path, destination: Path) -> Path:
     return destination
 
 
+def _export_files(directory: Path) -> list[Path]:
+    """Backup archives and the legacy progress JSON and notes zip of earlier backups."""
+    return [
+        *directory.glob(f"{BACKUP_ARCHIVE_PREFIX}*.zip"),
+        *directory.glob(f"{PROGRESS_PREFIX}*.json"),
+        *directory.glob(f"{NOTES_PREFIX}*.zip"),
+    ]
+
+
 def rotate(directory: Path, keep: int) -> list[Path]:
-    """Delete the oldest snapshots and progress exports beyond ``keep`` each."""
+    """Delete the oldest snapshots and exports beyond ``keep`` each.
+
+    Exports are counted per backup (time stamp): an archive, or the legacy
+    progress JSON with its notes zip, so old-style backups age out together with
+    new ones. Saved profiles and "export everything" files are never deleted.
+    """
     removed = []
-    snapshots = sorted(
-        p
-        for p in directory.glob(f"{SNAPSHOT_PREFIX}*.sqlite")
-        if not p.name.startswith(PROGRESS_PREFIX)
-    )
-    exports = sorted(directory.glob(f"{PROGRESS_PREFIX}*.json"))
-    archives = sorted(directory.glob(f"{NOTES_PREFIX}*.zip"))
-    for files in (snapshots, exports, archives):
-        for old in files[: max(len(files) - keep, 0)]:
+    snapshots = sorted(directory.glob(f"{SNAPSHOT_PREFIX}*.sqlite"))
+    for old in snapshots[: max(len(snapshots) - keep, 0)]:
+        old.unlink()
+        removed.append(old)
+    by_stamp: dict[str, list[Path]] = {}
+    for path in _export_files(directory):
+        found = _STAMP.search(path.name)
+        if found:  # a file without a time stamp is not one of ours
+            by_stamp.setdefault(found.group(1), []).append(path)
+    stamps = sorted(by_stamp)
+    for old_stamp in stamps[: max(len(stamps) - keep, 0)]:
+        for old in sorted(by_stamp[old_stamp]):
             old.unlink()
             removed.append(old)
     return removed
@@ -179,38 +201,61 @@ def rotate(directory: Path, keep: int) -> list[Path]:
 @dataclass
 class BackupResult:
     snapshot: Path
-    progress: Path
+    archive: Path
     removed: list[Path]
-    notes: Path | None = None
+
+    @property
+    def progress(self) -> Path:  # the name before 1.0
+        return self.archive
+
+
+def settings_text(cfg: Config, settings: dict | None = None) -> str | None:
+    """The profile's settings.yaml for an archive: ``settings`` if given, else the file.
+
+    A file that is not valid YAML is left out (the archive check would refuse it).
+    """
+    if settings is None:
+        try:
+            settings = profile_settings(cfg)
+        except (yaml.YAMLError, OSError, UnicodeDecodeError):
+            return None
+    if not settings:
+        return None
+    return yaml.safe_dump(settings, sort_keys=False, allow_unicode=True)
 
 
 def run_backup(
     cfg: Config, session: Session, moment: datetime | None = None, settings: dict | None = None
 ) -> BackupResult:
-    from litresearch import notes
+    """A snapshot of the database and an archive (export everything) in ``backup.dir``."""
+    from litresearch import archive, notes
 
     moment = moment or now()
     directory = cfg.backup.dir
     notes.refresh_quietly(session, cfg)  # edits made in note files go into the backup
     snap = snapshot(cfg.paths.database, directory / f"{SNAPSHOT_PREFIX}{stamp(moment)}.sqlite")
-    progress = directory / f"{PROGRESS_PREFIX}{stamp(moment)}.json"
-    data = export_progress(session, moment, settings)
-    atomic_write_text(progress, json.dumps(data, indent=1))
-    archive = notes.archive(cfg, directory / f"{NOTES_PREFIX}{stamp(moment)}.zip")
-    return BackupResult(snap, progress, rotate(directory, cfg.backup.keep), archive)
+    target = directory / f"{BACKUP_ARCHIVE_PREFIX}{stamp(moment)}.zip"
+    written = archive.export_archive(session, cfg, target, settings_text(cfg, settings), moment)
+    return BackupResult(snap, written.path, rotate(directory, cfg.backup.keep))
 
 
 def latest_backup(cfg: Config) -> datetime | None:
+    """The time of the newest backup (archive, or progress JSON before 1.0)."""
     directory = cfg.backup.dir
     if not directory.exists():
         return None
-    files = sorted(directory.glob(f"{PROGRESS_PREFIX}*.json"))
-    if not files:
-        return None
-    try:
-        return datetime.strptime(files[-1].stem.removeprefix(PROGRESS_PREFIX), "%Y%m%d_%H%M%S")
-    except ValueError:
-        return None
+    times = []
+    for path in [
+        *directory.glob(f"{BACKUP_ARCHIVE_PREFIX}*.zip"),
+        *directory.glob(f"{PROGRESS_PREFIX}*.json"),
+    ]:
+        found = _STAMP.fullmatch(path.stem.split("_", 2)[-1])
+        if found:
+            try:
+                times.append(datetime.strptime(found.group(1), "%Y%m%d_%H%M%S"))
+            except ValueError:
+                continue
+    return max(times, default=None)
 
 
 def restore(cfg: Config, source: Path, moment: datetime | None = None) -> Path:
@@ -218,6 +263,12 @@ def restore(cfg: Config, source: Path, moment: datetime | None = None) -> Path:
 
     Stop ``litresearch serve`` before restoring.
     """
+    if source.is_file() and zipfile.is_zipfile(source):
+        raise BackupError(
+            f"{source} is an archive, not a database snapshot; nothing was changed. "
+            "Load it as a new profile (litresearch profile load) or merge it "
+            "(litresearch import-all --into PROFILE)."
+        )
     problems = check_database(source)
     if problems:
         raise BackupError(
@@ -247,17 +298,19 @@ def restore_notes(cfg: Config, source: Path) -> None:
     from litresearch import notes
     from litresearch.db import init_db
 
-    archive = source.with_name(
-        NOTES_PREFIX + source.name.removeprefix(SNAPSHOT_PREFIX).removesuffix(".sqlite") + ".zip"
-    )
+    moment = source.name.removeprefix(SNAPSHOT_PREFIX).removesuffix(".sqlite")
+    archive = source.with_name(f"{BACKUP_ARCHIVE_PREFIX}{moment}.zip")
+    prefix = "notes/"  # the note files inside an archive
+    if not archive.is_file():  # a backup made before 1.0
+        archive, prefix = source.with_name(f"{NOTES_PREFIX}{moment}.zip"), ""
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
             notes.forget_sync_state(session)
             try:
                 if archive.is_file():
-                    notes.restore_archive(cfg, archive)
-            except (notes.NotesError, OSError, ValueError):
+                    notes.restore_archive(cfg, archive, prefix)
+            except (notes.NotesError, OSError, ValueError, zipfile.BadZipFile):
                 pass  # the copies in the database stay; `notes sync` writes the files
             notes.refresh_quietly(session, cfg)
     finally:
@@ -1043,13 +1096,37 @@ def save_profile_file(
     return path
 
 
+def save_profile_archive(
+    session: Session,
+    cfg: Config,
+    directory: Path,
+    moment: datetime | None = None,
+    settings: dict | None = None,
+) -> Path:
+    """*Save profile*: the archive (export everything) as ``litresearch_profile_*.zip``."""
+    from litresearch import archive
+
+    moment = moment or now()
+    profile = session.exec(select(Profile).order_by(Profile.id)).first()
+    name = profile.name if profile else "no-profile"
+    path = directory / f"{PROFILE_PREFIX}{slug(name)}_{stamp(moment)}.zip"
+    return archive.export_archive(session, cfg, path, settings_text(cfg, settings), moment).path
+
+
+SAVED_PATTERNS = (
+    f"{PROFILE_PREFIX}*.zip",
+    f"{BACKUP_ARCHIVE_PREFIX}*.zip",
+    "litresearch_export_*.zip",
+    f"{PROFILE_PREFIX}*.json",
+    f"{PROGRESS_PREFIX}*.json",
+)
+
+
 def saved_files(directory: Path) -> list[Path]:
-    """Saved profiles and progress exports in a folder, newest first."""
+    """Saved profiles, backup archives and progress exports in a folder, newest first."""
     if not directory.exists():
         return []
-    files = list(directory.glob(f"{PROFILE_PREFIX}*.json")) + list(
-        directory.glob(f"{PROGRESS_PREFIX}*.json")
-    )
+    files = [path for pattern in SAVED_PATTERNS for path in directory.glob(pattern)]
     return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
 
 

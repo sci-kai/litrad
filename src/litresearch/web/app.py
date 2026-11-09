@@ -64,7 +64,7 @@ from litresearch.backup import (
     latest_backup,
     profile_settings,
     run_backup,
-    save_profile_file,
+    save_profile_archive,
     saved_files,
     slug,
     summarize,
@@ -602,6 +602,7 @@ def create_app(
         """A saved profile file (uploaded or from the backups) becomes a new profile."""
         form = await request.form()
         base = base_config()
+        uploads: list[dict] = []
         try:
             uploads = await read_upload(request)
             saved = str(form.get("saved", "")).strip()
@@ -609,13 +610,22 @@ def create_app(
                 path = next((f for f in all_saved_files(base) if f.name == saved), None)
                 if path is None:
                     raise BackupError("Saved file not found")
-                uploads = [{"name": saved, "data": json.loads(path.read_text("utf-8"))}]
+                remove_temporary(uploads)
+                uploads = [saved_entry(path)]
             if not uploads:
                 raise BackupError("Choose a saved profile or upload a file")
             name = str(form.get("name", "")).strip() or None
-            slug = profiles.import_profile_file(base, uploads[0]["data"], name)
-        except (BackupError, ProfilesError, json.JSONDecodeError) as exc:
+            if "path" in uploads[0]:  # an archive
+                slug = archive.import_new(base, uploads[0]["path"], name).slug
+            else:
+                slug = profiles.import_profile_file(base, uploads[0]["data"], name)
+        except archive.ArchiveError as exc:
+            return archive_problems(request, exc) or error("/welcome", f"Not loaded: {exc}")
+        except (BackupError, ProfilesError, json.JSONDecodeError, OSError) as exc:
             return error("/welcome", f"Not loaded: {friendly_error(exc)}")
+        finally:
+            remove_temporary(uploads)
+
         info = profiles.describe(base, slug)
         return enter(
             slug,
@@ -1992,7 +2002,9 @@ def create_app(
         try:
             with Session(engine) as session:
                 note_files.refresh_quietly(session, cfg)
-                path = save_profile_file(session, cfg.backup.dir, settings=profile_settings(cfg))
+                path = save_profile_archive(
+                    session, cfg, cfg.backup.dir, settings=profile_settings(cfg)
+                )
             return back(
                 "/profile",
                 {
@@ -2079,7 +2091,19 @@ def create_app(
             },
         )
 
+    def saved_entry(path: Path) -> dict:
+        """A saved file for loading or comparing: an archive by path, JSON by content."""
+        if archive.is_archive(path):
+            return {"name": path.name, "path": path}
+        return {"name": path.name, "data": json.loads(path.read_text("utf-8"))}
+
+    def remove_temporary(entries: list[dict]) -> None:
+        for entry in entries:
+            if entry.get("temporary"):
+                Path(entry["path"]).unlink(missing_ok=True)
+
     async def read_upload(request: Request, field_name: str = "file") -> list[dict]:
+        """Uploaded profile files: JSON as ``data``, archives as a temporary ``path``."""
         form = await request.form()
         files = [f for f in form.getlist(field_name) if hasattr(f, "read")]
         result = []
@@ -2089,11 +2113,19 @@ def create_app(
             finally:
                 await upload.close()  # release the temporary file right away
             if len(raw) > MAX_UPLOAD:
+                remove_temporary(result)
                 raise BackupError(f"{upload.filename} is larger than {MAX_UPLOAD // 2**20} MB")
+            if raw.startswith(b"PK\x03\x04"):  # a zip archive
+                fd, name = tempfile.mkstemp(prefix="litresearch-upload-", suffix=".zip")
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(raw)
+                result.append({"name": upload.filename, "path": Path(name), "temporary": True})
+                continue
             try:
                 data = json.loads(raw)
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise BackupError(f"{upload.filename} is not a JSON file") from exc
+                remove_temporary(result)
+                raise BackupError(f"{upload.filename} is not a JSON or zip file") from exc
             if not isinstance(data, dict):
                 raise BackupError(f"{upload.filename} is not a litresearch profile file")
             result.append({"name": upload.filename, "data": data})
@@ -2112,11 +2144,15 @@ def create_app(
             for name in form.getlist("saved"):
                 path = next((f for f in saved_files(cfg.backup.dir) if f.name == name), None)
                 if path:
-                    entries.append({"name": name, "data": json.loads(path.read_text("utf-8"))})
+                    entries.append(saved_entry(path))
             entries += await read_upload(request)
-        except (BackupError, json.JSONDecodeError) as exc:
+        except (BackupError, json.JSONDecodeError, OSError) as exc:
+            remove_temporary(entries)
             return error("/profile/compare", str(exc))
-        return await compare(request, entries)
+        try:
+            return await compare(request, entries)
+        finally:
+            remove_temporary(entries)
 
     async def compare(request: Request, entries: list[dict]):
         cfg, engine = open_session()
@@ -2126,8 +2162,11 @@ def create_app(
                 problems = []
                 for entry in entries:
                     try:
-                        rows.append(summarize(entry["data"], cfg, entry["name"]))
-                    except BackupError as exc:
+                        if "path" in entry:
+                            rows.append(archive.summarize_file(entry["path"], cfg, entry["name"]))
+                        else:
+                            rows.append(summarize(entry["data"], cfg, entry["name"]))
+                    except (BackupError, OSError) as exc:
                         problems.append(f"{entry['name']}: {exc}")
                 saves = [
                     (path.name, datetime.fromtimestamp(path.stat().st_mtime).replace(microsecond=0))

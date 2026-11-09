@@ -504,9 +504,9 @@ def test_backup_archives_notes_and_restore_brings_back_missing_files(env):
     record_reading(session, cfg, a, ReadStatus.read, note="note a", at=AT)
     record_reading(session, cfg, b, ReadStatus.read, note="note b", at=AT)
     result = run_backup(cfg, session, AT)
-    assert result.notes is not None
-    with zipfile.ZipFile(result.notes) as handle:
-        assert sorted(handle.namelist()) == ["Muller2020-ab-c.md", "doi-10.1-b.md"]
+    with zipfile.ZipFile(result.archive) as handle:
+        names = sorted(n for n in handle.namelist() if n.startswith("notes/"))
+        assert names == ["notes/Muller2020-ab-c.md", "notes/doi-10.1-b.md"]
     path_a, path_b = file_of(session, cfg, a), file_of(session, cfg, b)
     session.close()
     path_a.unlink()
@@ -519,6 +519,22 @@ def test_backup_archives_notes_and_restore_brings_back_missing_files(env):
         assert fresh.get(NoteFile, b.id).conflict  # restored copy and file differ
         assert not fresh.get(NoteFile, a.id).conflict
     engine.dispose()
+
+
+def test_restore_takes_note_files_from_a_backup_made_before_1_0(env):
+    """Backups before 1.0 had the note files in litresearch_notes_<stamp>.zip."""
+    cfg, session, (a, _, _) = env
+    record_reading(session, cfg, a, ReadStatus.read, note="note a", at=AT)
+    result = run_backup(cfg, session, AT)
+    path_a = file_of(session, cfg, a)
+    session.close()
+    legacy = result.snapshot.with_name("litresearch_notes_20261005_090000.zip")
+    with zipfile.ZipFile(legacy, "w") as handle:
+        handle.writestr(path_a.name, path_a.read_text())
+    result.archive.unlink()  # as if made by 0.6
+    path_a.unlink()
+    restore(cfg, result.snapshot, AT.replace(hour=10))
+    assert path_a.read_text().endswith("note a\n")
 
 
 def test_progress_and_profile_load_write_note_files(app_env, tmp_path):  # noqa: F811

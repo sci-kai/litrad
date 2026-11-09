@@ -1244,3 +1244,33 @@ def import_into(
 def check_file(path: Path, base: Config | None = None) -> Checked:
     """Only the check (``litresearch import-all --dry-run`` shows the rest)."""
     return check(read_archive(path), base)
+
+
+def is_archive(path: Path) -> bool:
+    """Whether ``path`` is a zip file (an archive) rather than a progress JSON file."""
+    try:
+        return zipfile.is_zipfile(path)
+    except OSError:
+        return False
+
+
+def summarize_file(path: Path, cfg: Config, label: str = "") -> dict:
+    """``backup.summarize`` for an archive: key figures, nothing is changed."""
+    from litresearch.backup import memory_engine, summarize_session
+
+    archive = read_archive(path)
+    checked = check(archive, cfg)
+    _fail_if_errors(checked)
+    engine = memory_engine()
+    try:
+        with Session(engine) as session:
+            merge(session, cfg, _keys(checked), commit=False)
+            moment = None
+            try:
+                moment = datetime.fromisoformat(str(archive.manifest.get("created")))
+            except ValueError:
+                pass
+            # the check verified every file against its SHA-256: unmodified
+            return summarize_session(session, cfg, moment, label, checksum_ok=True)
+    finally:
+        engine.dispose()
