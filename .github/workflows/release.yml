@@ -1,30 +1,202 @@
-# Pushing a tag vX.Y.Z (or vX.Y.Z-alpha.N) builds the package and publishes a
-# GitHub release with the wheel, the source archive and the CHANGELOG section.
+# Pushing a tag vX.Y.Z (or vX.Y.Z-alpha.N) tests, builds the desktop apps and
+# the package, and publishes a GitHub release with the CHANGELOG section:
+#
+#   litresearch-<version>-linux-x86_64.AppImage   litresearch-<version>-linux-aarch64.AppImage
+#   litresearch-<version>-windows-x86_64.exe      (Inno Setup installer, per user)
+#   litresearch-<version>-macos-arm64.dmg
+#   litresearch-<version>-py3-none-any.whl, litresearch-<version>.tar.gz
+#
+# Every desktop build is smoke-tested (tools/smoke_desktop.py) before upload;
+# the Windows installer is also installed, tested and uninstalled, the .dmg
+# mounted and tested. "Run workflow" (workflow_dispatch) builds and uploads
+# the artifacts to the run without releasing.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+env:
+  PYTHON_VERSION: "3.13"
+  PYINSTALLER: "pyinstaller==6.22.*"
+  APPIMAGETOOL_VERSION: "1.9.1"
+  APPIMAGE_RUNTIME_VERSION: "20251108"
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Test before releasing
+        run: |
+          python -m pip install --editable ".[dev]"
+          pytest -q
+      - name: Version for file names
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(python -c 'import litresearch; print(litresearch.__version__)')"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      NAME: litresearch-${{ needs.test.outputs.version }}-linux-${{ matrix.arch }}.AppImage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build the app folder (PyInstaller)
+        run: |
+          python -m pip install . "$PYINSTALLER"
+          pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/litresearch.spec
+      - name: Smoke-test the app folder
+        run: python tools/smoke_desktop.py build/dist/litresearch/litresearch
+      - name: Build the AppImage
+        run: |
+          mkdir -p build/tools
+          base=https://github.com/AppImage
+          curl -fsSL -o build/tools/appimagetool \
+            "$base/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-${{ matrix.arch }}.AppImage"
+          curl -fsSL -o build/tools/runtime \
+            "$base/type2-runtime/releases/download/$APPIMAGE_RUNTIME_VERSION/runtime-${{ matrix.arch }}"
+          chmod +x build/tools/appimagetool
+          python tools/build_appimage.py build/dist/litresearch --output "out/$NAME" \
+            --appimagetool build/tools/appimagetool --runtime-file build/tools/runtime
+      - name: Smoke-test the AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"  # no FUSE on the runners
+        run: python tools/smoke_desktop.py "out/$NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: out/${{ env.NAME }}
+          if-no-files-found: error
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.test.outputs.version }}
+      NAME: litresearch-${{ needs.test.outputs.version }}-windows-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build the app folder (PyInstaller; Pillow converts the icon)
+        shell: bash
+        run: |
+          python -m pip install . "$PYINSTALLER" pillow
+          pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/litresearch.spec
+      - name: Smoke-test the app folder
+        shell: bash
+        run: python tools/smoke_desktop.py build/dist/litresearch/litresearch.exe
+      - name: Build the installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=$env:VERSION" "/DSourceDir=$PWD\build\dist\litresearch" `
+            "/DOutputDir=$PWD\out" "/DOutputName=$env:NAME" packaging\windows\litresearch.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install, smoke-test and uninstall
+        shell: pwsh
+        run: |
+          $setup = Start-Process "out\$env:NAME.exe" -Wait -PassThru `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER"
+          if ($setup.ExitCode -ne 0) { throw "installer failed: $($setup.ExitCode)" }
+          $app = "$env:LOCALAPPDATA\Programs\litresearch"
+          if (-not (Test-Path "$app\litresearch.exe")) { throw "not installed to $app" }
+          python tools/smoke_desktop.py "$app\litresearch.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $remove = Start-Process "$app\unins000.exe" -Wait -PassThru `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+          if ($remove.ExitCode -ne 0) { throw "uninstaller failed: $($remove.ExitCode)" }
+          Start-Sleep -Seconds 5  # the uninstaller removes itself after exiting
+          if (Test-Path "$app\litresearch.exe") { throw "program files left after uninstall" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\litresearch\logs\app.log")) {
+            throw "user data was removed by the uninstaller"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}.exe
+          path: out/${{ env.NAME }}.exe
+          if-no-files-found: error
+
+  macos:
+    needs: test
+    runs-on: macos-latest
+    env:
+      NAME: litresearch-${{ needs.test.outputs.version }}-macos-arm64.dmg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build litresearch.app (PyInstaller; Pillow converts the icon)
+        run: |
+          python -m pip install . "$PYINSTALLER" pillow
+          pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/litresearch.spec
+      - name: Smoke-test the app
+        run: python tools/smoke_desktop.py build/dist/litresearch.app/Contents/MacOS/litresearch
+      - name: Build the .dmg
+        run: |
+          mkdir -p build/dmg out
+          cp -R build/dist/litresearch.app build/dmg/
+          ln -s /Applications build/dmg/Applications
+          hdiutil create -volname litresearch -srcfolder build/dmg -ov -format UDZO "out/$NAME"
+      - name: Mount the .dmg and smoke-test its app
+        run: |
+          hdiutil attach -nobrowse -readonly -mountpoint /tmp/litresearch-dmg "out/$NAME"
+          python tools/smoke_desktop.py /tmp/litresearch-dmg/litresearch.app/Contents/MacOS/litresearch
+          hdiutil detach /tmp/litresearch-dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: out/${{ env.NAME }}
+          if-no-files-found: error
+
   release:
+    needs: [test, linux, windows, macos]
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-      - name: Test before releasing
-        run: |
-          python -m pip install --editable ".[dev]"
-          pytest -q
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Build wheel and source archive
         run: |
           python -m pip install build
           python -m build
+      - name: Collect the desktop builds
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       - name: Release notes from CHANGELOG.md
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -38,6 +210,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          ls -l dist
           flags=""
           case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --title "litresearch $GITHUB_REF_NAME" \

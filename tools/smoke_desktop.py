@@ -157,16 +157,17 @@ def smoke(binary: Path, port: int, timeout: float) -> None:
                 break
             time.sleep(0.25)
         check(status == 200, f"/welcome answers 200 after {time.monotonic() - started:.1f} s")
+        name = f"Smoke test {os.getpid()}"  # unique: Windows reuses the real data folder
         parser = FormFields("/welcome/create")
         parser.feed(request(base + "/welcome")[1])
-        fields = [(k, v) for k, v in parser.fields if k != "name"] + [("name", "Smoke test")]
+        fields = [(k, v) for k, v in parser.fields if k != "name"] + [("name", name)]
         status, body = request(
             base + "/welcome/create",
             "POST",
             {"Origin": base, "Content-Type": "application/x-www-form-urlencoded"},
             data=urllib.parse.urlencode(fields).encode(),
         )
-        check(status == 200 and "Smoke test" in body, "a profile is created with the default rules")
+        check(status == 200 and name in body, "a profile is created with the default rules")
         for path, needle in [
             ("/", "Dashboard"),
             ("/docs", "Setup"),
