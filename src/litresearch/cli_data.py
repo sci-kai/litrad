@@ -224,6 +224,15 @@ def check(config: Path = ConfigOpt):
             f"The database is damaged. Restore a snapshot from {cfg.backup.dir}{hint} "
             "with 'litresearch restore'."
         )
+    from litresearch.backup import check_database
+    from litresearch.migrations import SCHEMA_VERSION, read_version
+
+    problems = check_database(database)
+    if problems:
+        _fail("The database has problems:\n  " + "\n  ".join(problems))
+    version, _ = read_version(database)
+    upgrade = " (upgraded when opened)" if version < SCHEMA_VERSION else ""
+    console.print(f"Schema:    version {version}, this litresearch: {SCHEMA_VERSION}{upgrade}")
     engine = init_db(database)
     with Session(engine) as session:
 

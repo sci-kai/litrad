@@ -102,6 +102,38 @@ def integrity_ok(path: Path) -> bool:
         connection.close()
 
 
+REQUIRED_TABLES = {"paper", "reading", "xpevent"}
+
+
+def check_database(path: Path) -> list[str]:
+    """Problems that make a database file unusable for this version (empty = fine).
+
+    Integrity, a litresearch database at all, a schema version this version
+    understands, and no rows pointing to papers, libraries or batches that
+    do not exist (foreign keys). The file is opened read-only.
+    """
+    from litresearch.migrations import SCHEMA_VERSION, too_new_message
+
+    if not integrity_ok(path):
+        return [f"{path} is not a valid litresearch database (integrity check failed)"]
+    connection = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)
+    try:
+        tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master")}
+        if not REQUIRED_TABLES <= tables:
+            return [f"{path} does not look like a litresearch database"]
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        if version > SCHEMA_VERSION:
+            return [too_new_message(path, version)]
+        problems = []
+        for table, rowid, parent, _ in connection.execute("PRAGMA foreign_key_check"):
+            problems.append(f"{table} row {rowid}: refers to a missing {parent}")
+        if len(problems) > 20:
+            problems = problems[:20] + [f"... and {len(problems) - 20} more"]
+        return problems
+    finally:
+        connection.close()
+
+
 def snapshot(database: Path, destination: Path) -> Path:
     """Consistent copy of a (possibly busy) SQLite database."""
     if not database.exists():
@@ -186,15 +218,11 @@ def restore(cfg: Config, source: Path, moment: datetime | None = None) -> Path:
 
     Stop ``litresearch serve`` before restoring.
     """
-    if not integrity_ok(source):
-        raise BackupError(f"{source} is not a valid litresearch database")
-    connection = sqlite3.connect(source)
-    try:
-        tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master")}
-    finally:
-        connection.close()
-    if not {"paper", "reading", "xpevent"} <= tables:
-        raise BackupError(f"{source} does not look like a litresearch database")
+    problems = check_database(source)
+    if problems:
+        raise BackupError(
+            f"{source} cannot be restored; nothing was changed:\n  " + "\n  ".join(problems)
+        )
     moment = moment or now()
     safety = cfg.backup.dir / f"{SNAPSHOT_PREFIX}{stamp(moment)}_before_restore.sqlite"
     if cfg.paths.database.exists():
