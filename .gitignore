@@ -13,3 +13,5 @@ config/config.yaml
 config/*.bak
 build/
 dist/
+# compatibility fixtures are golden files and must be committed
+!tests/data/compat/*/litresearch.sqlite

@@ -77,6 +77,11 @@ what that version wrote. Only a new version gets a new folder:
     tools/make_compat_fixtures.py --tags v0.3.0
 
 Every release adds its fixtures (see CONTRIBUTING.md).
+
+The `litresearch.sqlite` files of `0.1.0-alpha.1`, `0.2.0-dev` and `dev-20261109`
+were rebuilt on 2026-11-09 with the same script and the same code (tag, or commit
+`a03acaa` for `dev-20261109`), because `*.sqlite` was git-ignored and they had not
+been committed; their content matches the JSON files except for build timestamps.
 """
 
 BUILDER = r"""

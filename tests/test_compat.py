@@ -37,6 +37,9 @@ RELEASED = [v for v in VERSIONS if not v.startswith("dev-")]
 def test_every_released_version_has_fixtures():
     assert {"0.1.0-alpha.1", "0.2.0-dev"} <= set(RELEASED)
     assert any(v.startswith("dev-") for v in VERSIONS)
+    for version in VERSIONS:  # *.sqlite is git-ignored elsewhere: these must be committed
+        for name in ("litresearch.sqlite", "settings.yaml", "progress.json", "profile.json"):
+            assert (COMPAT / version / name).is_file(), f"{version}/{name} missing"
 
 
 @pytest.fixture
