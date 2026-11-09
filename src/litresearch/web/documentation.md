@@ -29,6 +29,73 @@ This is the complete documentation. In the web UI it is under
 
 ### 1. Install
 
+Two ways to run litresearch:
+
+- **Desktop app (default):** on your own computer, for you alone. Double-click
+  it; it opens in your web browser.
+- **Server mode:** on a Raspberry Pi, NAS or lab server that is always on,
+  reachable from your laptop and phone with a password.
+
+#### Desktop app
+
+Download the file for your system from the **Releases** page of the
+litresearch repository on GitHub (latest release, *Assets*):
+
+| System | File | Install |
+|---|---|---|
+| Windows 10/11 (64-bit) | `litresearch-<version>-windows-x86_64.exe` | run it; installs for you only, no administrator rights; Start menu entry, optional desktop shortcut |
+| macOS (Apple silicon) | `litresearch-<version>-macos-arm64.dmg` | open it, drag **litresearch** to *Applications* |
+| Linux (x86_64 or ARM) | `litresearch-<version>-linux-x86_64.AppImage` / `-linux-aarch64.AppImage` | `chmod +x litresearch-*.AppImage`, then double-click or run it |
+
+The builds are not signed (signing costs money), so the system warns the
+first time:
+
+- **Windows** SmartScreen: *Windows protected your PC* → **More info** →
+  **Run anyway**.
+- **macOS**: right-click (or Ctrl-click) litresearch in *Applications* →
+  **Open** → **Open**. On newer macOS versions: try to open it once, then
+  *System Settings → Privacy & Security* → **Open Anyway**.
+- **Linux**: make the AppImage executable (above). If it says FUSE is
+  missing, install `libfuse2` (Debian/Ubuntu: `sudo apt install libfuse2t64`)
+  or run it with `--appimage-extract-and-run`.
+
+**First start:** litresearch creates your configuration and data folder,
+starts on this computer only (`http://127.0.0.1:47290/`, another free port
+if that one is taken) and opens it in your default browser, where you create
+your profile ([step 5](#5-create-your-profile-and-import-your-library)).
+Nothing is reachable from other computers. Starting it again while it runs
+just opens the browser on the running one.
+
+**Quit:** **⏻ Quit** at the bottom of the sidebar (or on the welcome page).
+Closing the browser tab does not stop litresearch; started from a terminal,
+Ctrl+C also quits. On macOS litresearch has no Dock icon: it runs in the
+background until you quit it; if it is already running, open
+`http://127.0.0.1:47290/` (or your bookmark) instead of starting it again.
+
+**Where your data lives** (`litresearch where` prints it):
+
+| System | Configuration | Data (profiles, backups, cache, log) |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\litresearch\config.yaml` | `%LOCALAPPDATA%\litresearch\` |
+| macOS | `~/Library/Application Support/litresearch/config.yaml` | `~/Library/Application Support/litresearch/` |
+| Linux | `~/.config/litresearch/config.yaml` | `~/.local/share/litresearch/` |
+
+The desktop app writes a log to `logs/app.log` in the data folder; if it
+cannot start, it opens a page in the browser that names the problem and the
+log file.
+
+**Update:** download and install the new version over the old one (quit
+litresearch first; the Windows installer closes it). Your data stays; the
+CHANGELOG says when a version changes the data format. **Uninstall:**
+Windows *Settings → Apps*, macOS move the app to the Bin, Linux delete the
+AppImage. Your data folder is kept; delete it yourself if you no longer need
+it.
+
+With a Python installation, `litresearch app` (or `litresearch-app`) starts
+the same desktop mode ([commands](#7-commands)).
+
+#### Server mode
+
 Requires Linux, Python ≥ 3.11, `git` and an internet connection for the
 installation (developed on a Raspberry Pi 5, Python 3.13). On Debian, Ubuntu
 or Raspberry Pi OS: `sudo apt install git python3-venv`.
@@ -383,6 +450,10 @@ litresearch serve --network wlan0    # no question: only the WLAN (or eth0, all,
 litresearch serve --no-choose        # no question: web.host / web.port from the config
 litresearch serve --list-networks    # the networks of this computer
 ```
+
+This chapter is about **server mode**. The [desktop app](#desktop-app)
+(`litresearch app`) needs none of it: it is always local and opens the
+browser itself.
 
 `serve` asks where the UI should be reachable (choosing another network
 offers to make it the default). It never asks when not run in a terminal
@@ -913,7 +984,8 @@ paper counts once).
 | `note REF TEXT`, `dismiss REF` | add a note / mark as not relevant |
 | `score`, `history` | level, streak, grade, badges / reading log |
 | `read-papers [--depth LEVEL]… [--rating N] [--since DATE] [--until DATE] [--library NAME] [--notes] [--dismissed] [--search WORDS] [--sort last\|first\|depth\|rating\|xp\|title] [--limit N] [--tsv FILE]` | your reading history; `--tsv` writes all matching rows |
-| `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI |
+| `app [--port N] [--no-browser]` | desktop mode: the web UI on this computer only, opened in your browser; Quit in the sidebar. `--no-browser` or `LITRESEARCH_NO_BROWSER=1`: do not open a browser. Also as `litresearch-app` |
+| `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI (server mode) |
 | `set-password [--remove] [--password-file FILE]` | password for network access |
 | `backup`, `restore FILE` | snapshot + progress export / restore a snapshot |
 | `export-progress FILE`, `import-progress FILE [--dry-run]` | move or merge progress between machines |
@@ -1113,6 +1185,7 @@ profile the command line uses.
 | Machine settings | `config/config.yaml` or the per-user config file | no; keep a copy |
 | Cached API answers (all profiles) | `data/cache/http_cache.sqlite` | yes, delete any time |
 | Login cookie key | `data/web_secret` | yes; deleting it logs everyone out |
+| Desktop app log, running-instance lock | `logs/app.log`, `app-instance.json` in the per-user data folder | yes |
 | Backups | `data/backups/<profile>/` (`backup.dir`) | they *are* the copy |
 | Data from before profiles | `data/litresearch.sqlite` | kept as it was |
 
@@ -1414,6 +1487,9 @@ licenses that permit use in this project.
 | *dev:* [pytest](https://docs.pytest.org/) | 9.1.1 | MIT | tests |
 | *dev:* [pytest-cov](https://github.com/pytest-dev/pytest-cov) | 7.1.0 | MIT | coverage |
 | *dev:* [Ruff](https://docs.astral.sh/ruff) | 0.16.10 | MIT | lint and format |
+| *build:* [PyInstaller](https://pyinstaller.org) | 6.22.3 | GPL-2.0 with bootloader exception | desktop app folders and `.app` (the exception allows bundling non-GPL apps) |
+| *build:* [Pillow](https://python-pillow.github.io) | CI | MIT-CMU | converting the icon for Windows and macOS builds |
+| *build:* [appimagetool](https://github.com/AppImage/appimagetool), [Inno Setup](https://jrsoftware.org/isinfo.php) | 1.9.1, 6 | MIT, Inno Setup license | Linux AppImage, Windows installer |
 
 Python standard library, notable uses: `sqlite3` (database, online backup,
 integrity check) · `hashlib.scrypt`, `hmac`, `secrets` (login) · `difflib`
@@ -1510,8 +1586,9 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
   Python 3.11–3.13 for pushes and pull requests to `main` and `dev`.
 - **Releases**: the version bump is its own commit (`pyproject.toml`,
   `__init__.py`, `CITATION.cff`). A tag `vX.Y.Z` runs
-  `.github/workflows/release.yml` (tests, wheel and source archive, GitHub
-  release with the CHANGELOG section; pre-release for `-alpha.N`/`-dev`).
+  `.github/workflows/release.yml` (tests, [desktop builds](#desktop-builds),
+  wheel and source archive, GitHub release with the CHANGELOG section;
+  pre-release for `-alpha.N`/`-dev`).
 - Issues use `.github/ISSUE_TEMPLATE/` (bug report, feature request, testing
   feedback); pull requests `.github/pull_request_template.md`. Hosting:
   GitHub; a GitLab@HHU mirror can be added as a second push target.
@@ -1548,6 +1625,26 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
 | `test_robustness.py`, `test_data_integrity.py` | crashes, concurrency, broken and hostile inputs; matching and merge correctness |
 | `test_scale.py`, `test_import_scale.py`, `test_longterm.py` | large libraries and years of use (`web_bigdata.py` builds the data) |
 | `test_network.py`, `test_live.py` | network interfaces for `serve`; real APIs (`--network`) |
+| `test_desktop.py` | desktop mode: port, single instance, Quit, browser, log; packaging files |
+
+### Desktop builds
+
+`.github/workflows/release.yml` builds the desktop apps for every tag (and
+on *Run workflow*, without releasing): PyInstaller (`packaging/litresearch.spec`,
+one folder, entry `packaging/desktop_entry.py`), then an AppImage
+(`tools/build_appimage.py`), an Inno Setup installer
+(`packaging/windows/litresearch.iss`) or a `.dmg` (`hdiutil`). Each build is
+checked with `tools/smoke_desktop.py BINARY`: start in a temporary home,
+create a profile, load pages, second start, Quit, lock removed. Locally on
+Linux:
+
+```bash
+pip install pyinstaller
+pyinstaller --distpath /tmp/lr/dist --workpath /tmp/lr/work packaging/litresearch.spec
+python tools/smoke_desktop.py /tmp/lr/dist/litresearch/litresearch
+python tools/build_appimage.py /tmp/lr/dist/litresearch --output /tmp/lr/litresearch.AppImage \
+    --appimagetool PATH/appimagetool-$(uname -m).AppImage
+```
 
 ### Recording new API fixtures
 
