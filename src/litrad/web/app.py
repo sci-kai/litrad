@@ -54,6 +54,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from sqlalchemy import case, func
 from sqlmodel import Session, select
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from litrad import __version__, archive, examples, export, history, libraries, profiles
@@ -140,6 +141,7 @@ from litrad.web import pwa
 from litrad.web.auth import (
     COOKIE,
     SESSION_DAYS,
+    LoginGuard,
     check_session,
     load_secret,
     make_session,
@@ -169,6 +171,8 @@ CURRENT_PROFILE: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
 MAX_UPLOAD = 50 * 2**20  # bytes
+# seconds a wrong password costs (slows down guessing)
+FAILED_LOGIN_DELAY = 1.0
 MAX_ARCHIVE_UPLOAD = 1024 * 2**20  # "export everything" archives (with notes)
 # the routes that take such an archive (streamed to a temporary file)
 ARCHIVE_UPLOAD_ROUTES = frozenset({"/welcome/import-all", "/profile/import-all"})
@@ -297,6 +301,8 @@ def create_app(
     templates = Jinja2Templates(directory=HERE / "templates")
     pwa.register(app, templates, HERE)  # manifest, service worker, offline page
     celebrations = Celebrations()
+    login_guard = LoginGuard()
+    login_lock = asyncio.Lock()
 
     env = templates.env
     env.globals.update(
@@ -564,8 +570,16 @@ def create_app(
         password_hash = load_config(config_path).web.password_hash
         if not password_hash:
             return RedirectResponse("/", status_code=303)
-        if not verify_password(password, password_hash):
-            await asyncio.sleep(1)  # slows down guessing
+        guard = app.state.login_guard
+        if guard.throttled():  # many wrong passwords lately: one check at a time, slowly
+            async with login_lock:
+                await asyncio.sleep(guard.delay)
+                right = await run_in_threadpool(verify_password, password, password_hash)
+        else:  # scrypt takes a while: never on the event loop
+            right = await run_in_threadpool(verify_password, password, password_hash)
+        if not right:
+            guard.failed()
+            await asyncio.sleep(FAILED_LOGIN_DELAY)  # slows down guessing
             return RedirectResponse(
                 f"/login?{urlencode({'next': safe(next), 'failed': 'true'})}", status_code=303
             )
@@ -2620,6 +2634,7 @@ def create_app(
             return templates.TemplateResponse(request, "stopped.html", {})
 
     app.state.celebrations = celebrations
+    app.state.login_guard = login_guard
     env.globals.update(Category=Category, depth=depth)
     return app
 

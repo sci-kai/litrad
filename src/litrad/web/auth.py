@@ -11,6 +11,7 @@ import hmac
 import os
 import secrets
 import time
+from collections import deque
 from pathlib import Path
 
 SCRYPT_N, SCRYPT_R, SCRYPT_P = 2**14, 8, 1
@@ -45,6 +46,33 @@ def verify_password(password: str, stored: str | None) -> bool:
     except (ValueError, TypeError):
         return False
     return hmac.compare_digest(candidate.hex(), digest)
+
+
+class LoginGuard:
+    """A global back-off for password guessing (all clients together).
+
+    After ``limit`` wrong passwords within ``window`` seconds, logins are
+    checked one at a time, each after ``delay`` seconds, until the window has
+    passed. Nobody is locked out: the right password still works, only slower.
+    """
+
+    def __init__(self, limit: int = 10, window: float = 60.0, delay: float = 2.0, clock=None):
+        self.limit, self.window, self.delay = limit, window, delay
+        self._clock = clock or time.monotonic
+        self._failures: deque[float] = deque()
+
+    def _prune(self) -> None:
+        cutoff = self._clock() - self.window
+        while self._failures and self._failures[0] < cutoff:
+            self._failures.popleft()
+
+    def throttled(self) -> bool:
+        self._prune()
+        return len(self._failures) >= self.limit
+
+    def failed(self) -> None:
+        self._prune()
+        self._failures.append(self._clock())
 
 
 def load_secret(path: Path) -> bytes:

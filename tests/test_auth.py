@@ -212,3 +212,47 @@ def test_preview_links_refuse_backslashes():
         assert not safe_href(href), href
     for href in ("https://doi.org/10.1/x", "/papers/3", "#notes", "mailto:a@b.c"):
         assert safe_href(href), href
+
+
+def test_login_guard_backs_off_and_recovers():
+    from litrad.web.auth import LoginGuard
+
+    now = [0.0]
+    guard = LoginGuard(limit=3, window=60, clock=lambda: now[0])
+    for _ in range(2):
+        guard.failed()
+    assert not guard.throttled()
+    guard.failed()
+    assert guard.throttled()
+    now[0] = 61  # the failures have aged out: back to normal
+    assert not guard.throttled()
+
+
+def test_login_checks_off_the_event_loop_and_backs_off(protected, monkeypatch):
+    import asyncio
+
+    import litrad.web.app as web
+
+    monkeypatch.setattr(web, "FAILED_LOGIN_DELAY", 0)
+    threads = []
+
+    def checked(password, stored):
+        try:
+            asyncio.get_running_loop()
+            threads.append("event loop")
+        except RuntimeError:
+            threads.append("worker")
+        return password == "lab-meeting-42"
+
+    monkeypatch.setattr(web, "verify_password", checked)
+    guard = protected.app.state.login_guard
+    guard.delay = 0.01
+    for _ in range(guard.limit):
+        response = protected.post("/login", data={"password": "nope"}, follow_redirects=False)
+        assert "failed=true" in response.headers["location"]
+    assert guard.throttled() and set(threads) == {"worker"}
+    # throttled, but the owner is not locked out
+    response = protected.post(
+        "/login", data={"password": "lab-meeting-42", "next": "/queue"}, follow_redirects=False
+    )
+    assert response.headers["location"] == "/queue" and COOKIE in protected.cookies

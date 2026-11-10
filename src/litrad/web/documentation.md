@@ -613,7 +613,9 @@ exist, the server does not start and lists the choices.
   since the login protects the data.
 - `set-password` again signs out all devices; `set-password --remove`
   removes it (the UI then only starts locally).
-- A wrong password costs a one-second delay.
+- A wrong password costs a one-second delay. After 10 wrong passwords
+  within a minute (from anywhere), logins are checked one at a time with a
+  short wait until the minute has passed; the right password still works.
 - Plain HTTP: fine in your home network, but never expose the port to the
   internet; use a VPN (Tailscale, WireGuard) from outside.
 - Run it in the background: `python3 install.py --service`.
