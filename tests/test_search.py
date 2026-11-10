@@ -251,7 +251,7 @@ def test_hits_do_not_overwrite_stored_papers(db):
 @pytest.fixture
 def site(tmp_path, monkeypatch, make_http):
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\n  cache_dir: {tmp_path / 'cache'}\n")
+    path.write_text(f"paths:\n  cache_dir: {tmp_path / 'cache'}\n")
     apis = FakeApis()
     monkeypatch.setattr(web, "make_http", lambda cfg: make_http(apis))
     client = TestClient(web.create_app(path))
@@ -313,7 +313,7 @@ def cli_profile(tmp_path, monkeypatch, make_http):
     apis = FakeApis()
     monkeypatch.setattr(cli_reading, "make_http", lambda cfg: make_http(apis))
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\n  cache_dir: {tmp_path / 'cache'}\n")
+    path.write_text(f"paths:\n  cache_dir: {tmp_path / 'cache'}\n")
     runner = CliRunner()
     runner.invoke(cli.app, ["profile", "create", "Ada", "--yes", "-c", str(path)])
     return runner, str(path)

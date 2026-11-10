@@ -529,5 +529,8 @@ def test_loading_a_broken_file_fails_cleanly(config_path, plain_console, tmp_pat
         result = runner.invoke(cli.app, ["profile", "load", str(path), "-c", str(config_path)])
         assert result.exit_code == 1 and result.exception.__class__ is SystemExit, name
         compared = runner.invoke(cli.app, ["profile", "compare", str(path), "-c", str(config_path)])
-        assert compared.exception is None or compared.exception.__class__ is SystemExit, name
+        # no traceback: a message (here: there is no profile to compare with)
+        assert compared.exception is None or isinstance(
+            compared.exception, (SystemExit, ConfigError)
+        ), name
     assert profiles.list_profiles(base) == []

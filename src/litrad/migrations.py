@@ -18,8 +18,9 @@ opens a database:
 
 Rules for new steps (the 1.x compatibility promise): append a ``Step`` with
 the next number (the first one is 2: it upgrades version 1 to 2) and raise
-``SCHEMA_VERSION``; never change or remove a released step. Additive model changes (new tables, nullable columns or
-columns with a default, new indexes) need a step that only calls
+``SCHEMA_VERSION``; never change or remove a released step. Additive model
+changes (new tables, nullable columns or columns with a default, new indexes)
+need a step that only calls
 ``sync_schema``; a test fails when the models change without a new version
 (``tests/data/compat/schema.json``).
 """

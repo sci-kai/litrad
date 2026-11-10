@@ -295,10 +295,11 @@ def make_work(
 # --- archives ------------------------------------------------------------------------
 
 
-def archive_data(session, cfg) -> dict:
+def archive_data(session, cfg, consistent: bool = True) -> dict:
     """The profile in ``session`` as ``backup.merge`` takes it, via a checked archive.
 
-    The same data as writing an archive and reading it back, without the file.
+    The same data as writing an archive and reading it back, without the file;
+    ``consistent=False`` for data that tests make inconsistent on purpose.
     """
     from litrad import archive
     from litrad.db import now
@@ -306,7 +307,7 @@ def archive_data(session, cfg) -> dict:
     files = archive.collect(session, cfg)
     info = archive.manifest(files, None, now())
     checked = archive.check(archive.Archive(Path("memory.zip"), info, files), cfg)
-    assert checked.report.ok, checked.report.lines()
+    assert checked.report.ok or not consistent, checked.report.lines()
     return archive._keys(checked)
 
 

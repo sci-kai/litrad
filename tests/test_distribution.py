@@ -93,7 +93,7 @@ def test_environment_config_is_created_on_first_use_with_data_next_to_it(tmp_pat
     assert choice.path == target and choice.rule == "env" and target.is_file()
     assert messages and str(target) in messages[0]
     cfg = load_config(target)
-    assert cfg.paths.database.parent == target.parent
+    assert cfg.paths.profiles_dir.parent == target.parent
     assert cfg.backup.dir.parent == target.parent
     # the second run keeps the file and says nothing
     target.write_text(target.read_text() + "\n# mine\n")

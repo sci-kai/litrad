@@ -403,7 +403,7 @@ def test_source_badges_and_curation(db):
         record_reading(session, cfg, add(session, "Own"), ReadStatus.skimmed, at=MONDAY).award
     )
     recommended = add(session, "Rec")
-    batch = RecommendationBatch(week_start=MONDAY.date())
+    batch = RecommendationBatch(week_start=MONDAY.date(), created_at=MONDAY)
     session.add(batch)
     session.flush()
     session.add(

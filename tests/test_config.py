@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from litrad.config import Config, load_config
+from litrad.config import Config, ConfigError, load_config
 
 EXAMPLE = Path(__file__).parents[1] / "config" / "config.example.yaml"
 
@@ -25,15 +25,12 @@ def test_local_embeddings_need_url():
         Config.model_validate({"paths": {"bibtex": "x.bib"}, "embeddings": {"backend": "local"}})
 
 
-def test_old_detail_skim_keys_are_migrated():
-    cfg = Config.model_validate(
-        {"paths": {"bibtex": "x.bib"}, "selection": {"n_detail": 2, "n_skim": 3}}
-    )
-    assert cfg.selection.n_recommendations == 5
-    capped = Config.model_validate(
-        {"paths": {"bibtex": "x.bib"}, "selection": {"n_detail": 4, "n_skim": 4}}
-    )
-    assert capped.selection.n_recommendations == 5
+@pytest.mark.parametrize("key", ["database", "bibtex"])
+def test_profile_paths_are_no_setting_of_config_yaml(tmp_path, key):
+    path = tmp_path / "config.yaml"
+    path.write_text(f"paths:\n  {key}: data/x\n")
+    with pytest.raises(ConfigError, match=f"paths.{key} is not a setting of config.yaml"):
+        load_config(path)
 
 
 @pytest.mark.parametrize("value", [".inf", "-.inf", ".nan"])
@@ -41,9 +38,9 @@ def test_infinite_numbers_rejected(tmp_path, value):
     from litrad.config import ConfigError
 
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\nbackup:\n  interval_hours: {value}\n")
+    path.write_text(f"paths: {{}}\nbackup:\n  interval_hours: {value}\n")
     with pytest.raises(ConfigError, match="finite"):
         load_config(path)
-    path.write_text(f"paths:\n  bibtex: x.bib\nselection:\n  mmr_lambda: {value}\n")
+    path.write_text(f"paths: {{}}\nselection:\n  mmr_lambda: {value}\n")
     with pytest.raises(ConfigError):
         load_config(path)

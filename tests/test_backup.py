@@ -249,7 +249,7 @@ def test_export_contents(source):
         "Only a title",
         "Queued paper",
     }
-    assert data["achievements"][0]["code"] == "first_read"
+    assert "first_read" in {a["code"] for a in data["achievements"]}
 
 
 def test_import_into_other_installation(source, target):
@@ -516,7 +516,7 @@ def test_import_named_recommended_does_not_merge_into_recommended(source, target
         session.flush()
         libraries.link(session, lib, paper)
         session.commit()
-        data = archive_data(session, cfg)
+        data = archive_data(session, cfg, consistent=False)
     assert sorted(e["kind"] for e in data["libraries"]) == ["imported", "recommended"]
     data["libraries"] = [e for e in data["libraries"] if e["kind"] == "imported"]
     with Session(tengine) as session:

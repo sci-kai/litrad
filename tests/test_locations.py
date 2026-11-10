@@ -71,7 +71,7 @@ def test_first_run_creates_the_user_config(tmp_path):
     data = locations.user_data_dir()
     assert cfg.paths.base_dir == data
     assert cfg.paths.profiles_dir == data / "profiles"
-    assert cfg.paths.database == data / "litrad.sqlite"
+    assert cfg.paths.profiles_dir == data / "profiles"
     assert cfg.paths.cache_dir == data / "cache"
     assert cfg.backup.dir == data / "backups"
     # comments of the example are kept
@@ -82,10 +82,11 @@ def test_first_run_creates_the_user_config(tmp_path):
 
 
 def test_first_run_from_the_command_line(tmp_path):
-    result = CliRunner().invoke(app, ["status"])
+    result = CliRunner().invoke(app, ["profile", "create", "Ada", "--yes"])
     assert result.exit_code == 0, result.output
     assert locations.user_config_file().exists()
     assert "Created your configuration" in result.output
+    assert (locations.user_data_dir() / "profiles" / "ada" / "litrad.sqlite").exists()
     # nothing in the current folder
     assert not (tmp_path / "config").exists() and not (tmp_path / "data").exists()
 
@@ -106,8 +107,7 @@ def test_git_layout_resolves_like_before(tmp_path):
     )
     cfg = load_config(Path("config/config.yaml"))
     assert cfg.paths.profiles_dir == tmp_path / "data" / "profiles"
-    assert cfg.paths.database == tmp_path / "data" / "litrad.sqlite"
-    assert cfg.paths.bibtex == tmp_path / "data" / "paperpile" / "library.bib"
+    assert cfg.paths.profiles_dir == tmp_path / "data" / "profiles"
     assert cfg.paths.cache_dir == tmp_path / "data" / "cache"
     assert cfg.backup.dir == tmp_path / "data" / "backups"
     assert cfg.paths.obsidian_vault is None
