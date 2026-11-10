@@ -56,8 +56,9 @@
       {% else %}
       {% if note.body %}<div class="note-body">{{ note_html }}</div>{% elif reading %}<p class="muted">No notes yet.</p>{% endif %}
       {% if reading %}
-      <details class="note-editor" {{ "open" if note_preview is not none }}>
+      <details class="note-editor" {{ "open" if note_preview is not none or note_error }}>
         <summary>✏️ Edit</summary>
+        {% if note_error %}<p class="neg" role="alert">{{ note_error }}</p>{% endif %}
         <form method="post" action="/papers/{{ paper.id }}/note" class="grid" style="gap:.5rem; margin-top:.6rem">
           <input type="hidden" name="base" value="{{ note.base }}">
           <label for="note-text">Markdown · <code>[[citation-key]]</code> links a paper · {{ rules.reflection_chars }}+ characters: ✍️ +{{ rules.reflection_xp }} XP once</label>

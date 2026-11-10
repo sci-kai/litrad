@@ -904,7 +904,8 @@ def save(
 ):
     """Save the note body from the editor; ``base`` = hash of the version it was opened from.
 
-    Raises ``NoteConflict`` (nothing written) if the file changed meanwhile.
+    Raises ``NoteConflict`` (nothing written) if the file changed meanwhile,
+    ``NotesError`` if the file cannot be written (nothing is changed).
     Returns the XP award (notes bonus).
     """
     at = at or now()
@@ -940,6 +941,12 @@ def save(
     except _Changed as exc:
         session.rollback()
         raise NotesError("The file changed while saving; open the paper again") from exc
+    except OSError as exc:  # read-only vault, full disk, ...
+        session.rollback()
+        raise NotesError(
+            f"The note could not be saved to {state.path}: {exc.strerror or exc}. "
+            "Nothing was changed; your text is still in the editor."
+        ) from exc
     if stat is not None:
         session.add(
             _store(

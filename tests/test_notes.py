@@ -387,6 +387,31 @@ def test_web_editor_preview_save_and_conflict(app_env):  # noqa: F811
     engine.dispose()
 
 
+def test_web_editor_keeps_the_draft_when_the_file_cannot_be_written(app_env, monkeypatch):  # noqa: F811
+    client, path, _ = app_env
+    pid = web_paper(path)
+    post(client, f"/papers/{pid}/read", {"level": "read", "note": "on disk"})
+    page = client.get(f"/papers/{pid}").text
+    base = re.search(r'name="base" value="([0-9a-f]*)"', page).group(1)
+
+    def full(*_args, **_kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(notes, "_write", full)
+    response = post(client, f"/papers/{pid}/note", {"text": "my long draft", "base": base})
+    assert response.status_code == 200
+    assert "No space left on device" in response.text and "my long draft" in response.text
+    assert 'class="note-editor" open' in response.text
+    cfg = profile_cfg(path)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        assert session.get(Reading, pid).notes.endswith("on disk")  # nothing changed
+        with pytest.raises(notes.NotesError, match="could not be saved"):
+            notes.save(session, cfg, session.get(Paper, pid), "again", base)
+        assert session.get(Reading, pid).notes.endswith("on disk")
+    engine.dispose()
+
+
 def test_web_log_dialog_with_changed_file(app_env):  # noqa: F811
     client, path, _ = app_env
     pid = web_paper(path)

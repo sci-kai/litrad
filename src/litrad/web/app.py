@@ -1220,6 +1220,7 @@ def create_app(
             note_preview=note_view.get("preview"),
             note_conflict=note_view.get("conflict"),
             note_merged=note_view.get("merged"),
+            note_error=note_view.get("error"),
             recs=recs,
             xp_events=xp_events,
             queue_item=item,
@@ -2540,7 +2541,15 @@ def create_app(
                             request, session, cfg, paper, draft=text, preview=preview
                         )
                     else:
-                        award = note_files.save(session, cfg, paper, text, base)
+                        try:
+                            award = note_files.save(session, cfg, paper, text, base)
+                        except note_files.NoteConflict:
+                            raise
+                        except note_files.NotesError as exc:  # keep the draft
+                            session.rollback()
+                            return render_paper(
+                                request, session, cfg, paper, draft=text, error=str(exc)
+                            )
                 except note_files.NoteConflict as exc:
                     session.rollback()
                     note = note_files.refresh_paper(session, cfg, paper)
