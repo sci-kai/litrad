@@ -1841,8 +1841,9 @@ profile; without any profile it stops and says how to create one.
 - One transaction per action, `PRAGMA synchronous=FULL`, a 30 s busy
   timeout; snapshots via SQLite's online backup API, integrity-checked;
   atomic writes (temporary file, `fsync`, `os.replace`).
-- Uploads are checked in a temporary file, limited to 50 MB (HTTP 413 for
-  larger requests) and stored under safe names; an invalid export never
+- Uploads are checked in a temporary file, limited to 50 MB, archives for
+  *Import an archive* to 1 GB (HTTP 413 for larger requests, 411 for a
+  request body without a length), and stored under safe names; an invalid export never
   replaces a library; the previous file is kept as `.bak`.
 - Network access needs a password (salted scrypt, RFC 7914) and an
   HMAC-SHA256-signed (RFC 2104), HttpOnly, SameSite=Lax cookie whose

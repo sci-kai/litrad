@@ -170,6 +170,15 @@ QUEUE_NUDGE_DAYS = 14
 LEDGER_PAGE = 50
 MAX_UPLOAD = 50 * 2**20  # bytes
 MAX_ARCHIVE_UPLOAD = 1024 * 2**20  # "export everything" archives (with notes)
+# the routes that take such an archive (streamed to a temporary file)
+ARCHIVE_UPLOAD_ROUTES = frozenset({"/welcome/import-all", "/profile/import-all"})
+
+
+def body_limit(path: str) -> int:
+    """The largest request body a route accepts (form fields included)."""
+    return (MAX_ARCHIVE_UPLOAD if path in ARCHIVE_UPLOAD_ROUTES else MAX_UPLOAD) + 2**20
+
+
 LIBRARY_PAGE = 50
 MAX_WEEKS = 104  # weekly reports on the dashboard: how far back they go
 WEEKS_PER_PAGE = 4
@@ -368,11 +377,19 @@ def create_app(
 
     @app.middleware("http")
     async def limit_body_size(request: Request, call_next):
-        """Refuse huge uploads before they are spooled to the (small) temp folder."""
-        length = request.headers.get("content-length") or "0"
-        if not length.isdigit() or int(length) > MAX_UPLOAD + 2**20:
+        """Refuse huge uploads before they are spooled to the (small) temp folder.
+
+        A body without a Content-Length (chunked) could not be checked: refused.
+        """
+        length = request.headers.get("content-length")
+        if length is None:
+            if "transfer-encoding" in request.headers:
+                return PlainTextResponse("Send the request with a Content-Length", status_code=411)
+            length = "0"
+        limit = body_limit(request.url.path)
+        if not length.isdigit() or int(length) > limit:
             return PlainTextResponse(
-                f"Request too large (at most {MAX_UPLOAD // 2**20} MB)", status_code=413
+                f"Request too large (at most {limit // 2**20} MB)", status_code=413
             )
         return await call_next(request)
 

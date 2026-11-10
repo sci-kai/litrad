@@ -377,6 +377,40 @@ def test_huge_requests_are_refused_early(user):
     assert response.status_code == 413
 
 
+def test_archive_routes_have_the_archive_limit(user):
+    client, _ = user
+    between = str(web.MAX_UPLOAD + 2**22)  # too large for a library, fine for an archive
+    for url in ("/profile/import-all", "/welcome/import-all"):
+        assert web.body_limit(url) == web.MAX_ARCHIVE_UPLOAD + 2**20
+        response = client.post(
+            url, content=b"x", headers={"content-length": between, "content-type": "text/plain"}
+        )
+        assert response.status_code != 413, url
+    too_large = str(web.MAX_ARCHIVE_UPLOAD + 2**21)
+    response = client.post(
+        "/profile/import-all",
+        content=b"x",
+        headers={"content-length": too_large, "content-type": "text/plain"},
+    )
+    assert response.status_code == 413
+    assert web.body_limit("/library/import") == web.MAX_UPLOAD + 2**20
+
+
+def test_requests_without_content_length_are_refused(user):
+    client, _ = user
+
+    def chunks():
+        yield b"--b\r\n"
+        yield b"x" * 1024
+
+    for url in ("/library/import", "/profile/import-all"):
+        response = client.post(
+            url, content=chunks(), headers={"content-type": "multipart/form-data; boundary=b"}
+        )
+        assert response.status_code == 411, url
+    assert client.get("/queue").status_code == 200  # no body, no header: fine
+
+
 def test_profile_files_must_be_zip_archives(user):
     client, _ = user
     for url in ("/welcome/load", "/profile/compare"):
