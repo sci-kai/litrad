@@ -122,6 +122,11 @@ def test_login_does_not_redirect_elsewhere(protected):
         follow_redirects=False,
     )
     assert response.headers["location"] == "/"
+    for target in ("/\\evil.example", "//evil.example", "/\t/evil.example"):
+        response = protected.post(
+            "/login", data={"password": "lab-meeting-42", "next": target}, follow_redirects=False
+        )
+        assert response.headers["location"] == "/", target
 
 
 def test_no_password_means_no_login(tmp_path):
@@ -170,3 +175,40 @@ def test_set_password_keeps_comments(tmp_path):
 
     result = runner.invoke(cli.app, ["set-password", "--remove", "-c", str(path)])
     assert result.exit_code == 0 and load_config(path).web.password_hash is None
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "//evil.example",
+        "/\\evil.example",
+        "/\\\\evil.example",
+        "/x\\..\\y",
+        "/\t/evil.example",
+        "/\n/evil.example",
+        "https://evil.example",
+        "javascript:alert(1)",
+        "evil.example",
+        "",
+    ],
+)
+def test_redirect_targets_stay_on_this_site(target):
+    from litrad.web.app import local_path
+
+    assert not local_path(target)
+
+
+def test_local_redirect_targets_are_kept():
+    from litrad.web.app import local_path
+
+    for target in ("/", "/queue", "/search?q=a+b&page=2#top", "/papers/3"):
+        assert local_path(target)
+
+
+def test_preview_links_refuse_backslashes():
+    from litrad.notes import safe_href
+
+    for href in ("/\\evil.example", "/\t/evil.example", "https:\\\\evil.example", "//evil.example"):
+        assert not safe_href(href), href
+    for href in ("https://doi.org/10.1/x", "/papers/3", "#notes", "mailto:a@b.c"):
+        assert safe_href(href), href

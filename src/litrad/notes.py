@@ -1032,7 +1032,20 @@ ALLOWED_TAGS = {
     "h1", "h2", "h3", "h4", "h5", "h6", "hr", "a", "table", "thead", "tbody", "tr", "th",
     "td", "span", "div", "del",
 }  # fmt: skip
-SAFE_HREF = re.compile(r"^(https?://|mailto:|/(?!/)|#)", re.I)
+SAFE_HREF = re.compile(r"^(https?://|mailto:|/(?![/\\])|#)", re.I)
+
+
+def safe_href(value: str) -> bool:
+    """A link target for the preview: web, mail, this site or an anchor.
+
+    Backslashes and control characters are refused anywhere: browsers read
+    ``/\\evil.example`` (and ``/<tab>/evil.example``) as another site.
+    """
+    if any(c == "\\" or ord(c) < 32 or ord(c) == 127 for c in value):
+        return False
+    return bool(SAFE_HREF.match(value))
+
+
 WIKILINK = r"\[\[([^\[\]|#\n]+)(#[^\[\]|\n]*)?(?:\|([^\[\]\n]+))?\]\]"
 
 
@@ -1061,14 +1074,14 @@ class _Sanitize(Treeprocessor):
             for element in list(parent):
                 if element.tag == "img":  # no external requests: show a link instead
                     src, alt = element.get("src", ""), element.get("alt")
-                    element.tag = "a" if SAFE_HREF.match(src) else "span"
+                    element.tag = "a" if safe_href(src) else "span"
                     element.attrib = {"href": src} if element.tag == "a" else {}
                     element.text = "🖼 " + (alt or src or "image")
                 if element.tag not in ALLOWED_TAGS:
                     element.tag = "span"
                 kept = {}
                 for name, value in element.attrib.items():
-                    if name == "href" and element.tag == "a" and SAFE_HREF.match(value.strip()):
+                    if name == "href" and element.tag == "a" and safe_href(value.strip()):
                         kept[name] = value.strip()
                     elif name == "class" and value in ("wikilink", "wikilink missing"):
                         kept[name] = value

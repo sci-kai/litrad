@@ -174,6 +174,16 @@ MAX_ARCHIVE_UPLOAD = 1024 * 2**20  # "export everything" archives (with notes)
 ARCHIVE_UPLOAD_ROUTES = frozenset({"/welcome/import-all", "/profile/import-all"})
 
 
+def local_path(url: str) -> bool:
+    """A path on this site: one leading "/", no backslash or control character.
+
+    Browsers read ``//host``, ``/\\host`` and ``/<tab>/host`` as another site.
+    """
+    if not url.startswith("/") or url[1:2] in ("/", "\\"):
+        return False
+    return not any(c == "\\" or ord(c) <= 32 or ord(c) == 127 for c in url)
+
+
 def body_limit(path: str) -> int:
     """The largest request body a route accepts (form fields included)."""
     return (MAX_ARCHIVE_UPLOAD if path in ARCHIVE_UPLOAD_ROUTES else MAX_UPLOAD) + 2**20
@@ -2590,7 +2600,7 @@ def create_app(
 
     def safe(url: str) -> str:
         """Only allow local redirect targets."""
-        return url if url.startswith("/") and not url.startswith("//") else "/"
+        return url if local_path(url) else "/"
 
     # ----- desktop mode -----
     if on_quit is not None:
