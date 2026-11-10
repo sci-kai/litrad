@@ -1083,13 +1083,13 @@ class GameRules(BaseModel):
     xp_read: int = Field(40, ge=0, le=10000)
     xp_thorough: int = Field(80, ge=0, le=10000)
     # bonus ("got the cheese"): share of the base points for reading the top paper of the queue
-    cheese_bonus: float = Field(0.5, ge=0, le=10)
+    cheese_bonus: float = Field(0.2, ge=0, le=10)
     # bonus: +step per consecutive reading week, up to max_steps steps
     streak_step: float = Field(0.05, ge=0, le=1)
     streak_max_steps: int = Field(10, ge=0, le=100)
     # bonus: landmark paper read at least at "read" depth
     classic_percentile: float = Field(99.0, ge=0, le=100)
-    classic_xp: int = Field(20, ge=0, le=10000)
+    classic_xp: int = Field(10, ge=0, le=10000)
     # bonus: read soon after publication
     hot_days: int = Field(30, ge=0, le=3650)
     hot_xp: int = Field(10, ge=0, le=10000)
@@ -1105,7 +1105,7 @@ class GameRules(BaseModel):
     # weekly quest: papers at least "read" + further papers at least skimmed
     weekly_detail_goal: int = Field(1, ge=0, le=100)
     weekly_skim_goal: int = Field(1, ge=0, le=100)
-    quest_xp: int = Field(20, ge=0, le=10000)
+    quest_xp: int = Field(10, ge=0, le=10000)
     # per unlocked badge
     badge_xp: int = Field(8, ge=0, le=10000)
     # penalty: a queued paper leaves the queue before it was at least skimmed

@@ -161,7 +161,7 @@ def test_cheese_bonus_only_for_top_of_queue(db):
         record_reading(session, cfg, second, ReadStatus.read, at=MONDAY).award
     )
     award = record_reading(session, cfg, top, ReadStatus.read, at=MONDAY).award
-    assert kinds(award)["cheese"] == 20  # half of the 40 base points
+    assert kinds(award)["cheese"] == 8  # 20 % of the 40 base points
 
 
 def test_cheese_needs_more_than_the_abstract(db):

@@ -968,15 +968,15 @@ planned to read first), not volume.
 |---|---|---|
 | `xp_abstract` / `xp_skimmed` / `xp_read` / `xp_thorough` | 5 / 15 / 40 / 80 | base points for the depth **you** choose; deeper may never pay less |
 | `backlog_share` | 0.8 | 🕰️ share of the base points for a paper you **read earlier**, before litrad ([below](#starting-with-papers-you-already-read)) |
-| `cheese_bonus` | 0.5 | 🧀 *Got the cheese: read your top paper first*: +50 % of the base points when the paper was **q1** (up next) and read at least skimmed (XP kind `cheese`) |
+| `cheese_bonus` | 0.2 | 🧀 *Got the cheese: read your top paper first*: +20 % of the base points when the paper was **q1** (up next) and read at least skimmed (XP kind `cheese`) |
 | `streak_step` / `streak_max_steps` | 0.05 / 10 | 🔥 +5 % per consecutive reading week, at most +50 % ("next reads earn ×N") |
-| `classic_percentile` / `classic_xp` | 99 / 20 | 🏛️ landmark (top 1 % cited) read at least at "read" depth |
+| `classic_percentile` / `classic_xp` | 99 / 10 | 🏛️ landmark (top 1 % cited) read at least at "read" depth |
 | `hot_days` / `hot_xp` | 30 / 10 | 📰 read within 30 days of publication |
 | `recommendation_xp` | 8 | 🎯 read (≥ skimmed) a paper from your recommendations; it counts only if it was recommended before you first read it |
 | `rating_xp` | 2 | ⭐ first rating of a paper |
 | `reflection_chars` / `reflection_xp` | 140 / 5 | ✍️ notes on a paper reach 140 characters |
 | `inbox_zero_xp` | 5 | 📭 the queue becomes empty because you *read* its last paper (once per day) |
-| `weekly_detail_goal` / `weekly_skim_goal` / `quest_xp` | 1 / 1 / 20 | 🗓️ weekly quest: 1 paper at least "read" + 1 more at least skimmed |
+| `weekly_detail_goal` / `weekly_skim_goal` / `quest_xp` | 1 / 1 / 10 | 🗓️ weekly quest: 1 paper at least "read" + 1 more at least skimmed |
 | `badge_xp` | 8 | 🏅 per unlocked badge |
 | `drop_penalty` | 15 | ⚠️ a queued paper (from anywhere) leaves the queue, removed or marked not relevant, before you at least skimmed it |
 | `levels` | 60 levels | the ladder below |
@@ -1078,7 +1078,9 @@ deep read by at most two: after the first 3–5 papers you are at about
 level 4–5 with 2 badges, and badges then come one or two at a time. Later
 steps grow slowly to about 750 XP; a regular reader gets a level-up every
 week or two and reaches the top after more than two years. The ladder was fitted with `tools/simulate_game.py`, which
-plays typical readers on the real game code ([Balancing](#balancing)).
+plays typical readers on the real game code ([Balancing](#balancing)),
+before the cheese, landmark and quest bonuses were lowered: the figures in
+this paragraph are from that run.
 
 ### Badges (default targets)
 
@@ -1226,7 +1228,9 @@ level by week, badges by week, the badges reached within one and two years,
 the quest rate, drop penalties, the longest stretch without a level-up
 or badge, the share of XP per source (reading, badges, quests, other) and
 the first 10 papers of a new profile, reading by reading. The defaults
-above give:
+above gave the figures below; they were computed before the cheese bonus
+was lowered from 50 % to 20 % and the landmark and quest bonuses from 20 to
+10 XP, so they are somewhat too high now:
 
 | Reader | Week 1 | Week 4 | Week 52 | Week 104 | Badges in 2 years | Longest gap (reading weeks) | XP from reading (2 years) |
 |---|---|---|---|---|---|---|---|
