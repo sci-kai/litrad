@@ -9,6 +9,9 @@ The first release candidate of litrad 1.0, the Literature Radar Game. From
 1.0 on, every 1.x version reads and upgrades the data, settings and archives
 of every earlier 1.x version.
 
+Licensed under MIT with the Commons Clause: free to use, change and share,
+but not to sell litrad or a paid product or service based mainly on it.
+
 ### Added
 
 **Recommendations**

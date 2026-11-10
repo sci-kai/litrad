@@ -83,5 +83,5 @@ testing: [TESTING.md](TESTING.md) · contributing:
 ## License
 
 MIT with the [Commons Clause](https://commonsclause.com): free to use, study,
-change and share, but not to sell this software or a paid product or service
-(incl. hosting, consulting or support) based mainly on it. See [LICENSE](LICENSE).
+change and share, but not to sell litrad or a paid product or service (incl.
+hosting, consulting or support) based mainly on it. See [LICENSE](LICENSE).

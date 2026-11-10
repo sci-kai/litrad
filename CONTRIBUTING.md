@@ -1,7 +1,8 @@
 # Contributing to litrad
 
 Thanks for using and testing litrad! Reports of what breaks are the most
-useful contribution.
+useful contribution. Contributions are accepted under the project's license
+(MIT with the Commons Clause, see [LICENSE](LICENSE)).
 
 ## Reporting problems and ideas
 
