@@ -1579,8 +1579,8 @@ def create_app(
             with Session(engine) as session:
                 try:
                     if fields["target"] == "new":
-                        if not fields["name"]:
-                            raise libraries.LibraryError("Give the new library a name")
+                        if not fields["name"]:  # optional: named after the file
+                            fields["name"] = libraries.name_from_file(session, upload.filename)
                         libraries.check_name(session, fields["name"])
                     else:
                         library = session.get(Library, fields["library_id"] or -1)

@@ -372,9 +372,17 @@ def test_overview_and_first_import(site):
     assert files and files[0].read_bytes() == SAMPLE_BIB.read_bytes()
 
 
+def test_a_library_without_a_name_is_named_after_its_file(site):
+    client, _ = site
+    first = upload(client, SAMPLE_BIB.read_bytes(), filename="paperpile_export-2026.bib", name="")
+    assert "paperpile export 2026: 7 entries imported" in first.text
+    second = upload(client, SAMPLE_BIB.read_bytes(), filename="paperpile_export-2026.bib", name="")
+    assert "paperpile export 2026 2: 7 entries imported" in second.text
+    assert "paperpile export 2026 2" in client.get("/library").text
+
+
 def test_import_problems(site):
     client, _ = site
-    assert "Give the new library a name" in upload(client, SAMPLE_BIB.read_bytes(), name="").text
     page = upload(client, b"@ARTICLE{x, title = {never closed").text
     assert "Not valid BibTeX" in page and "Nothing was imported" in page
     page = client.post("/library/import", data={"action": "import"}, follow_redirects=True).text

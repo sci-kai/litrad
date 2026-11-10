@@ -268,6 +268,12 @@ def set_used(session: Session, chosen: set[int]) -> list[Library]:
     return used
 
 
+def name_from_file(session: Session, filename: str) -> str:
+    """A free library name from an export's file name, e.g. "paperpile export"."""
+    stem = re.sub(r"[_\s]+", " ", Path(filename or "").stem.replace("-", " ")).strip()
+    return _free_name(session, (stem or DEFAULT_NAME)[:MAX_NAME].strip())
+
+
 def _free_name(session: Session, name: str) -> str:
     taken = {lib.name.lower() for lib in session.exec(select(Library)).all()}
     candidate, number = name, 2

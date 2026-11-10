@@ -33,7 +33,7 @@
         <span><b>A new library</b></span>
       </label>
       <div class="choice-body new-body">
-        <input type="text" name="name" value="{{ form.name or '' }}" placeholder="Name, e.g. Paperpile – cancer evolution" maxlength="80" aria-label="name of the new library">
+        <input type="text" name="name" value="{{ form.name or '' }}" placeholder="Name (default: the file's name)" maxlength="80" aria-label="name of the new library">
         <textarea name="description" placeholder="Description (optional)" aria-label="description">{{ form.description or "" }}</textarea>
       </div>
     </div>

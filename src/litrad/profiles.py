@@ -185,6 +185,15 @@ def list_profiles(base: Config) -> list[ProfileInfo]:
     )
 
 
+def free_name(base: Config, name: str) -> str:
+    """``name``, or "name 2", "name 3" … if a profile is already called that."""
+    taken = {info.name.lower() for info in list_profiles(base)}
+    candidate, number = name, 2
+    while candidate.lower() in taken:
+        candidate, number = f"{name} {number}", number + 1
+    return candidate
+
+
 def _new_folder(base: Config, name: str) -> tuple[str, Path]:
     name = (name or "").strip()
     if not name:

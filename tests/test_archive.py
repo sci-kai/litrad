@@ -526,6 +526,16 @@ def test_newer_format_is_refused(base, exported):
         import_new(base, newer, "Newer")
 
 
+def test_without_a_name_the_saved_name_is_made_unique(base, exported):
+    _, path = exported  # the profile "Source" still exists
+    first = import_new(base, path)
+    second = import_new(base, path)
+    names = {info.slug: info.name for info in profiles.list_profiles(base)}
+    assert names[first.slug] == "Source 2" and names[second.slug] == "Source 3"
+    with pytest.raises((ArchiveError, profiles.ProfilesError), match="already exists"):
+        import_new(base, path, "Source")  # a name you choose is never changed
+
+
 def test_not_a_zip(base, tmp_path):
     path = tmp_path / "x.zip"
     path.write_text("hello")

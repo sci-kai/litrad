@@ -1179,8 +1179,10 @@ def import_new(
     checked = check(archive, base, partial)
     _fail_if_errors(checked)
     profile = checked.data.get("profile") or {}
-    name = (name or profile.get("name") or archive.manifest.get("profile") or "").strip()
-    name = name or "Imported profile"
+    if not (name or "").strip():  # no name given: the saved name, made unique
+        saved = (profile.get("name") or archive.manifest.get("profile") or "").strip()
+        name = profiles.free_name(base, saved or "Imported profile")
+    name = name.strip()
     result = ImportResult(checked.report, dry_run=dry_run)
     if dry_run:
         if any(i.name.lower() == name.lower() for i in profiles.list_profiles(base)):

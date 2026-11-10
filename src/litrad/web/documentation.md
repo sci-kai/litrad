@@ -240,8 +240,8 @@ new profiles ([Configuration](#9-configuration)). In a git folder it and
 ### 5. Create your profile and import your library
 
 In the web UI: `litrad serve`, open the printed address, create a
-profile, then **Library → Import**: choose the file, name the new library and
-press *Check & import*. On the command line:
+profile, then **Library → Import**: choose the file, optionally name the new
+library (default: the file's name) and press *Check & import*. On the command line:
 
 ```bash
 litrad profile create "Kai"      # needed before any other command; game rules are locked from now on
