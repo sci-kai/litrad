@@ -277,7 +277,7 @@ def test_only_libraries_used_for_recommendations(db):
 
 
 def old_selection(session) -> tuple[list[str], list[str]]:
-    """The selection of gather_s2_candidates before the rules existed (v0.2.0-dev)."""
+    """The default selection (liked + recent, dismissed), written out by hand."""
     library = [p for p in libraries.recommendation_library(session) if p.doi]
     liked = session.exec(
         select(Paper)

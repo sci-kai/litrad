@@ -1,6 +1,6 @@
 # litrad documentation
 
-**litrad, the Literature Radar Game** (called litresearch before 0.3), is a personal literature radar built on your reference-manager
+**litrad, the Literature Radar Game**, is a personal literature radar built on your reference-manager
 libraries (Paperpile, Zotero, Mendeley, EndNote …). On request it proposes
 **up to 5 papers**, ranked by similarity to your library (SPECTER2
 embeddings), your topics, paper impact and timeliness (very recent *or* a
@@ -33,7 +33,7 @@ Two ways to run litrad:
 
 - **Desktop app (default):** on your own computer, for you alone. Double-click
   it; it opens in your web browser.
-- **Server mode:** on a Raspberry Pi, NAS or lab server that is always on,
+- **Server mode:** on a home server, NAS or lab server that is always on,
   reachable from your laptop and phone with a password.
 
 #### Desktop app
@@ -96,9 +96,43 @@ the same desktop mode ([commands](#7-commands)).
 
 #### Server mode
 
-Requires Linux, Python ≥ 3.11, `git` and an internet connection for the
-installation (developed on a Raspberry Pi 5, Python 3.13). On Debian, Ubuntu
-or Raspberry Pi OS: `sudo apt install git python3-venv`.
+Three ways, all for a machine that is always on. litrad listens on the
+network only with a password ([Web UI](#using-it-from-your-laptop-local-network)).
+
+**Docker** (the image runs on ARM and x86). The image is
+`ghcr.io/<owner>/litrad` (`<owner>`: the GitHub account of the repository):
+
+```bash
+docker run --rm -it -v litrad:/data ghcr.io/<owner>/litrad litrad set-password   # once
+docker run -d --name litrad --restart unless-stopped -p 8080:8080 \
+    -v litrad:/data ghcr.io/<owner>/litrad
+```
+
+Open `http://<host>:8080` and log in. The server listens on all networks of
+the container and refuses to start without a password, so set it first; for a
+script or a Docker secret use `set-password --password-file FILE` (first line
+of the file) instead of the prompt. Everything lives in the volume `/data`
+(configuration `/data/config.yaml`, created on first start, profiles,
+backups in `/data/backups`); to edit the file, find the volume
+with `docker volume inspect litrad`. **Update:** run
+`docker exec litrad litrad backup`, then `docker pull` the image,
+`docker rm -f litrad` and start it again with the same volume. The port is
+plain HTTP: keep it in your home network or behind a VPN.
+
+**As a package** (`pipx install litrad`, or the wheel of a GitHub release:
+`pip install litrad-*.whl`; Python ≥ 3.11): no git folder needed, run it
+from any folder. The first command creates your configuration and data in
+your per-user folders:
+
+| System | Configuration | Data (profiles, backups, cache) |
+|---|---|---|
+| Linux | `~/.config/litrad/config.yaml` | `~/.local/share/litrad/` |
+| macOS | `~/Library/Application Support/litrad/config.yaml` | `~/Library/Application Support/litrad/` |
+| Windows | `%LOCALAPPDATA%\litrad\config.yaml` | `%LOCALAPPDATA%\litrad\` |
+
+**From git with the installer.** Requires Linux, Python ≥ 3.11, `git` and an
+internet connection for the installation. On Debian or Ubuntu:
+`sudo apt install git python3-venv`.
 
 ```bash
 git clone <repository-url> litrad && cd litrad
@@ -125,88 +159,9 @@ there `config/config.yaml` is found, and `data/` lives next to `config/`.
   the data format.
 - **Without the installer:** `python3 -m venv .venv && .venv/bin/pip install -e .`
   and `cp config/config.example.yaml config/config.yaml`.
-- **As a package** (`pipx install litrad`, or the
-  wheel of a GitHub release: `pip install litrad-*.whl`): no git folder
-  needed, run it from any folder. The first command creates your configuration and data in your
-  per-user folders:
-
-  | System | Configuration | Data (profiles, backups, cache) |
-  |---|---|---|
-  | Linux | `~/.config/litrad/config.yaml` | `~/.local/share/litrad/` |
-  | macOS | `~/Library/Application Support/litrad/config.yaml` | `~/Library/Application Support/litrad/` |
-  | Windows | `%LOCALAPPDATA%\litrad\config.yaml` | `%LOCALAPPDATA%\litrad\` |
 
 `litrad where` shows which configuration and data folders are in use
 and why ([lookup order](#9-configuration)).
-
-**With Docker** (server mode for a Pi, NAS or lab server; the image runs on
-ARM and x86). The image is `ghcr.io/<owner>/litrad` (`<owner>`: the GitHub
-account of the repository):
-
-```bash
-docker run --rm -it -v litrad:/data ghcr.io/<owner>/litrad litrad set-password   # once
-docker run -d --name litrad --restart unless-stopped -p 8080:8080 \
-    -v litrad:/data ghcr.io/<owner>/litrad
-```
-
-Open `http://<host>:8080` and log in. The server listens on all networks of
-the container and refuses to start without a password, so set it first; for a
-script or a Docker secret use `set-password --password-file FILE` (first line
-of the file) instead of the prompt. Everything lives in the volume `/data`
-(configuration `/data/config.yaml`, created on first start, profiles,
-database, backups in `/data/backups`); to edit the file, find the volume
-with `docker volume inspect litrad`.
-
-**Update:** run `docker exec litrad litrad backup`, then
-`docker pull` the image, `docker rm -f litrad` and start it again with
-the same volume. The port is plain HTTP: keep
-it in your home network or behind a VPN, as described in
-[Web UI](#using-it-from-your-laptop-local-network).
-
-#### Renamed from litresearch
-
-litrad was called **litresearch** before 0.3. An installation of litresearch
-keeps working after the update; nothing has to be done by hand:
-
-- **Commands:** `litrad` and `litrad-app`. `litresearch` and
-  `litresearch-app` still work for a while and print a note.
-- **Environment variables:** `LITRAD_CONFIG`, `LITRAD_NO_BROWSER`; the old
-  `LITRESEARCH_CONFIG` and `LITRESEARCH_NO_BROWSER` still count (the new
-  name wins if both are set).
-- **Per-user folders** (desktop app, package installs): on the first start,
-  litrad moves `~/.config/litresearch` and `~/.local/share/litresearch`
-  (Windows `%LOCALAPPDATA%\litresearch`, macOS
-  `~/Library/Application Support/litresearch`) to the litrad folders (on
-  another drive: copies them), points the absolute paths in `config.yaml`,
-  in the profiles' `settings.yaml` and of the libraries' files to the new
-  place, and leaves a `MOVED-TO-litrad.txt` in the old place. An existing
-  litrad folder is never overwritten: it is used, and `litrad where` lists
-  the old folder so you can move what you need.
-- **Git installation** (`config/` and `data/` in the repository folder):
-  stays where it is. Run `git pull && python3 install.py` as for every
-  update: it replaces the old package in `.venv`; with `--service` it also
-  replaces `litresearch.service` by `litrad.service` (until then the old
-  service keeps running with the `litresearch` command).
-- **Docker:** keep your volume, e.g. `-v litresearch:/data`, and switch to
-  the image `ghcr.io/<owner>/litrad`; the container's `/data` is unchanged.
-- **Databases:** each profile's `litresearch.sqlite` is renamed to
-  `litrad.sqlite` the first time the profile is opened. A database named in
-  your configuration (`paths.database`, e.g. `data/litresearch.sqlite`) is
-  used under that name; without the setting, an existing
-  `data/litresearch.sqlite` is used where it is.
-- **Backups and files:** new files start with `litrad_`
-  (`litrad_backup_*.zip`, `litrad_*.sqlite`, `litrad_export_*.zip`,
-  `litrad_profile_*`). Files named `litresearch_*` are still listed,
-  restored, loaded and rotated with them, so old backups age out normally.
-- **Formats:** archives (`litresearch-export`), progress and profile files
-  (`litresearch-progress`) and note files (`litresearch-note/1`,
-  `litresearch_id`) from before the rename are read as they are, forever.
-  Note files are not rewritten for the new names; when litrad updates a
-  note's front matter anyway, `litresearch_id` becomes `litrad_id` in place
-  and your own keys stay. The notes folder in an Obsidian vault stays
-  `litresearch` if your configuration does not name another one.
-- **Library exports** with reading status now add the keywords
-  `litrad-read`, `litrad-rating-4`, … (before: `litresearch-…`).
 
 ### 2. Export your library from your reference manager
 
@@ -286,19 +241,20 @@ profile, then **Library → Import**: choose the file, name the new library and
 press *Check & import*. On the command line:
 
 ```bash
-litrad profile create "Kai"      # game rules are locked from now on
+litrad profile create "Kai"      # needed before any other command; game rules are locked from now on
 litrad library import library.bib --new "Paperpile" --description "everything"
 litrad status
 ```
 
-Data from before profiles existed is taken over with `litrad profile
-adopt NAME` (or on the welcome screen); its library becomes "My library".
-
-The import report lists entries added, updated and removed, DOIs taken from
+Every command needs a profile. Without one the command line says *There is
+no profile yet. Create one with 'litrad profile create NAME' or in the web
+UI*. The import report lists entries added, updated and removed, DOIs taken from
 the file or found via Crossref/PMID, entries **not found anywhere** (with
 their citation keys) and how many papers got OpenAlex metrics and SPECTER2
 embeddings. Imports can be repeated safely; API answers are cached, so
-repeated runs make almost no network requests.
+repeated runs make almost no network requests. The first library of a
+profile reads from `library.bib` in the profile folder unless the profile's
+`settings.yaml` sets `paths.bibtex` to another file.
 
 ### Troubleshooting
 
@@ -509,7 +465,7 @@ before backups and exports. litrad remembers the version both had at
 the last sync:
 
 - only the file changed → its text is taken over (notes bonus if it is now
-  long enough, once per paper as before);
+  long enough, once per paper);
 - only litrad's copy changed (log dialog, progress import, restore) →
   the file is updated;
 - both changed → **conflict**: nothing is overwritten. The paper page shows
@@ -519,9 +475,8 @@ the last sync:
   meanwhile (e.g. in Obsidian), saving shows the same conflict view.
 
 A missing file is written again from the copy; a renamed or moved file is
-found by its `litrad_id`. Existing notes from before 0.5 become files on
-first use (opening a paper, a backup or `notes sync`); a file with different
-text is a conflict, never overwritten. Nothing is deleted automatically.
+found by its `litrad_id`. A file whose text differs from litrad's copy is
+a conflict, never overwritten. Nothing is deleted automatically.
 
 ```bash
 litrad notes sync          # import edits, write missing files, list conflicts and orphans
@@ -576,8 +531,8 @@ mix.
 **Web UI:**
 
 1. The **welcome screen** lists your profiles (level, XP, papers read, last
-   activity) and offers *Create a new profile*, *Load a saved profile* and,
-   if data from before profiles exists, *Use your existing library*.
+   activity) and offers *Create a new profile* and *Load a saved profile*
+   (a `.zip` archive).
 2. Creating a profile means choosing its game rules: the form is pre-filled
    from `config.yaml`; every reward, the penalty, the level ladder and the
    badge targets can be changed. **The rules are locked on creation.**
@@ -594,10 +549,11 @@ litrad profile list                     # * marks the current profile
 litrad profile create "Grace" --yes     # rules from config.yaml, locked
 litrad profile use grace
 litrad --profile Kai queue              # one command for another profile
-litrad profile adopt "Kai"              # data from before profiles -> profile
-litrad profile load saved.json --name "Kai (laptop)"
+litrad profile save                    # archive in backup.dir
+litrad profile load saved.zip --name "Kai (laptop)"
 ```
 
+Without any profile every command stops with *There is no profile yet*.
 Saving, loading and comparing profiles: [Gamification](#saving-loading-and-comparing-profiles);
 where the files live: [Your data and backups](#10-your-data-and-backups).
 
@@ -701,7 +657,7 @@ login protects your data. Never open the port to the internet directly.
 
 | Menu | Page | What you can do |
 |---|---|---|
-| | 👋 **Welcome** | choose, create or load a profile; take over existing data |
+| | 👋 **Welcome** | choose, create or load a profile |
 | 🏠 | **Dashboard** | the up-next paper with one-click logging, weekly quest, hints, a reminder when recommendations are due, latest recommendations, queue, recent XP, **weekly report cards** |
 | Reading | 📚 **Reading queue** | log a reading (level, rating, note), reorder, remove; add papers by DOI, PubMed ID, citation key or title (one box) |
 | Reading | ✅ **Read papers** | every paper you marked with depth, dates, rating, notes snippet, XP and source; sort, filter, search, **Export TSV** ([details](#read-papers)) |
@@ -712,23 +668,20 @@ login protects your data. Never open the port to the internet directly.
 | Library | 🔍 **Find & add** | search Europe PMC, PubMed or your own library and queue a result ([details](#find-papers-in-europe-pmc-and-pubmed)); add any paper by DOI, PubMed ID or title |
 | | ⚙️ **Settings** | topics, excluded terms, every recommendation and queue setting; data & backups |
 | | 📖 **Documentation** | this documentation |
-| (chip) | 🎮 **Profile** | locked rules and fingerprint; save, download, compare profiles; switch or create one |
+| (chip) | 🎮 **Profile** | locked rules and fingerprint; save, compare, export everything; switch or create a profile |
 | | 📄 **Paper** | abstract, TL;DR, metrics, notes (Markdown editor with preview, [conflicts](#notes-and-obsidian)), status, every recommendation of it with its evidence tree, XP earned |
-
-Old addresses (`/ledger`, `/how`, `/paperpile`) redirect.
 
 - A new profile's dashboard shows a five-step **Getting started** checklist:
   import a library, set topics, get recommendations, queue a paper, log a
   reading.
 - Weekly reports on the dashboard are paged, 4 weeks per page (newer/older
-  links), back to the first week with activity; the old `/weekly` address
-  leads there.
+  links), back to the first week with activity.
 - Earlier recommendation sets are grouped by month.
 - Library search results say which ones are shown ("Showing 51–100 · page 2
   of 12"). Deleting a library asks once (type its name); its papers stay in
   your other libraries, queue and reading history.
-- Compare lists your saved profile files with dates (newest first); you can
-  still upload a file.
+- Compare lists your saved profile archives with dates (newest first); you
+  can also upload a `.zip`.
 - Unknown pages and invalid values show an error page with links back; form
   errors name the field and its limit.
 - On phones the menu is a sideways-scrolling bar at the top; switching
@@ -760,8 +713,7 @@ Every file is checked first; an invalid file changes nothing
 ([what an export must contain](#what-an-export-must-contain)). Two libraries
 are kept by litrad: **Recommended** (a recommendation joins it when you
 queue it, and stays after reading; remove with ✖) and **Reading queue**
-(always exactly the current queue; exportable). Databases from before
-libraries existed are migrated to a library called **My library**.
+(always exactly the current queue; exportable).
 
 **Positive examples** and **Negative examples** are the papers sent to
 Semantic Scholar's recommendations ([how they are chosen](#1-candidates)).
@@ -784,6 +736,10 @@ version is kept as `settings.yaml.bak`, and invalid values (e.g. more than 5
 papers, all weights 0, infinite or NaN numbers) are rejected with a message,
 leaving the file unchanged. Paths, API keys, embeddings, LLM and web settings
 are only editable in the file.
+
+**Data & backups** shows where the data lives, runs **Back up now**, syncs the
+notes and offers **Download everything (zip)** (`/profile/export-all`), the
+same archive as `litrad export-all`.
 
 
 ---
@@ -946,7 +902,6 @@ publication day, 0.5 at the end of the window); landmark
 
 Recommendations never prescribe a reading depth: you mark the paper after
 reading and earn the points your profile defines ([Gamification](#6-gamification)).
-(Old batches still carry detail/skim labels in the data; the UI ignores them.)
 
 ### The evidence tree
 
@@ -986,18 +941,14 @@ planned to read first), not volume.
 2. The rules are copied into the profile's database and **locked**. Their
    **fingerprint** (a short hash of the rule set) is on the profile page. All
    points use these stored rules; editing the config cannot inflate them.
-   The fingerprint is stable across versions: a rule added by a later
-   version counts only when a profile sets it to something other than its
-   default, so profiles locked earlier keep their fingerprint and stay
-   comparable and mergeable.
+   The fingerprint covers every rule and badge of 1.0. A rule or badge
+   added in a later 1.x version enters it only when a profile sets it to a
+   non-default value, so fingerprints stay stable across 1.x and profiles
+   stay comparable and mergeable.
 3. **Different rules** need another profile; the old one stays and you can
    switch back at any time.
-4. **Rules formats.** New profiles get *rules format 2* (the defaults below:
-   60 levels, 129 badges). A profile locked by litrad 1.0 or earlier
-   keeps *format 1* (20 levels from 🎓 Curious Undergrad to 🏆 Hallmarks
-   Author at 13 000 XP, the 44 badges without ², its own badge targets and
-   rules) and its fingerprint. Rules stored without `rules_format` that list
-   every rule of format 1 are format 1.
+4. **One rules format.** Every profile stores `"rules_format": 1`: the
+   defaults below (60 levels, 129 badges, `backlog_share`).
 
 ### Rules you can set (defaults)
 
@@ -1005,11 +956,11 @@ planned to read first), not volume.
 |---|---|---|
 | `xp_abstract` / `xp_skimmed` / `xp_read` / `xp_thorough` | 5 / 15 / 40 / 80 | base points for the depth **you** choose; deeper may never pay less |
 | `backlog_share` | 1.0 | 🕰️ share of the base points for a paper you **read earlier**, before litrad ([below](#starting-with-papers-you-already-read)) |
-| `frog_bonus` | 0.5 | 🐸 share of the base points when the paper was **q1** (up next) and read ≥ skimmed |
+| `cheese_bonus` | 0.5 | 🧀 *Got the cheese: read your top paper first*: +50 % of the base points when the paper was **q1** (up next) and read at least skimmed (XP kind `cheese`) |
 | `streak_step` / `streak_max_steps` | 0.05 / 10 | 🔥 +5 % per consecutive reading week, at most +50 % ("next reads earn ×N") |
 | `classic_percentile` / `classic_xp` | 99 / 20 | 🏛️ landmark (top 1 % cited) read at least at "read" depth |
 | `hot_days` / `hot_xp` | 30 / 10 | 📰 read within 30 days of publication |
-| `recommendation_xp` | 15 | 🎯 read (≥ skimmed) a paper from your recommendations |
+| `recommendation_xp` | 15 | 🎯 read (≥ skimmed) a paper from your recommendations; it counts only if it was recommended before you first read it |
 | `rating_xp` | 2 | ⭐ first rating of a paper |
 | `reflection_chars` / `reflection_xp` | 140 / 10 | ✍️ notes on a paper reach 140 characters |
 | `inbox_zero_xp` | 10 | 📭 the queue becomes empty because you *read* its last paper (once per day) |
@@ -1028,7 +979,7 @@ Fairness rules that always apply:
   paper was recommended again.
 - Paper bonuses (landmark, fresh, recommendation, rating, notes) are paid
   once per paper; the reading bonuses only with a step to a deeper level. The
-  frog bonus is a share of *newly* earned base points.
+  cheese bonus is a share of *newly* earned base points.
 - Dismissing a recommendation you never queued is free.
 - Penalties can lower the total and the level, but never below level 1.
 
@@ -1046,7 +997,7 @@ page tick the papers and use *🕰️ Mark as read earlier* with one depth
   day one.
 - They count for nothing that measures *when* or *how* you read here:
   streaks, weekly quests, report cards, the calendar, pace and time badges
-  (marathon, binge week, night owl, early riser, weekend), the frog,
+  (marathon, binge week, night owl, early riser, weekend), the cheese,
   fresh-paper, recommendation and inbox-zero bonuses, the Reading Impact
   Factor and the best week.
 - Reading such a paper again more deeply pays the difference as usual; the
@@ -1068,7 +1019,7 @@ the higher tiers are still ahead.
   complete; B = at least half the quest; C = something read; - = rest week
   (also the tooltip of each grade badge).
 - **Reading Impact Factor**: average XP per week over the last four weeks.
-- **Discipline**: share of papers read while at the top of the queue.
+- **Discipline**: share of papers read as the top paper of the queue first (*cheeses*).
 - **Depth**: share of papers read at least at "read" depth.
 - **Queue nudge**: a warning when the top paper has waited 14 days or more.
 
@@ -1108,139 +1059,139 @@ plays typical readers on the real game code ([Balancing](#balancing)).
 
 "Read" means skimmed or deeper, reached for the first time (re-logging a
 paper counts once); "looked at" includes abstracts; "fully" means at least
-"read". ² = new in rules format 2.
+"read".
 
 | Group | Badge | Requirement | Code |
 |---|---|---|---|
 | Reading | 🌱 First Steps | Read your first paper (skimmed or deeper) | `first_read` |
-| Reading | 🔆 Warm-Up ² | Read 3 papers | `warm_up` |
-| Reading | 🔖 Reading List ² | Read 5 papers | `reading_list` |
+| Reading | 🔆 Warm-Up | Read 3 papers | `warm_up` |
+| Reading | 🔖 Reading List | Read 5 papers | `reading_list` |
 | Reading | 📄 Page Turner | Read 10 papers | `page_turner` |
-| Reading | 📑 Regular Reader ² | Read 15 papers | `regular` |
+| Reading | 📑 Regular Reader | Read 15 papers | `regular` |
 | Reading | 🐛 Bookworm | Read 25 papers | `bookworm` |
 | Reading | 📚 Bibliophile | Read 50 papers | `bibliophile` |
-| Reading | 🗃️ Literature Review ² | Read 75 papers | `lit_review` |
+| Reading | 🗃️ Literature Review | Read 75 papers | `lit_review` |
 | Reading | 💯 Centurion | Read 100 papers | `centurion` |
-| Reading | 🔎 Systematic Review ² | Read 150 papers | `systematic` |
-| Reading | 🧾 Well-Read ² | Read 200 papers | `well_read` |
+| Reading | 🔎 Systematic Review | Read 150 papers | `systematic` |
+| Reading | 🧾 Well-Read | Read 200 papers | `well_read` |
 | Reading | 🏛️ Living Library | Read 250 papers | `living_library` |
-| Reading | 🎩 Erudite ² | Read 300 papers | `erudite` |
-| Reading | 📊 Meta-Analyst ² | Read 350 papers | `meta_analyst` |
-| Reading | 🌍 Encyclopedia ² | Read 500 papers | `encyclopedia` |
-| Reading | 👁️ First Glance ² | Look at 1 paper (abstract or deeper) | `first_glance` |
-| Reading | 🛍️ Browser ² | Look at 10 papers (abstract or deeper) | `browser` |
-| Reading | 💡 Abstract Thinker ² | Look at 50 papers (abstract or deeper) | `abstract_thinker` |
-| Depth | 🏊 First Dive ² | Read 1 paper thoroughly | `first_dive` |
+| Reading | 🎩 Erudite | Read 300 papers | `erudite` |
+| Reading | 📊 Meta-Analyst | Read 350 papers | `meta_analyst` |
+| Reading | 🌍 Encyclopedia | Read 500 papers | `encyclopedia` |
+| Reading | 👁️ First Glance | Look at 1 paper (abstract or deeper) | `first_glance` |
+| Reading | 🛍️ Browser | Look at 10 papers (abstract or deeper) | `browser` |
+| Reading | 💡 Abstract Thinker | Look at 50 papers (abstract or deeper) | `abstract_thinker` |
+| Depth | 🏊 First Dive | Read 1 paper thoroughly | `first_dive` |
 | Depth | 🤿 Deep Diver | Read 5 papers thoroughly | `deep_diver` |
-| Depth | 🐬 Free Diver ² | Read 10 papers thoroughly | `free_diver` |
+| Depth | 🐬 Free Diver | Read 10 papers thoroughly | `free_diver` |
 | Depth | 🐙 Abyss Explorer | Read 25 papers thoroughly | `abyss_explorer` |
-| Depth | 🦪 Pearl Diver ² | Read 50 papers thoroughly | `pearl_diver` |
-| Depth | 🌊 Mariana Trench ² | Read 100 papers thoroughly | `trench` |
-| Depth | 🗒️ Note Taker ² | Write substantial notes on 1 paper | `note_taker` |
+| Depth | 🦪 Pearl Diver | Read 50 papers thoroughly | `pearl_diver` |
+| Depth | 🌊 Mariana Trench | Read 100 papers thoroughly | `trench` |
+| Depth | 🗒️ Note Taker | Write substantial notes on 1 paper | `note_taker` |
 | Depth | ✍️ Scribe | Write substantial notes on 10 papers | `scribe` |
-| Depth | 🖍️ Annotator ² | Write substantial notes on 25 papers | `annotator` |
-| Depth | 🪶 Chronicler ² | Write substantial notes on 50 papers | `chronicler` |
-| Depth | 🖊️ Essayist ² | Write 5000 characters of notes in total | `essayist` |
+| Depth | 🖍️ Annotator | Write substantial notes on 25 papers | `annotator` |
+| Depth | 🪶 Chronicler | Write substantial notes on 50 papers | `chronicler` |
+| Depth | 🖊️ Essayist | Write 5000 characters of notes in total | `essayist` |
 | Depth | 📝 Novelist | Write 20000 characters of notes in total | `novelist` |
-| Depth | 📕 Monograph ² | Write 50000 characters of notes in total | `monograph` |
-| Depth | ⚖️ Referee ² | Rate 5 papers | `referee` |
+| Depth | 📕 Monograph | Write 50000 characters of notes in total | `monograph` |
+| Depth | ⚖️ Referee | Rate 5 papers | `referee` |
 | Depth | ⭐ Critic | Rate 20 papers | `critic` |
-| Depth | 🍷 Connoisseur ² | Rate 50 papers | `connoisseur` |
+| Depth | 🍷 Connoisseur | Rate 50 papers | `connoisseur` |
 | Depth | 🌟 Fan Club | Give 10 five-star ratings | `fan_club` |
-| Depth | 🔍 Close Reader ² | Read 1 paper at least fully | `close_reader` |
-| Depth | 🧐 Careful Reader ² | Read 10 papers at least fully | `careful` |
-| Depth | 🫖 Journal Club ² | Read 25 papers at least fully | `journal_club` |
-| Depth | 💭 Deep Thinker ² | Read 50 papers at least fully | `deep_thinker` |
-| Depth | ⚗️ Critical Mind ² | Read 75 papers at least fully | `critical_mind` |
-| Depth | 🧠 Scholar ² | Read 100 papers at least fully | `scholar` |
-| Depth | 🧙 Sage ² | Read 250 papers at least fully | `sage` |
-| Discipline | 🥚 Tadpole ² | Read your top paper first, 1 time | `tadpole` |
-| Discipline | 🐸 Frog Eater | Read your top paper first, 10 times | `frog_eater` |
-| Discipline | 🐊 Bullfrog ² | Read your top paper first, 25 times | `bullfrog` |
-| Discipline | 🤴 Frog Prince | Read your top paper first, 50 times | `frog_prince` |
-| Discipline | 👑 Frog King ² | Read your top paper first, 100 times | `frog_king` |
+| Depth | 🔍 Close Reader | Read 1 paper at least fully | `close_reader` |
+| Depth | 🧐 Careful Reader | Read 10 papers at least fully | `careful` |
+| Depth | 🫖 Journal Club | Read 25 papers at least fully | `journal_club` |
+| Depth | 💭 Deep Thinker | Read 50 papers at least fully | `deep_thinker` |
+| Depth | ⚗️ Critical Mind | Read 75 papers at least fully | `critical_mind` |
+| Depth | 🧠 Scholar | Read 100 papers at least fully | `scholar` |
+| Depth | 🧙 Sage | Read 250 papers at least fully | `sage` |
+| Discipline | 🐭 First Bite | Get the cheese: read your top paper first, 1 time | `first_bite` |
+| Discipline | 🧀 Cheese Taster | Get the cheese: read your top paper first, 10 times | `cheese_taster` |
+| Discipline | 📜 Cheese Scholar | Get the cheese: read your top paper first, 25 times | `cheese_scholar` |
+| Discipline | 🐀 Big Cheese | Get the cheese: read your top paper first, 50 times | `big_cheese` |
+| Discipline | 👑 Chair of Cheese Studies | Get the cheese: read your top paper first, 100 times | `chair_of_cheese` |
 | Discipline | 📭 Inbox Zero | Empty your reading queue by reading it | `inbox_zero` |
 | Discipline | 🧘 Minimalist | Empty your reading queue 5 times | `minimalist` |
-| Discipline | ☯️ Zen Master ² | Empty your reading queue 15 times | `zen` |
+| Discipline | ☯️ Zen Master | Empty your reading queue 15 times | `zen` |
 | Discipline | 🗂️ Curator | Mark 10 papers as not relevant (teaches the recommender) | `curator` |
-| Discipline | 🚧 Gatekeeper ² | Mark 25 papers as not relevant | `gatekeeper` |
-| Consistency | ✌️ Back to Back ² | Read something 2 weeks in a row | `streak_2` |
+| Discipline | 🚧 Gatekeeper | Mark 25 papers as not relevant | `gatekeeper` |
+| Consistency | ✌️ Back to Back | Read something 2 weeks in a row | `streak_2` |
 | Consistency | 🔥 Month of Momentum | Read something 4 weeks in a row | `streak_4` |
-| Consistency | 🚴 Two-Month Run ² | Read something 8 weeks in a row | `streak_8` |
+| Consistency | 🚴 Two-Month Run | Read something 8 weeks in a row | `streak_8` |
 | Consistency | 🏃 Quarter Marathon | Read something 12 weeks in a row | `streak_12` |
 | Consistency | 🦸 Half-Year Hero | Read something 26 weeks in a row | `streak_26` |
 | Consistency | 🗓️ Year of Reading | Read something 52 weeks in a row | `streak_52` |
-| Consistency | 🚂 Unstoppable ² | Read something 78 weeks in a row | `streak_78` |
-| Consistency | 🏔️ Two Years Strong ² | Read something 104 weeks in a row | `streak_104` |
+| Consistency | 🚂 Unstoppable | Read something 78 weeks in a row | `streak_78` |
+| Consistency | 🏔️ Two Years Strong | Read something 104 weeks in a row | `streak_104` |
 | Consistency | 🧭 Questing | Complete your first weekly quest | `questing` |
-| Consistency | 🎒 Adventurer ² | Complete 3 weekly quests | `adventurer` |
-| Consistency | 🥾 Pathfinder ² | Complete 5 weekly quests | `pathfinder` |
+| Consistency | 🎒 Adventurer | Complete 3 weekly quests | `adventurer` |
+| Consistency | 🥾 Pathfinder | Complete 5 weekly quests | `pathfinder` |
 | Consistency | 🗺️ Quest Master | Complete 10 weekly quests | `quest_master` |
 | Consistency | 🐉 Quest Legend | Complete 25 weekly quests | `quest_legend` |
-| Consistency | ⛵ Odyssey ² | Complete 50 weekly quests | `odyssey` |
-| Consistency | 📯 Saga ² | Complete 75 weekly quests | `saga` |
-| Consistency | 🏰 Epic ² | Complete 100 weekly quests | `epic` |
-| Consistency | ✅ Top Marks ² | Get grade A or S in 1 week | `top_marks` |
+| Consistency | ⛵ Odyssey | Complete 50 weekly quests | `odyssey` |
+| Consistency | 📯 Saga | Complete 75 weekly quests | `saga` |
+| Consistency | 🏰 Epic | Complete 100 weekly quests | `epic` |
+| Consistency | ✅ Top Marks | Get grade A or S in 1 week | `top_marks` |
 | Consistency | 🅰️ Straight A | Get grade A or S in 5 weeks | `straight_a` |
-| Consistency | 🎖️ Honor Roll ² | Get grade A or S in 15 weeks | `honor_roll` |
-| Consistency | 📋 Dean's List ² | Get grade A or S in 30 weeks | `deans_list` |
-| Consistency | 🎤 Valedictorian ² | Get grade A or S in 52 weeks | `valedictorian` |
-| Consistency | ✨ Distinction ² | Get grade S in 1 week | `distinction` |
+| Consistency | 🎖️ Honor Roll | Get grade A or S in 15 weeks | `honor_roll` |
+| Consistency | 📋 Dean's List | Get grade A or S in 30 weeks | `deans_list` |
+| Consistency | 🎤 Valedictorian | Get grade A or S in 52 weeks | `valedictorian` |
+| Consistency | ✨ Distinction | Get grade S in 1 week | `distinction` |
 | Consistency | 💎 Perfectionist | Get grade S in 3 weeks | `perfectionist` |
-| Consistency | 🏵️ Summa cum Laude ² | Get grade S in 10 weeks | `summa` |
+| Consistency | 🏵️ Summa cum Laude | Get grade S in 10 weeks | `summa` |
 | Consistency | 🔄 Comeback Kid | Read again after a break of 4 weeks or more | `comeback` |
-| Consistency | 🌀 Habit Former ² | Read something in 5 different weeks | `habit` |
-| Consistency | 🏫 Semester ² | Read something in 13 different weeks | `semester` |
-| Consistency | 🌗 Two Semesters ² | Read something in 26 different weeks | `two_semesters` |
-| Consistency | 📆 Academic Year ² | Read something in 40 different weeks | `academic_year` |
-| Consistency | 🎆 Full Year ² | Read something in 52 different weeks | `full_year` |
-| Consistency | 🍂 Seasoned ² | Read something in 75 different weeks | `seasoned` |
-| Consistency | 🎗️ Veteran ² | Read something in 100 different weeks | `veteran` |
+| Consistency | 🌀 Habit Former | Read something in 5 different weeks | `habit` |
+| Consistency | 🏫 Semester | Read something in 13 different weeks | `semester` |
+| Consistency | 🌗 Two Semesters | Read something in 26 different weeks | `two_semesters` |
+| Consistency | 📆 Academic Year | Read something in 40 different weeks | `academic_year` |
+| Consistency | 🎆 Full Year | Read something in 52 different weeks | `full_year` |
+| Consistency | 🍂 Seasoned | Read something in 75 different weeks | `seasoned` |
+| Consistency | 🎗️ Veteran | Read something in 100 different weeks | `veteran` |
 | Pace | 🏅 Marathon Day | Read 4 papers in one day | `marathon` |
 | Pace | 🍿 Binge Week | Read 8 papers in one week | `binge_week` |
 | Pace | 🦉 Night Owl | Read 5 different papers between 22:00 and 04:00 | `night_owl` |
-| Pace | 🌙 Night Shift ² | Read 20 different papers between 22:00 and 04:00 | `night_shift` |
+| Pace | 🌙 Night Shift | Read 20 different papers between 22:00 and 04:00 | `night_shift` |
 | Pace | 🌅 Early Riser | Read 5 different papers between 05:00 and 08:00 | `early_riser` |
-| Pace | 🐓 Dawn Patrol ² | Read 20 different papers between 05:00 and 08:00 | `dawn_patrol` |
+| Pace | 🐓 Dawn Patrol | Read 20 different papers between 05:00 and 08:00 | `dawn_patrol` |
 | Pace | 🏖️ Weekend Warrior | Read 5 different papers on weekends | `weekend_warrior` |
-| Pace | ⛱️ Weekend Scholar ² | Read 20 different papers on weekends | `weekend_scholar` |
-| Breadth | 🗿 Landmark ² | Read 1 landmark paper (top 1 % cited) | `landmark` |
+| Pace | ⛱️ Weekend Scholar | Read 20 different papers on weekends | `weekend_scholar` |
+| Breadth | 🗿 Landmark | Read 1 landmark paper (top 1 % cited) | `landmark` |
 | Breadth | 🏺 Classicist | Read 5 landmark papers (top 1 % cited) | `classicist` |
 | Breadth | 📜 Canon Keeper | Read 20 landmark papers | `canon_keeper` |
-| Breadth | 🏯 Canon Scholar ² | Read 50 landmark papers | `canon_scholar` |
+| Breadth | 🏯 Canon Scholar | Read 50 landmark papers | `canon_scholar` |
 | Breadth | 🐦 Early Bird | Read 5 papers within 30 days of publication | `early_bird` |
-| Breadth | 📈 Trend Spotter ² | Read 15 papers within 30 days of publication | `trend_spotter` |
-| Breadth | 🔪 Cutting Edge ² | Read 30 papers within 30 days of publication | `cutting_edge` |
+| Breadth | 📈 Trend Spotter | Read 15 papers within 30 days of publication | `trend_spotter` |
+| Breadth | 🔪 Cutting Edge | Read 30 papers within 30 days of publication | `cutting_edge` |
 | Breadth | 📰 Scoop | Read 3 papers within 7 days of publication | `scoop` |
-| Breadth | 🗞️ Breaking News ² | Read 10 papers within 7 days of publication | `breaking_news` |
+| Breadth | 🗞️ Breaking News | Read 10 papers within 7 days of publication | `breaking_news` |
 | Breadth | 🦴 Archaeologist | Read a paper that is 25+ years old | `archaeologist` |
-| Breadth | ⏳ Historian ² | Read 5 papers that are 25+ years old | `historian` |
-| Breadth | 🌿 Curious Mind ² | Read papers from 3 different topics | `curious` |
-| Breadth | 🚶 Wanderer ² | Read papers from 5 different topics | `wanderer` |
+| Breadth | ⏳ Historian | Read 5 papers that are 25+ years old | `historian` |
+| Breadth | 🌿 Curious Mind | Read papers from 3 different topics | `curious` |
+| Breadth | 🚶 Wanderer | Read papers from 5 different topics | `wanderer` |
 | Breadth | 🧩 Polymath | Read papers from 8 different research topics | `polymath` |
-| Breadth | 🌉 Bridge Builder ² | Read papers from 12 different topics | `bridge_builder` |
+| Breadth | 🌉 Bridge Builder | Read papers from 12 different topics | `bridge_builder` |
 | Breadth | 🎨 Renaissance Mind | Read papers from 20 different topics | `renaissance` |
-| Breadth | 🌌 Universal Scholar ² | Read papers from 30 different topics | `universal` |
-| Breadth | 🔭 Scout ² | Read 3 papers from your recommendations | `scout` |
+| Breadth | 🌌 Universal Scholar | Read papers from 30 different topics | `universal` |
+| Breadth | 🔭 Scout | Read 3 papers from your recommendations | `scout` |
 | Breadth | 🧗 Trailblazer | Read 10 papers from your recommendations | `trailblazer` |
-| Breadth | 🚀 Pioneer ² | Read 25 papers from your recommendations | `pioneer` |
-| Breadth | 🗻 Expedition Leader ² | Read 50 papers from your recommendations | `expedition` |
-| Breadth | 🗺 Cartographer ² | Read 100 papers from your recommendations | `cartographer` |
+| Breadth | 🚀 Pioneer | Read 25 papers from your recommendations | `pioneer` |
+| Breadth | 🗻 Expedition Leader | Read 50 papers from your recommendations | `expedition` |
+| Breadth | 🗺 Cartographer | Read 100 papers from your recommendations | `cartographer` |
 | Breadth | 📁 Library Diver | Read 10 papers from your libraries | `library_diver` |
-| Breadth | 🗄️ Archivist ² | Read 25 papers from your libraries | `archivist` |
-| Breadth | 🏷️ Librarian ² | Read 50 papers from your libraries | `librarian` |
-| Breadth | 🗝️ Head Librarian ² | Read 100 papers from your libraries | `head_librarian` |
-| Breadth | 📇 Bibliographer ² | Read 200 papers from your libraries | `bibliographer` |
+| Breadth | 🗄️ Archivist | Read 25 papers from your libraries | `archivist` |
+| Breadth | 🏷️ Librarian | Read 50 papers from your libraries | `librarian` |
+| Breadth | 🗝️ Head Librarian | Read 100 papers from your libraries | `head_librarian` |
+| Breadth | 📇 Bibliographer | Read 200 papers from your libraries | `bibliographer` |
 | Breadth | 🪁 Free Spirit | Read 5 papers you added yourself | `free_spirit` |
-| Breadth | 🦄 Maverick ² | Read 15 papers you added yourself | `maverick` |
-| Experience | 🌠 Rising Star ² | Earn 500 XP | `rising_star` |
+| Breadth | 🦄 Maverick | Read 15 papers you added yourself | `maverick` |
+| Experience | 🌠 Rising Star | Earn 500 XP | `rising_star` |
 | Experience | 💰 Thousand Club | Earn 1000 XP | `thousand_club` |
-| Experience | 🥈 Silver Club ² | Earn 2500 XP | `silver_club` |
+| Experience | 🥈 Silver Club | Earn 2500 XP | `silver_club` |
 | Experience | 🖐️ High Five | Earn 5000 XP | `high_five` |
-| Experience | 🔟 Ten Thousand ² | Earn 10000 XP | `ten_thousand` |
-| Experience | 🥇 Gold Club ² | Earn 15000 XP | `gold_club` |
-| Experience | 💠 Platinum Club ² | Earn 20000 XP | `platinum_club` |
-| Experience | 🏆 Hall of Fame ² | Earn 25000 XP | `hall_of_fame` |
+| Experience | 🔟 Ten Thousand | Earn 10000 XP | `ten_thousand` |
+| Experience | 🥇 Gold Club | Earn 15000 XP | `gold_club` |
+| Experience | 💠 Platinum Club | Earn 20000 XP | `platinum_club` |
+| Experience | 🏆 Hall of Fame | Earn 25000 XP | `hall_of_fame` |
 
 ### Balancing
 
@@ -1248,7 +1199,7 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 database with the real game code (offline, fixed seed) and prints XP and
 level by week, badges by week, the badges reached within one and two years,
 the quest rate, drop penalties and the longest stretch without a level-up
-or badge. The defaults above (format 2) give:
+or badge. The defaults above give:
 
 | Reader | Week 1 | Week 4 | Week 52 | Week 104 | Badges in 2 years | Longest gap (reading weeks) |
 |---|---|---|---|---|---|---|
@@ -1262,24 +1213,26 @@ or badge. The defaults above (format 2) give:
   [archive](#the-archive-export-everything) (`.zip`) with the profile and its
   locked rules, every status, rating and note (also the note files),
   history, queue, XP, badges, recommendation batches with evidence, and the
-  libraries with their papers. Automatic backups contain the same. A `FILE`
-  ending in `.json` gets the progress JSON of earlier versions instead.
-- **Load** (welcome screen, `profile load FILE`): an archive or a progress
-  JSON file becomes a *new* profile; nothing is replaced.
-- **Compare** (Profile → Compare, `profile compare FILE ...`): level, XP,
+  libraries with their papers. Default file:
+  `litrad_profile_<name>_<date>_<time>.zip` in `backup.dir`. Automatic
+  backups contain the same.
+- **Load** (welcome screen, `profile load FILE.zip [--name NAME]`): an
+  archive becomes a *new* profile; nothing is replaced.
+- **Compare** (Profile → Compare, `profile compare FILE.zip ...`): level, XP,
   papers read, thorough reads, longest streak, quests, badges, discipline,
   depth, Reading Impact Factor, notes and active weeks side by side, the best
   value highlighted; says whether profiles played by the **same rules**
-  (fingerprint) and whether a file was **edited** outside litrad.
-- Every file has a **checksum** (archives: a SHA-256 per file); a file whose
-  content no longer matches is refused. This catches hand edits; it is not a cryptographic proof. Loading
-  and comparing also check the file against its schema and for consistency
-  (every reading and XP event points to a paper in the file, totals add up).
+  (fingerprint).
+- Archives are verified by the SHA-256 of every file in `manifest.json`
+  when they are read; a file whose content no longer matches is refused.
+  This catches hand edits; it is not a cryptographic proof. Loading and
+  comparing also check the archive against its schemas and for consistency
+  (every reading and XP event points to a paper in the archive, totals add
+  up).
 - **Export everything** (Profile page, `export-all`) writes the same archive
   under another name ([Data formats](#11-data-formats)).
 - Merging progress from another machine (`import-progress`, `import-all
   --into`) only works between profiles with the same rules.
-
 
 ---
 
@@ -1290,7 +1243,7 @@ or badge. The defaults above (format 2) give:
 
 | Command | Purpose |
 |---|---|
-| `profile list\|create\|adopt\|use\|show\|save\|load\|compare` | profiles: list, create (rules locked), take over old data, choose the current one, show rules, save, load as a new profile, compare |
+| `profile list\|create\|use\|show\|save\|load\|compare` | profiles: list, create (rules locked), choose the current one, show rules, save an archive (`save [FILE]`), load an archive as a new profile (`load FILE.zip [--name]`), compare archives (`compare FILE.zip…`) |
 | `library list\|import\|export\|edit\|use\|delete` | `import FILE --new NAME` or `--to NAME [--replace]` (`--check` only checks); `export NAME\|queue [FILE] [--format bibtex\|ris] [--status]`; `edit NAME [--name] [--description] [--recommendations/--no-recommendations]`; `use NAME… [--off]` (libraries used for recommendations) |
 | `examples [positive\|negative]` | example papers for Semantic Scholar with their origin; `add\|remove\|restore positive\|negative REF`; `reset positive\|negative`; `rules positive\|negative [RULE…] [--none] [--count N]` (saved in the profile's settings) |
 | `ingest [--no-s2]` | update every library from its file; resolve DOIs; fetch metrics and embeddings |
@@ -1308,8 +1261,8 @@ or badge. The defaults above (format 2) give:
 | `app [--port N] [--no-browser]` | desktop mode: the web UI on this computer only, opened in your browser; Quit in the sidebar. `--no-browser` or `LITRAD_NO_BROWSER=1`: do not open a browser. Also as `litrad-app` |
 | `serve [--network local\|all\|eth0\|wlan0\|IP] [--no-choose] [--port] [--list-networks]` | the web UI (server mode) |
 | `set-password [--remove] [--password-file FILE]` | password for network access |
-| `backup`, `restore FILE` | snapshot + archive of everything / restore a snapshot |
-| `export-progress FILE`, `import-progress FILE [--dry-run]` | progress as JSON (legacy format) / merge a JSON file or an archive into the current profile |
+| `backup`, `restore FILE` | snapshot (`litrad_YYYYMMDD_HHMMSS.sqlite`) plus archive (`litrad_backup_YYYYMMDD_HHMMSS.zip`) in `backup.dir` / restore a snapshot |
+| `export-progress FILE.zip`, `import-progress FILE.zip [--dry-run]` | the same as `export-all FILE.zip` / `import-all FILE.zip --into` the current profile |
 | `export-all [FILE.zip]` | everything of the profile in one documented archive ([Data formats](#the-archive-export-everything)); default: a new file in `backup.dir` |
 | `import-all FILE.zip [--new NAME \| --into PROFILE] [--dry-run] [--partial]` | import an archive as a new profile or merge it; checked first, all or nothing ([details](#importing-an-archive)) |
 | `check` | database integrity, schema version, references, contents, last backup |
@@ -1360,15 +1313,15 @@ Planned: PubMed as a recommendation source and PubMed Central full texts
   [`config/config.example.yaml`](../config/config.example.yaml).
 - **`data/profiles/<profile>/settings.yaml`**: what a profile changes:
   `topics`, `excluded_terms`, `selection`, `sources`, `queue`, `library`,
-  `paths.bibtex`. The web UI writes it; you can edit it by hand. A new profile
-  starts without topics; a profile taken over from old data starts with the
-  topics of `config.yaml`.
+  `paths.bibtex` (the profile's Paperpile export; default `library.bib` in the
+  profile folder). The web UI writes it; you can edit it by hand. A new
+  profile starts without topics.
 
 **Which `config.yaml`** (the first that applies; `litrad where` shows
 the choice):
 
 1. `-c/--config PATH`;
-2. the environment variable `LITRAD_CONFIG` (or the old `LITRESEARCH_CONFIG`; a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
+2. the environment variable `LITRAD_CONFIG` (a missing file is created on the first run, with the data in the same folder; the Docker image sets `/data/config.yaml`);
 3. `config/config.yaml` in the current folder (a git installation);
 4. your per-user config file ([Setup](#1-install)). If it does not exist
    yet, the first command creates it from the example, with the data in your
@@ -1378,11 +1331,12 @@ the choice):
 resolved against the *data folder*, not the folder you run the command in:
 `paths.base_dir` if set (relative to the config file's folder); otherwise
 the folder that contains `config/` when the file is `.../config/config.yaml`
-(a git installation keeps `data/` next to `config/`, as before); otherwise
+(a git installation keeps `data/` next to `config/`); otherwise
 the config file's folder. `~` stands for your home folder.
 
 Use `n/a` for "not set". Unknown keys, and infinite or NaN numbers, are
-rejected. Sections marked *(planned)* are validated but not used yet.
+rejected; so are `paths.database` and `paths.bibtex` in `config.yaml`
+(the error names the line): both belong to the profile. Sections marked *(planned)* are validated but not used yet.
 
 ### `paths`
 
@@ -1390,11 +1344,9 @@ rejected. Sections marked *(planned)* are validated but not used yet.
 |---|---|---|
 | `base_dir` | `n/a` | folder relative paths start from (see above); a new per-user config sets it to your per-user data folder |
 | `profiles_dir` | `data/profiles` | one folder per profile |
-| `bibtex` | `data/paperpile/library.bib` | an export file that `ingest` imports into **My library** when no library has a file yet (the set-up before 0.2); a profile uses `library.bib` in its folder unless its `settings.yaml` sets it |
-| `database` | `data/litrad.sqlite` | database *before profiles* (not set: an existing `data/litresearch.sqlite` from before the rename is used); a profile uses `litrad.sqlite` in its folder |
 | `cache_dir` | `data/cache` | HTTP response cache |
 | `obsidian_vault` | `n/a` | Obsidian vault for the note files; `n/a`: `<profile folder>/notes/` ([Notes and Obsidian](#notes-and-obsidian)) |
-| `notes_subfolder` | `litrad` | folder inside the vault for the note files (`""` = the vault itself; not set: an existing `litresearch` folder from before the rename is used); only used with `obsidian_vault` |
+| `notes_subfolder` | `litrad` | folder inside the vault for the note files (`""` = the vault itself); only used with `obsidian_vault` |
 
 ### `topics`, `excluded_terms`, `library`
 
@@ -1442,7 +1394,7 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `n_recommendations` | 5 | papers per list (1–5); old `n_detail`/`n_skim` are converted |
+| `n_recommendations` | 5 | papers per list (1–5) |
 | `fresh_window_months` | 6 | how recent a paper must be to count as "current" |
 | `landmark_min_percentile` | 95 | field/year-normalised citation percentile for "important" papers |
 | `landmark_max_age_years` | 15 | landmark papers must be younger than this |
@@ -1504,7 +1456,7 @@ profile the command line uses.
 |---|---|---|
 | **Your progress**: statuses, ratings, notes, history, queue, XP, badges, recommendations, example choices, locked rules | `data/profiles/<profile>/litrad.sqlite` | **no**, back it up |
 | Libraries, paper metadata, metrics, embeddings | same database | yes, from the export files |
-| Uploaded export files | `data/profiles/<profile>/libraries/` | yes, export again |
+| Uploaded export files; the profile's Paperpile export `library.bib` | `data/profiles/<profile>/libraries/`, `data/profiles/<profile>/library.bib` | yes, export again |
 | **Your notes** (Markdown files) | `data/profiles/<profile>/notes/` or your Obsidian vault | **no**; in every backup (zip), copy in the database |
 | Topics and settings | `data/profiles/<profile>/settings.yaml` | no; in every backup |
 | Machine settings | `config/config.yaml` or the per-user config file | no; keep a copy |
@@ -1513,13 +1465,12 @@ profile the command line uses.
 | Desktop app log, running-instance lock | `logs/app.log`, `app-instance.json` in the per-user data folder | yes |
 | Backups | `data/backups/<profile>/` (`backup.dir`) | they *are* the copy |
 | Copies made before a database upgrade | `data/profiles/<profile>/upgrade-backups/` | they *are* the copy ([Database upgrades](#database-upgrades)) |
-| Data from before profiles | `data/litrad.sqlite` | kept as it was |
 
 All paths are settings, so everything can live in one folder of your choice.
 
 ### Recommended setup
 
-1. **One live database on one machine** (e.g. an always-on Raspberry Pi);
+1. **One live database on one machine** (e.g. a home server or NAS);
    laptop and phone use the web UI over the network, so there is never a
    second copy to get out of sync.
 2. **Point `backup.dir` to a cloud-synced folder**, not the database:
@@ -1540,8 +1491,8 @@ All paths are settings, so everything can live in one folder of your choice.
 
 **Do not sync the live database file**: a sync client may copy it mid-write
 (a corrupt copy), and two machines using it create conflict copies that lose
-progress. Snapshots are complete and never change. Use the JSON
-export/import below to move progress.
+progress. Snapshots are complete and never change. Use the
+archives below to move progress.
 
 ### What a backup contains
 
@@ -1553,9 +1504,7 @@ Two files per backup, named with `YYYYMMDD_HHMMSS`:
 | `litrad_backup_20261008_070000.zip` | the whole **profile** as an [archive](#the-archive-export-everything) (the same as *Export everything*): rules, settings, statuses, ratings, notes and note files, history, queue, XP, badges, recommendations, libraries, example choices | `profile load` (new profile), `import-all --into` (merge); `restore` takes the note files from it |
 
 The oldest files beyond `backup.keep` (default 14 of each kind) are
-deleted. Backups made before 1.0 (`litrad_progress_<date>_<time>.json`
-and `litrad_notes_<date>_<time>.zip`) are still read, and age out
-together with the new ones. Profiles you save yourself
+deleted. Profiles you save yourself
 (`litrad_profile_<name>_<date>_<time>.zip`) and *Export everything*
 files are never deleted.
 
@@ -1571,7 +1520,7 @@ restore can be undone; these copies are rotated by time like other snapshots
 and count toward `backup.keep`. Before anything changes, the snapshot is
 checked: integrity, a litrad database at all, a schema version this
 version understands (a snapshot of a newer litrad is refused; an older
-one is upgraded when it is next opened) and no rows referring to papers,
+1.x one is upgraded when it is next opened) and no rows referring to papers,
 libraries or batches that do not exist. Paths that do not exist are refused
 too. Note files:
 missing ones are written back from the archive of the same backup (or from
@@ -1586,8 +1535,8 @@ litrad import-all export.zip --into PROFILE --dry-run   # new machine: preview
 litrad import-all export.zip --into PROFILE
 ```
 
-`import-progress FILE` does the same for the current profile and also takes
-the progress JSON of `export-progress` and of backups before 1.0.
+`import-progress FILE.zip` is `import-all FILE.zip --into` the current
+profile.
 
 How the merge works:
 
@@ -1602,17 +1551,14 @@ How the merge works:
   queue entries are appended while there is room;
 - the profile is taken over if the target has none; otherwise both must have
   the same rules (fingerprint), or the merge is refused;
-- importing the same file twice changes nothing; the target is backed up
-  first; the file is checked against its schema and for consistency before
-  anything changes (problems are listed as `readings[3]: paper p7 not in
-  papers`), so an invalid file changes nothing.
+- importing the same archive twice changes nothing; the target is backed up
+  first; the archive is checked against its schemas and for consistency
+  before anything changes ([details](#importing-an-archive)), so an invalid
+  archive changes nothing;
+- the libraries with all metadata and the note files come along.
 
-The same works with an [archive](#importing-an-archive):
-`litrad import-all FILE.zip --into PROFILE`; it also brings the libraries
-with all metadata and the note files.
-
-To start a profile from a saved file instead, use *Load a saved profile* on
-the welcome screen or `profile load FILE [--name NAME]`.
+To start a profile from a saved archive instead, use *Load a saved profile*
+on the welcome screen or `profile load FILE.zip [--name NAME]`.
 
 ### How progress is protected against crashes
 
@@ -1636,29 +1582,30 @@ Three version numbers are independent of each other:
 
 | Version | Where | Changes when |
 |---|---|---|
-| app version (`0.2.0-dev`) | `litrad version` | every release |
+| app version (`1.0.0`) | `litrad version` | every release |
 | **data format** (`1`) | `format_version` in `manifest.json` of an archive | the content of the archive changes in any way: a new file, a new field, a changed meaning |
 | **database schema** (`1`) | `PRAGMA user_version` of each profile database | a table, column or index changes |
 
 A litrad version reads every data format and database schema up to its
 own and refuses newer ones with a clear message, so an older version never
-damages data of a newer one. **Compatibility promise from 1.0 on:** every
-1.x version reads and upgrades all data, settings and exports of earlier
-versions; new features only add (optional fields, new files, new tables).
+damages data of a newer one. **Compatibility promise:** every
+1.x version reads and upgrades all data, settings and archives of earlier
+1.x versions; new features only add (optional fields, new files, new tables).
 The promise is forward only: a newer version reads older files, not the
 other way round.
 
 ### Database upgrades
 
-When litrad opens a profile database with an older schema version
-(databases of 0.1 to 0.5 have version 0), it first saves a copy to
+The database schema version is `PRAGMA user_version`; **version 1 is the
+1.0 baseline**. Upgrades in 1.x are numbered steps (step 2 upgrades 1 to 2),
+one transaction each, so an interrupted upgrade resumes where it stopped.
+Before upgrading, litrad saves a copy to
 `data/profiles/<profile>/upgrade-backups/litrad_<date>_<time>_before-schema-<old>-to-<new>.sqlite`
-(the newest 3 copies are kept; older ones are deleted after an upgrade
-succeeded; `litrad where` shows the folder) and then upgrades it by numbered, tested steps, one transaction each: an
-interrupted upgrade resumes where it stopped. Nothing is ever reset. A
-database with a newer schema version is not opened at all: update
-litrad, or restore a backup made with this version. `litrad check`
-shows the schema version.
+(the newest 3 copies are kept; `litrad where` shows the folder). Nothing is
+ever reset. A database with a newer schema version is refused: update
+litrad, or restore a backup made with this version. A database without a
+version (0) that already has tables is refused as not written by litrad
+1.x. `litrad check` shows the schema version.
 
 ### The archive ("Export everything")
 
@@ -1676,7 +1623,7 @@ from `papers.json`.
 | `libraries.json` | `libraries`: `name`, `description`, `kind` (imported, recommended), `format`, `use_for_recommendations`, dates, `files`, and `papers` (`paper`, `citation_key`, `folders`, `tags`, `added_at`) |
 | `libraries/<name>.bib`, `.json` | each library as BibTeX and CSL-JSON for reference managers (views of `libraries.json`, checked on import but not read) |
 | `readings.json` | `readings`: `paper`, `status` (abstract, skimmed, read, thorough, dismissed), `rating`, `notes`, `updated_at` |
-| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top`, `at`; optional (not in older files): `earlier: true` (read before litrad) and `read_on` (`YYYY-MM-DD` or null) |
+| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top`, `at`; optional: `earlier: true` (read before litrad) and `read_on` (`YYYY-MM-DD` or null) |
 | `xp_ledger.json` | `total` and `events`: `points`, `kind`, `reason`, `at`, `paper`, running `balance` |
 | `badges.json` | `badges`: `code`, `name`, `unlocked_at` |
 | `queue.json` | `queue`: `paper`, `position` (1 = next), `source`, `added_at` |
@@ -1723,7 +1670,7 @@ writes it later). `--partial` (*Only the consistent part*) imports the
 consistent records and lists what was skipped, including everything that
 refers to a skipped record. `--dry-run` checks and shows what would change.
 
-Merging uses the rules of [progress files](#moving-to-another-machine-or-merging-two):
+Merging uses the rules of [moving and merging](#moving-to-another-machine-or-merging-two):
 papers are matched by DOI, PMID, citation key, then title and year; the
 newer reading wins and notes of both sides are kept; importing the same
 archive twice changes nothing. The settings of the archive are only used for
@@ -1732,31 +1679,9 @@ a new profile, and paths from another machine never.
 **Unknown fields** in the JSON files are allowed and ignored with a note
 (e.g. fields a script added). Files of a newer data format are refused.
 
-### Legacy formats
-
-Still read, so nothing written by an earlier version is lost:
-
-- **Progress and profile files** (`litrad_progress_*.json`,
-  `litrad_profile_*.json`, format `litrad-progress` version 2, and
-  version 1 without checksum from before game profiles). Backups and *Save
-  profile* wrote version 2 until 1.0 and write archives since;
-  `export-progress`, *Download* on the Profile page and a `profile save` to a
-  `.json` file still write it. It is described by
-  `schemas/progress.schema.json` and checked like an archive before it is
-  loaded, merged or compared.
-- **Notes zips of backups** (`litrad_notes_*.zip`, before 1.0): `restore`
-  still takes the note files from them.
-- **Databases** of every version since 0.1.0-alpha.1 (upgraded as above).
-- **Notes in the database** (before 0.5): they become note files.
-- **Names from before the rename to litrad** (0.3): files named
-  `litresearch_*`, the formats `litresearch-export` and
-  `litresearch-progress`, note files with `format: litresearch-note/1` and
-  `litresearch_id`, and profile databases named `litresearch.sqlite`
-  ([Renamed from litresearch](#renamed-from-litresearch)).
-
-The test suite keeps a small profile database and the files written by each
-released version (`tests/data/compat/`) and checks that they open, upgrade,
-export and import.
+Everything moves between machines and profiles only as zip archives
+(format `litrad-export`, data format version `1`); there is no other
+exchange format.
 
 ### Reading the database directly
 
@@ -1803,7 +1728,7 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `ingest/bibtex.py`, `ingest/formats.py` | BibTeX (LaTeX decoding, Paperpile's month/day format, DOI normalisation, folders/labels), RIS and CSL-JSON parsers, format detection |
 | `ingest/check.py` | checks of an export (required fields, coverage, duplicates) |
 | `ingest/pipeline.py` | import into a library (new, add, replace), matching, DOI resolution, OpenAlex and S2 enrichment, per-source error isolation, import history |
-| `libraries.py`, `export.py`, `cli_library.py` | libraries and memberships, Recommended and queue libraries, uploads, migration; BibTeX/RIS/CSL-JSON export; `library` and `examples` commands |
+| `libraries.py`, `export.py`, `cli_library.py` | libraries and memberships, Recommended and queue libraries, uploads; BibTeX/RIS/CSL-JSON export; `library` and `examples` commands |
 | `examples.py` | the positive and negative example lists for Semantic Scholar: rules, your choices, regeneration |
 | `sources/http.py` | JSON client: SQLite cache with max age and clean-up, per-host throttling, retries (`Retry-After`, backoff) |
 | `sources/crossref.py`, `openalex.py`, `semanticscholar.py`, `europepmc.py`, `pubmed.py`, `hits.py` | API clients; a common search `Hit` with merging |
@@ -1813,8 +1738,8 @@ domain functions, so their behaviour is identical). Planned stages are in
 | `notes.py` | notes as Markdown files: names, front matter (ruamel.yaml round trip), three-way sync with the copy in `reading.notes`, conflicts, Markdown preview without raw HTML, template, notes archive |
 | `history.py` | reading history: filter, sort and aggregate in SQL, TSV export (Read papers tab, `read-papers`) |
 | `rules.py`, `profile.py`, `game.py` | `GameRules`, badge catalog, fingerprint; locking; points, anti-farming, streaks, quests, levels, badges, summaries, ledger, calendar |
-| `profiles.py` | profile folders, settings overlay, current profile, taking over old data, loading saved files |
-| `backup.py` | atomic writes, snapshots, rotation, restore, profile files with checksum, merge, comparison in an in-memory database, automatic backup thread |
+| `profiles.py` | profile folders, settings overlay, current profile, loading saved archives |
+| `backup.py` | atomic writes, snapshots, rotation, restore, profile archives, merge, comparison in an in-memory database, automatic backup thread |
 | `cli.py`, `cli_reading.py`, `cli_data.py` | Typer commands; expected errors become messages |
 | `web/app.py`, `auth.py`, `settings.py`, `docs.py` | FastAPI routes and middleware; scrypt/HMAC login; settings schema and forms; this documentation as chapter pages |
 | `web/templates/`, `web/static/` | Jinja2 pages, CSS (themes, animations), JavaScript (toasts, confetti, rings) |
@@ -1882,16 +1807,15 @@ batch for diversity's sake.
 
 ### Game design
 
-Rules in [Gamification](#6-gamification). Design notes: the frog bonus is a
-nod to Brian Tracy's "eat that frog"; anti-farming invariants (base points
-only up to the deepest level, paper bonuses once, frog bonus on new base
+Rules in [Gamification](#6-gamification). Design notes: the cheese bonus fits the rat
+in the logo; anti-farming invariants (base points
+only up to the deepest level, paper bonuses once, cheese bonus on new base
 points) are checked by a randomised test over long sessions; all rules form
 one `GameRules` object frozen per profile with a SHA-256-based fingerprint
-(over the rules of rules format 1, `rules.FINGERPRINT_FIELDS`; later rules
-enter only with a non-default value, so the fingerprint never changes for a
-locked profile);
-profile files carry a SHA-256 checksum, and comparisons load each file into a
-throw-away in-memory SQLite database; streaks count weeks, not days, to
+(over every 1.0 rule and badge, `rules.FINGERPRINT_FIELDS`; rules and badges
+added in a later 1.x enter only with a non-default value, so the fingerprint
+never changes for a locked profile); archives carry a SHA-256 per file, and
+comparisons load each archive into a throw-away in-memory SQLite database; streaks count weeks, not days, to
 motivate without guilt.
 
 ### Profiles
@@ -1903,8 +1827,7 @@ backup dir pointing into the profile. The web UI keeps the chosen profile in
 a signed cookie; a middleware sends requests without a valid profile to the
 welcome screen and passes the profile to the routes in a context variable.
 The CLI uses `--profile`, else `data/profiles/.current`, else the only
-profile; without profiles it falls back to `paths.database`, which
-`adopt_legacy` copies into a new profile.
+profile; without any profile it stops and says how to create one.
 
 ### Data safety and web security
 
@@ -1951,10 +1874,9 @@ profile; without profiles it falls back to `paths.database`, which
 
 ### Quality assurance
 
-About 510 tests in 29 modules (offline by default with recorded real API
-responses; live tests with `--network`), covering failure scenarios, hostile
-input, data integrity, scale and years of use; about 97 % statement coverage
-at v0.1.0-alpha.1, with scoring, game, reading, config and auth at 100 %.
+The test suite runs offline by default with recorded real API
+responses (live tests with `--network`) and covers failure scenarios, hostile
+input, data integrity, scale and years of use.
 Warnings are errors; ruff lints and formats; CI runs on Python 3.11–3.13.
 Each milestone was also run on real data and checked with headless-browser
 screenshots. Details: [Development](#14-development).
@@ -1968,7 +1890,7 @@ licenses that permit use in this project.
 |---|---|---|---|
 | [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) | 2.1.0 | MIT | parsing BibTeX (v2 API, LaTeX decoding and name-splitting middlewares) |
 | [httpx](https://www.python-httpx.org) | 0.28.1 | BSD-3-Clause | HTTP client for all APIs; `MockTransport` in tests |
-| [jsonschema](https://github.com/python-jsonschema/jsonschema) | 4.26.0 | MIT | checking exports, progress and profile files against their JSON Schema (draft 2020-12) before importing |
+| [jsonschema](https://github.com/python-jsonschema/jsonschema) | 4.26.0 | MIT | checking archives against their JSON Schemas (draft 2020-12) before importing |
 | [numpy](https://numpy.org) | 2.5.3 | BSD-3-Clause | embeddings and vector maths (cosine, kNN, MMR, TF-IDF) |
 | [platformdirs](https://github.com/tox-dev/platformdirs) | 4.14.5 | MIT | per-user config and data folders on Linux, macOS and Windows |
 | [pydantic](https://github.com/pydantic/pydantic) | 2.13.5 | MIT | configuration models and validation |
@@ -2061,8 +1983,6 @@ Methods:
   in input, sources, impact scoring, the reading workflow and the game.
 - Scholar Inbox (Flicke et al., 2025, arXiv:2504.08385), Semantic Scholar
   Research Feeds, ResearchRabbit and Litmaps were reviewed as alternatives.
-- "Eat that frog" (Brian Tracy) named the bonus for reading your planned top
-  paper first.
 
 ### License and citation
 
@@ -2093,7 +2013,7 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
   `__init__.py`, `CITATION.cff`). A tag `vX.Y.Z` runs
   `.github/workflows/release.yml` (tests, [desktop builds](#desktop-builds),
   wheel and source archive, GitHub release with the CHANGELOG section;
-  pre-release for `-alpha.N`/`-dev`).
+  pre-release for `-rc.N`/`-dev`).
 - Issues use `.github/ISSUE_TEMPLATE/` (bug report, feature request, testing
   feedback); pull requests `.github/pull_request_template.md`. Hosting:
   GitHub; a GitLab@HHU mirror can be added as a second push target.
@@ -2120,14 +2040,14 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
 
 | Test module | Covers |
 |---|---|
-| `test_bibtex.py`, `test_pipeline.py`, `test_libraries.py` | parsing quirks; ingest end to end; formats, import modes, exports, special libraries, migration, `library` CLI |
+| `test_bibtex.py`, `test_pipeline.py`, `test_libraries.py` | parsing quirks; ingest end to end; formats, import modes, exports, special libraries, `library` CLI |
 | `test_http.py`, `test_sources.py`, `test_search.py` | cache, retries, throttling; API clients and match rules; paper search |
 | `test_scoring.py`, `test_recommend.py` | scoring maths, evidence; candidates, filters, cooldown, outages |
 | `test_reading.py`, `test_game.py`, `test_papers.py` | queue, notes, ratings; XP, anti-farming, streaks, quests, badges; paper storage |
 | `test_backup.py`, `test_profile.py`, `test_profiles.py` | snapshots, rotation, merge, restore; rules, locking, checksums, comparison; profile folders, welcome screen, separation |
 | `test_cli.py`, `test_web.py`, `test_web_usecases.py`, `test_web_polish.py`, `test_auth.py` | interfaces, every page, settings round trip, user flows, login |
-| `test_config.py`, `test_db.py` | validation, schema, migration |
-| `test_migrations.py`, `test_compat.py` | schema versions, upgrade steps, snapshots, refusing newer databases, restore checks; files and databases of every released version (`tests/data/compat/`, made by `tools/make_compat_fixtures.py`) |
+| `test_config.py`, `test_db.py` | validation, schema, additive upgrade steps |
+| `test_migrations.py`, `test_compat.py` | schema versions, upgrade steps, snapshots, refusing newer databases, restore checks; files and databases of every 1.x release (`tests/data/compat/`, made by `tools/make_compat_fixtures.py`; until the first exists, of the current code) |
 | `test_archive.py` | Export everything: contents, schemas, round trip, merge, every consistency rule, all or nothing, `--partial`, dry run, CLI, web, 5000 papers |
 | `test_robustness.py`, `test_data_integrity.py` | crashes, concurrency, broken and hostile inputs; matching and merge correctness |
 | `test_scale.py`, `test_import_scale.py`, `test_longterm.py` | large libraries and years of use (`web_bigdata.py` builds the data) |
@@ -2137,8 +2057,8 @@ issue ─► feat-*/issueNN-* branch from dev ─► pull request into dev (CI g
 ### Compatibility fixtures
 
 `tests/data/compat/<version>/` holds what each released version wrote: a
-small profile database, progress and profile files, from 0.6 on an archive,
-and the counts that version computed (`expected.json`).
+small profile database, an archive and the counts that version computed
+(`expected.json`).
 `tools/make_compat_fixtures.py --tags vX.Y.Z` checks the tag out into a
 temporary worktree, installs it into a fresh virtual environment and builds
 the profile offline with that version's own code. **Every release adds its

@@ -2,98 +2,83 @@
 
 # litrad · The Literature Radar Game
 
-A personal literature radar built on your reference-manager libraries
-(Paperpile, Zotero, Mendeley, EndNote …). Whenever you ask (with a weekly
-reminder), it proposes **up to 5 papers**, ranked by similarity to your
-library (SPECTER2), your topics, paper impact and timeliness: very recent
-*or* a landmark.
+A personal literature radar on top of your reference-manager libraries
+(Paperpile, Zotero, Mendeley, EndNote …). Whenever you ask, with a weekly
+reminder, it proposes **up to 5 papers**, ranked by similarity to your library
+(SPECTER2), your topics, impact and timeliness; you pick papers onto a short
+reading queue, log how deeply you read them, and a game layer (XP, streaks,
+weekly quests, levels and badges; read your top paper first and you get the
+🧀) keeps you going. Profiles keep everything personal with locked game rules,
+every recommendation comes with its evidence, and only free services are used
+without sending personal data.
 
-- **You decide:** pick papers onto a short, ordered **reading queue**; add
-  any paper by DOI, PubMed ID or title, or find it in **Europe PMC and
-  PubMed**.
-- **Track your reading:** abstract / skimmed / read / thorough, ratings and
-  notes; a **game layer** (XP, streaks, weekly quests, 20 levels, 44 badges)
-  keeps you going.
-- **Several libraries** from any reference manager (BibTeX, RIS, CSL-JSON),
-  exportable with your reading status.
-- **Profiles** hold everything personal, with game rules locked on creation;
-  save, load and compare them.
-- **Transparent and private:** an evidence tree for every recommendation,
-  every rule documented; free services only, no personal data sent.
+**Status:** `1.0.0-rc.1` (release candidate). Please [test it](TESTING.md) and
+report what breaks.
 
-**Status:** `v0.2.0-dev` (2026-10-29), a development release for testing;
-previous release `v0.1.0-alpha.1`. Runs on Linux (developed on a Raspberry
-Pi). Please [test it](TESTING.md) and report what breaks.
+## Install
 
-## Install and first steps
+**Desktop app (default):** download the file for your system from the latest
+GitHub release: Windows installer (`.exe`), macOS (`.dmg`) or Linux AppImage.
+Double-click it; litrad starts on this computer only and opens in your
+browser. Quit with **⏻ Quit** in the sidebar. The builds are unsigned: Windows
+*More info → Run anyway*, macOS right-click → *Open*, Linux `chmod +x`.
+Details: [Desktop app](docs/documentation.md#desktop-app).
 
-**Desktop app (default):** download the file for your system from the
-latest GitHub release: Windows installer (`.exe`), macOS (`.dmg`) or Linux
-AppImage. Double-click it; litrad starts on this computer only and opens
-in your browser. Quit with **⏻ Quit** in the sidebar. The builds are
-unsigned: Windows *More info → Run anyway*, macOS right-click → *Open*,
-Linux `chmod +x`. Details: [Desktop app](docs/documentation.md#desktop-app).
+**Server mode** (a home server, NAS or lab server, reachable from your other
+devices with a password), one of:
 
-**Server mode** (Raspberry Pi, NAS, lab server; reachable from your other
-devices with a password) needs Linux with Python ≥ 3.11 and git (Debian,
-Ubuntu, Raspberry Pi OS: `sudo apt install git python3-venv`):
+- **Docker:**
 
-```bash
-git clone <repository-url> litrad && cd litrad
-python3 install.py                 # checks, installs, offers to start the web UI
-.venv/bin/litrad serve        # later: start the web UI, open the address it prints
-```
+  ```bash
+  docker run --rm -it -v litrad:/data ghcr.io/<owner>/litrad litrad set-password   # once
+  docker run -d --name litrad --restart unless-stopped -p 8080:8080 \
+      -v litrad:/data ghcr.io/<owner>/litrad
+  ```
 
-Options: `--service` (start the web UI automatically), `--repair` (if
-litrad does not start), `--remove-service`. Details:
-[Server mode](docs/documentation.md#server-mode).
+- **pipx** (Python ≥ 3.11): `pipx install litrad`, then `litrad serve`.
+- **git and install.py** (Linux with Python ≥ 3.11 and git; Debian/Ubuntu:
+  `sudo apt install git python3-venv`):
+
+  ```bash
+  git clone <repository-url> litrad && cd litrad
+  python3 install.py            # checks, installs, offers to start the web UI
+  .venv/bin/litrad serve        # later: start the web UI, open the address it prints
+  ```
+
+  Options: `--service` (start the web UI automatically), `--repair`,
+  `--remove-service`. Update with `git pull && python3 install.py`.
+
+Details: [Server mode](docs/documentation.md#server-mode).
+
+## First steps
 
 In the browser:
 
-1. create a profile (and its game rules);
+1. create a profile (its game rules are locked);
 2. **Library → Import** your reference-manager export;
 3. **Reading → Recommendations**: name your topics and get your first list;
 4. put papers on your queue, read, and log what you read.
 
-Everything also works on the command line:
+The same on the command line:
 
 ```bash
-.venv/bin/litrad profile create "Kai"
-.venv/bin/litrad library import library.bib --new "Paperpile"
-.venv/bin/litrad recommend --new
-.venv/bin/litrad queue add r1
-.venv/bin/litrad read q1 thorough --rating 5 --note "..."
-.venv/bin/litrad score
+litrad profile create "Kai"
+litrad library import library.bib --new "Paperpile"
+litrad recommend --new
+litrad queue add r1
+litrad read q1 thorough --rating 5 --note "..."
+litrad score
 ```
-
-Update with `git pull && python3 install.py`; `config/` and `data/` stay.
-
-**Renamed from litresearch:** litrad was called litresearch before 0.3.
-Existing installations keep working: folders, databases and backups are
-taken over automatically, old files stay readable, and the `litresearch`
-command remains for a while. Details:
-[Renamed from litresearch](docs/documentation.md#renamed-from-litresearch).
 
 ## Documentation
 
-Everything is in **[docs/documentation.md](docs/documentation.md)**, also
-built into the web UI (📖):
-
-| Part | Contents |
-|---|---|
-| I. Using litrad | setup and exports, the weekly loop, profiles, libraries, the web UI and network access |
-| II. How it works | every recommendation rule and formula; points, penalty, levels and badges |
-| III. Reference | commands, data sources and privacy, configuration, data and backups |
-| IV. How it is built | architecture, development, tests, **credits for all packages, services and literature** |
+Everything is in **[docs/documentation.md](docs/documentation.md)**, also built
+into the web UI (📖): using litrad, how recommendations and the game work,
+commands, configuration, data formats and backups, architecture and credits.
 
 Plans: [ROADMAP.md](ROADMAP.md) · changes: [CHANGELOG.md](CHANGELOG.md) ·
-testing: [TESTING.md](TESTING.md).
-
-## Contributing
-
-Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
-`main` holds releases, `dev` is the development branch; feature branches
-(`feat-*`, `issueNN-*`) start from `dev`. Security: [SECURITY.md](SECURITY.md).
+testing: [TESTING.md](TESTING.md) · contributing:
+[CONTRIBUTING.md](CONTRIBUTING.md) · security: [SECURITY.md](SECURITY.md).
 
 ## License
 

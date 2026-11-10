@@ -1,7 +1,7 @@
 # Publish to PyPI with Trusted Publishing (no token stored in GitHub).
 #
 # Tags vX.Y.Z and pre-releases PEP 440 accepts (v0.3.0rc1, v0.3.0-rc.1) are
-# published; development tags such as v0.2.0-dev (PEP 440: 0.2.0.dev0) are
+# published; development tags such as v1.1.0-dev (PEP 440: 1.1.0.dev0) are
 # skipped. Run by hand ("Run workflow") to upload to TestPyPI instead.
 # One-time setup: see "Releases" in CONTRIBUTING.md.
 name: Publish to PyPI

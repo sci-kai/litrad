@@ -36,7 +36,7 @@ body:
     attributes:
       label: litrad version
       description: Output of `litrad version`
-      placeholder: 0.2.0-dev
+      placeholder: 1.0.0-rc.1
     validations:
       required: true
   - type: input

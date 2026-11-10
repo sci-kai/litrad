@@ -1,6 +1,6 @@
 # Build the Docker image (linux/amd64 and linux/arm64) and push it to
 # ghcr.io/<owner>/litrad. Tags: the version of every v* tag; "latest" only for
-# releases, not for pre-releases such as v0.2.0-dev. A manual run builds
+# releases, not for pre-releases such as v1.0.0-rc.1. A manual run builds
 # the selected ref and tags it with the branch name.
 name: Docker image
 

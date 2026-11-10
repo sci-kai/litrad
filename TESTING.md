@@ -1,64 +1,59 @@
-# Testing litrad 0.2.0-dev
+# Testing litrad 1.0.0-rc.1
 
-Thank you for testing! Use litrad with your **own library for real
-reading** for a few weeks, not only a quick click through. Setting it up
-takes about 30 minutes.
+Thank you for testing the release candidate! Use litrad with your **own
+library for real reading** for a week or two, not only a quick click through.
+Setting it up takes about 30 minutes.
 
 ## Before you start
 
-- Install with `python3 install.py` ([README](README.md)); note your system,
-  Python version and browser.
-- Point `backup.dir` to a synced folder and run `litrad backup` now and
-  then (documentation, "Your data and backups").
-- Never paste private data (exports, notes, API keys) into an issue; titles
-  of public papers are fine.
+- Install the desktop app or a server ([README](README.md)); note your system,
+  the install way and your browser.
+- Point `backup.dir` to a synced folder (documentation, "Your data and
+  backups").
+- Never paste private data (exports, notes, API keys) into an issue; titles of
+  public papers are fine.
 
-## First day
+## Checklist
 
-- [ ] Install; `litrad serve`; open it from another device (after
-      `litrad set-password`)
+**Install and set up**
+
+- [ ] Install; start it (desktop app, or `litrad serve` and open it from
+      another device after `litrad set-password`)
 - [ ] Create a profile; change a game rule before creating it
 - [ ] Export your library (BibTeX, RIS or CSL-JSON) and import it under
       *Library → Import*: were the checks and instructions clear?
-- [ ] Set up topics on the first visit to *Recommendations*; get the first
-      list (how long did it take? warnings?); read one evidence tree
-- [ ] Add papers to the queue: from recommendations, your library, by DOI,
-      `pmid:`, title
-- [ ] Log a read with depth, rating and note; watch the XP pop-up
-- [ ] Find the answer to a question in the documentation (📖)
 
-## New in 0.2: libraries and Find & add
+**The weekly loop**
 
-- [ ] A **second library** (another manager or project); import into an
-      **existing** library, once *adding* and once *replacing*
-- [ ] **Export** a library as BibTeX or RIS *with reading status* and import
-      it into your reference manager: are the labels kept?
-- [ ] Re-import an updated export: are papers recognised, nothing doubled?
-- [ ] *Recommended* and *Reading queue* libraries; switch a library off for
-      recommendations
-- [ ] **Find & add**: search Europe PMC and PubMed by keywords, author,
-      journal, years, open access; did you find what you looked for? Queue a
-      result; search your own library
+- [ ] Name your topics and get the first recommendations (how long? any
+      warnings?); read one evidence tree
+- [ ] Add papers to the queue: from recommendations, your library, *Find &
+      add*, and by DOI, PubMed ID or title in the add box
+- [ ] Log reads with depth, rating and note; read your top paper first once
+      (🧀) and remove one paper unread (the penalty)
+- [ ] Add papers you read before litrad (*Read earlier*)
+- [ ] Notes: write one in the editor; with an Obsidian vault, edit it there
+      and sync
+- [ ] Look at *Progress & XP*, the XP ledger, the weekly report and *Read
+      papers*
+- [ ] Use it from a phone browser (server mode)
+
+**Libraries and data**
+
+- [ ] A second library; import into an existing library, once *adding* and
+      once *replacing*; re-import an updated export (nothing doubled?)
+- [ ] Export a library *with reading status* and import it into your
+      reference manager
+- [ ] `litrad backup` (or *Back up now*), *Export everything*, then load the
+      archive as a second profile and *Compare* the two
 - [ ] Large libraries: how long do import, recommendations and the library
       pages take, for how many papers?
 
-## Two to four weeks
-
-- [ ] New recommendations when reminded; mark misses *not relevant*; do
-      later lists get better?
-- [ ] Read from the queue; keep a weekly streak and the quest
-- [ ] Remove a paper unread at least once (the penalty)
-- [ ] Update a library from your reference manager (*Update from file*)
-- [ ] *Progress & XP*, the XP ledger and weekly reports
-- [ ] Use it from the phone browser
-- [ ] Save a profile file; (optional) load it as a second profile and compare
-
 ## Reporting
 
-- **Testing feedback** template after one and after four weeks: how many
-  recommendations were worth reading, what motivated or annoyed you, what
-  you missed or never used.
-- **Bug report**: steps, expected vs. actual, terminal output (and browser
+- **Testing feedback** template: how many recommendations were worth reading,
+  what motivated or annoyed you, what you missed or never used.
+- **Bug report**: steps, expected vs. actual, terminal output (and the browser
   console, F12, for UI problems), `litrad version` and your system.
 - **Feature request**: check the [roadmap](ROADMAP.md) and existing issues
   first.

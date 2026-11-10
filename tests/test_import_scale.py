@@ -1,6 +1,6 @@
-"""Large libraries: thousands of entries, messy duplicates, re-imports, exports, progress files.
+"""Large libraries: thousands of entries, messy duplicates, re-imports, exports, archives.
 
-Sizes are kept small enough for a Raspberry Pi; the work per entry is checked
+Sizes are kept small enough for a small ARM board; the work per entry is checked
 by counting SQL statements and LaTeX decoder calls, which does not depend on
 the speed of the machine.
 """

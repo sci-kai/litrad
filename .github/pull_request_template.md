@@ -10,5 +10,5 @@ Closes #
 - [ ] Tests added or updated; `pytest` passes
 - [ ] `ruff check` and `ruff format --check` pass
 - [ ] `docs/documentation.md` updated (and `web/templates/_how_recommend.html` if scoring changed)
-- [ ] `CHANGELOG.md` entry under the unreleased version
+- [ ] `CHANGELOG.md` entry under `## Unreleased`
 - [ ] New dependencies credited in the documentation ("Implementation and credits")
