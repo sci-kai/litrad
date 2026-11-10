@@ -391,10 +391,14 @@ editor; litrad picks up the change.
 
 **Where the files are.** `<profile folder>/notes/`, or, with
 `paths.obsidian_vault` set (in `config.yaml` or the profile's
-`settings.yaml`), `<vault>/<paths.notes_subfolder>/` (default subfolder
-`litrad`). Obsidian then edits the same files; nothing is copied.
-Profiles that share a vault need different subfolders. Subfolders inside
-the notes folder are allowed (move or rename files freely).
+`settings.yaml`), `<vault>/<paths.notes_subfolder>/<profile id>/` (default
+subfolder `litrad`; the profile id is the name of the profile folder).
+Obsidian then edits the same files; nothing is copied. Every profile has
+a notes folder of its own, also when all profiles use one vault: a hidden
+file `.litrad-profile` in the folder names the profile's database, and a
+folder that belongs to another existing profile (e.g. of a second
+installation) is refused with a message. Subfolders inside the notes
+folder are allowed (move or rename files freely).
 `litrad notes path REF` prints a paper's file; Settings → Data &
 backups shows the folder.
 
@@ -1346,7 +1350,7 @@ rejected; so are `paths.database` and `paths.bibtex` in `config.yaml`
 | `profiles_dir` | `data/profiles` | one folder per profile |
 | `cache_dir` | `data/cache` | HTTP response cache |
 | `obsidian_vault` | `n/a` | Obsidian vault for the note files; `n/a`: `<profile folder>/notes/` ([Notes and Obsidian](#notes-and-obsidian)) |
-| `notes_subfolder` | `litrad` | folder inside the vault for the note files (`""` = the vault itself); only used with `obsidian_vault` |
+| `notes_subfolder` | `litrad` | folder inside the vault for the profiles' note folders (`<subfolder>/<profile id>/`; `""` = the vault itself); only used with `obsidian_vault` |
 
 ### `topics`, `excluded_terms`, `library`
 

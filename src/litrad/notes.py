@@ -12,7 +12,10 @@ search, history, XP and backups; ``NoteFile`` remembers the body both had at
 the last sync. A change on one side is copied to the other; a change on both
 sides is a *conflict*: nothing is overwritten until you choose a version.
 
-Folder: ``<profile folder>/notes``, or ``<paths.obsidian_vault>/<paths.notes_subfolder>``.
+Folder: ``<profile folder>/notes``, or ``<paths.obsidian_vault>/<paths.notes_subfolder>/<profile
+id>``: every profile has a folder of its own, also in a shared vault. A hidden
+``.litrad-profile`` file in a vault folder names the database it belongs to; a
+folder that belongs to another existing profile is refused (``NotesUnavailable``).
 File name: the paper's citation key, made safe for file names (``a-z A-Z 0-9
 - _ .``), else ``doi-<doi>`` or ``paper-<id>``; Obsidian ``[[key]]`` links
 resolve by file name.
@@ -267,18 +270,52 @@ def _write(path: Path, text: str, expect: tuple[int, int] | None = None) -> tupl
 # --- folder and names -------------------------------------------------------------------
 
 
+OWNER_FILE = ".litrad-profile"
+
+
+def _owner(cfg: Config) -> str:
+    return str(Path(cfg.paths.database).expanduser().resolve())
+
+
+def _claim(folder: Path, cfg: Config, create: bool) -> None:
+    """Refuse a vault folder that belongs to another profile; mark it as ours."""
+    marker = folder / OWNER_FILE
+    me = _owner(cfg)
+    other = ""
+    try:
+        other = marker.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise NotesUnavailable(f"Cannot read {marker}: {exc}") from exc
+    if other == me:
+        return
+    if other and Path(other).exists():
+        raise NotesUnavailable(
+            f"{folder} is the notes folder of another profile ({other}); "
+            "give this profile another paths.notes_subfolder"
+        )
+    if create and folder.is_dir():  # new, or its profile was deleted or moved
+        _write(marker, me + "\n")
+
+
 def notes_dir(cfg: Config, create: bool = True) -> Path:
-    """The notes folder of this configuration (profile)."""
+    """The notes folder of this configuration (profile), never shared with another."""
     vault = cfg.paths.obsidian_vault
-    if vault is not None:
-        vault = Path(vault).expanduser()
-        if not vault.is_dir():
-            raise NotesUnavailable(f"Obsidian vault not found: {vault} (paths.obsidian_vault)")
-        folder = vault / cfg.paths.notes_subfolder if cfg.paths.notes_subfolder else vault
-    else:
+    if vault is None:
         folder = Path(cfg.paths.database).parent / DEFAULT_FOLDER
+        if create:
+            folder.mkdir(parents=True, exist_ok=True)
+        return folder
+    vault = Path(vault).expanduser()
+    if not vault.is_dir():
+        raise NotesUnavailable(f"Obsidian vault not found: {vault} (paths.obsidian_vault)")
+    shared = vault / cfg.paths.notes_subfolder if cfg.paths.notes_subfolder else vault
+    # one subfolder per profile (the profile folder's name, i.e. its id)
+    folder = shared / Path(cfg.paths.database).expanduser().parent.name
     if create:
         folder.mkdir(parents=True, exist_ok=True)
+    _claim(folder, cfg, create)
     return folder
 
 

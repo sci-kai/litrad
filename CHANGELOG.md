@@ -49,7 +49,9 @@ of every earlier 1.x version.
 - One Markdown file per paper (format `litrad-note/1`, YAML front matter),
   an editor with preview, templates and `[[citation-key]]` links.
 - Two-way sync with an Obsidian vault that shows conflicts instead of
-  overwriting.
+  overwriting; every profile has its own folder in the vault
+  (`<vault>/litrad/<profile id>/`), and a folder of another profile is
+  refused.
 
 **Game**
 

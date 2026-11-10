@@ -17,7 +17,7 @@ paths:
   cache_dir: data/cache
   # notes as Markdown files: n/a = <profile folder>/notes; or an Obsidian vault
   obsidian_vault: n/a
-  # folder inside the vault for the note files
+  # folder inside the vault; each profile's notes go to <subfolder>/<profile id>
   notes_subfolder: litrad
 
 library:

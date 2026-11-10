@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 import litrad.cli as cli
 from conftest import make_profile, profile_cfg
 from litrad import archive, history, notes, profiles
-from litrad.backup import restore, run_backup
+from litrad.backup import restore, run_backup, save_profile_archive
 from litrad.config import Config, load_config
 from litrad.db import (
     Library,
@@ -302,7 +302,8 @@ def test_folder_unavailable_never_blocks_reading(env, tmp_path):
     # once the vault is there, the note file is written
     (tmp_path / "unmounted").mkdir()
     assert notes.refresh_all(session, gone).counts == {"created": 1}
-    assert (tmp_path / "unmounted" / "litrad" / "Muller2020-ab-c.md").exists()
+    profile_folder = cfg.paths.database.parent.name
+    assert (tmp_path / "unmounted" / "litrad" / profile_folder / "Muller2020-ab-c.md").exists()
 
 
 # --- template and preview ---------------------------------------------------------------
@@ -442,12 +443,108 @@ def test_vault_per_profile(app_env, tmp_path):  # noqa: F811
         base, slug, {"paths": {"obsidian_vault": str(vault), "notes_subfolder": "papers/lit"}}
     )
     cfg = profile_cfg(path)
-    assert notes.notes_dir(cfg) == vault / "papers" / "lit"
+    assert notes.notes_dir(cfg) == vault / "papers" / "lit" / slug
     pid = web_paper(path)
     post(client, f"/papers/{pid}/read", {"level": "read", "note": "into the vault"})
-    assert list((vault / "papers" / "lit").glob("*.md"))[0].read_text().endswith("into the vault\n")
+    written = list((vault / "papers" / "lit" / slug).glob("*.md"))
+    assert written[0].read_text().endswith("into the vault\n")
     with pytest.raises(ValueError):
         Config.model_validate({"paths": {"notes_subfolder": "../outside"}})
+
+
+def shared_vault_config(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\n  profiles_dir: {tmp_path / 'profiles'}\n"
+        f"  obsidian_vault: {vault}\n"
+    )
+    return config, vault
+
+
+def note_paper(cfg, text):
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        paper = Paper(title="Shared paper", doi="10.9/shared", bibtex_key="Shared2024")
+        session.add(paper)
+        session.commit()
+        record_reading(session, cfg, paper, ReadStatus.read, note=text, at=AT)
+        pid = paper.id
+    engine.dispose()
+    return pid
+
+
+def test_profiles_in_one_vault_never_share_note_files(tmp_path):
+    config, vault = shared_vault_config(tmp_path)
+    base = load_config(config)
+    a = profiles.create_profile(base, "Ada")
+    cfg_a = profiles.profile_config(base, a)
+    pid = note_paper(cfg_a, "Ada's note")
+    file_a = vault / "litrad" / a / "Shared2024.md"
+    assert notes.notes_dir(cfg_a) == file_a.parent and file_a.read_text().endswith("Ada's note\n")
+    # a fresh second profile with the same paper does not pick up Ada's file
+    b = profiles.create_profile(base, "Bob")
+    cfg_b = profiles.profile_config(base, b)
+    note_paper(cfg_b, "Bob's note")
+    assert notes.notes_dir(cfg_b) == vault / "litrad" / b
+    assert file_a.read_text().endswith("Ada's note\n")
+    # Ada's saved profile loaded as a new profile gets its own copies of the files
+    engine = init_db(cfg_a.paths.database)
+    with Session(engine) as session:
+        saved = save_profile_archive(session, cfg_a, tmp_path / "saved")
+    engine.dispose()
+    result = archive.import_new(base, saved, "Ada copy")
+    cfg_c = profiles.profile_config(base, result.slug)
+    file_c = vault / "litrad" / result.slug / "Shared2024.md"
+    assert result.notes_written == 1 and result.notes_kept == 0
+    assert file_c.read_text().endswith("Ada's note\n")
+    engine = init_db(cfg_c.paths.database)
+    with Session(engine) as session:
+        paper = session.get(Paper, pid)
+        state = notes.refresh_paper(session, cfg_c, paper)
+        notes.save(session, cfg_c, paper, "edited in the copy", state.base, at=AT)
+    engine.dispose()
+    assert file_c.read_text().endswith("edited in the copy\n")
+    assert file_a.read_text().endswith("Ada's note\n")
+    engine = init_db(cfg_a.paths.database)
+    with Session(engine) as session:
+        assert notes.refresh_all(session, cfg_a).counts.get("imported") is None
+        assert session.get(Reading, pid).notes.endswith("Ada's note")
+    engine.dispose()
+
+
+def test_a_vault_folder_of_another_profile_is_refused(tmp_path):
+    config, vault = shared_vault_config(tmp_path)
+    base = load_config(config)
+    a = profiles.create_profile(base, "Ada")
+    cfg_a = profiles.profile_config(base, a)
+    folder_a = notes.notes_dir(cfg_a)
+    assert (folder_a / notes.OWNER_FILE).read_text().strip() == str(cfg_a.paths.database.resolve())
+    # another installation (other profiles folder) with the same profile id
+    other = tmp_path / "other.yaml"
+    other.write_text(
+        f"paths:\n  cache_dir: {tmp_path / 'cache2'}\n  profiles_dir: {tmp_path / 'other'}\n"
+        f"  obsidian_vault: {vault}\n"
+    )
+    other_base = load_config(other)
+    assert profiles.create_profile(other_base, "Ada") == a
+    cfg_other = profiles.profile_config(other_base, a)
+    with pytest.raises(notes.NotesUnavailable, match="another profile"):
+        notes.notes_dir(cfg_other)
+    engine = init_db(cfg_other.paths.database)
+    with Session(engine) as session:
+        assert "another profile" in notes.refresh_all(session, cfg_other).problem
+    engine.dispose()
+    # once the first profile is gone, the folder can be taken over
+    import shutil
+
+    shutil.rmtree(profiles.folder(base, a))
+    assert notes.notes_dir(cfg_other) == folder_a
+    assert (folder_a / notes.OWNER_FILE).read_text().strip() == str(
+        cfg_other.paths.database.resolve()
+    )
+    assert notes.scan(folder_a) == []  # the marker is not a note
 
 
 # --- CLI --------------------------------------------------------------------------------
