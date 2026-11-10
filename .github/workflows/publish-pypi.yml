@@ -3,6 +3,7 @@
 # Tags vX.Y.Z and pre-releases PEP 440 accepts (v0.3.0rc1, v0.3.0-rc.1) are
 # published; development tags such as v1.1.0-dev (PEP 440: 1.1.0.dev0) are
 # skipped. Run by hand ("Run workflow") to upload to TestPyPI instead.
+# The test job (as in CI) must pass before anything is built or uploaded.
 # One-time setup: see "Releases" in CONTRIBUTING.md.
 name: Publish to PyPI
 
@@ -12,7 +13,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  # the same checks as CI: nothing is published unless they pass
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: python -m pip install --editable ".[dev]"
+      - name: Lint
+        run: |
+          ruff check src tests tools install.py
+          ruff format --check src tests tools install.py
+      - name: Test
+        run: pytest -q
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.decide.outputs.publish }}

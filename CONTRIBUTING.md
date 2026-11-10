@@ -110,7 +110,8 @@ To release (maintainers):
    schemas (see the [Data formats chapter](docs/documentation.md#11-data-formats)).
 6. On `dev`, bump to the next `-dev` version in its own commit.
 
-Two more workflows run for every `v*` tag:
+Two more workflows run for every `v*` tag; each first runs the lint and
+test job of CI (Python 3.11–3.13) and publishes nothing if it fails:
 
 - **`publish-pypi.yml`** uploads the wheel and source archive to PyPI for
   releases (`vX.Y.Z`) and pre-releases PEP 440 accepts (`v1.1.0rc1`,

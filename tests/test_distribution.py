@@ -185,7 +185,16 @@ def test_workflows_are_valid_yaml_with_the_needed_permissions():
     publish = yaml.safe_load((REPO / ".github/workflows/publish-pypi.yml").read_text())
     assert publish["jobs"]["pypi"]["permissions"] == {"id-token": "write"}
     assert publish["jobs"]["testpypi"]["permissions"] == {"id-token": "write"}
+    # nothing is published before the tests pass (the same matrix as CI)
+    ci = yaml.safe_load((REPO / ".github/workflows/ci.yml").read_text())
+    matrix = ci["jobs"]["test"]["strategy"]["matrix"]
+    assert publish["jobs"]["build"]["needs"] == "test"
+    assert {publish["jobs"][j]["needs"] for j in ("pypi", "testpypi")} == {"build"}
+    assert publish["jobs"]["test"]["strategy"]["matrix"] == matrix
+    assert any(s.get("run") == "pytest -q" for s in publish["jobs"]["test"]["steps"])
     docker = yaml.safe_load((REPO / ".github/workflows/docker.yml").read_text())
     assert docker["permissions"]["packages"] == "write"
+    assert docker["jobs"]["image"]["needs"] == "test"
+    assert docker["jobs"]["test"]["strategy"]["matrix"] == matrix
     build = next(s for s in docker["jobs"]["image"]["steps"] if "build-push" in s.get("uses", ""))
     assert build["with"]["platforms"] == "linux/amd64,linux/arm64"
