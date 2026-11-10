@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from pydantic import NaiveDatetime
 from sqlalchemy import JSON, Column, LargeBinary, UniqueConstraint, event
+from sqlalchemy.engine import URL
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 
@@ -287,13 +288,23 @@ def load_embedding(embedding: Embedding) -> np.ndarray:
     return np.frombuffer(embedding.vector, dtype=np.float32)
 
 
+def sqlite_url(path: Path) -> URL:
+    """An SQLAlchemy URL for a database file; ``#``, ``?`` or ``%`` in the path are no query."""
+    return URL.create("sqlite", database=str(path))
+
+
+def readonly_uri(path: Path) -> str:
+    """A read-only ``file:`` URI for ``sqlite3.connect(..., uri=True)``, fully quoted."""
+    return Path(path).absolute().as_uri() + "?mode=ro"
+
+
 # seconds a writer waits for another writer (e.g. CLI while the web UI runs)
 BUSY_TIMEOUT = 30
 
 
 def get_engine(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{path}", connect_args={"timeout": BUSY_TIMEOUT})
+    engine = create_engine(sqlite_url(path), connect_args={"timeout": BUSY_TIMEOUT})
 
     @event.listens_for(engine, "connect")
     def _durable(connection, _record):

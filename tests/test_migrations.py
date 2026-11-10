@@ -313,3 +313,33 @@ def test_command_line_reports_a_newer_database(tmp_path, monkeypatch, capsys):
         cli.run()
     assert exit_info.value.code == 2
     assert "newer litrad" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("name", ["a#b", "a?b", "a%20b", "with space", "Müller ü", "q?x=1#y"])
+def test_special_characters_in_the_data_path(tmp_path, name):
+    folder = tmp_path / name
+    database = folder / "litrad.sqlite"
+    engine = init_db(database)
+    with Session(engine) as session:
+        session.add(Paper(title="special path"))
+        session.commit()
+    engine.dispose()
+    engine = init_db(database)  # the second open reads the version read-only
+    with Session(engine) as session:
+        assert session.exec(select(Paper.title)).all() == ["special path"]
+    engine.dispose()
+    assert read_version(database) == (SCHEMA_VERSION, True)
+    assert check_database(database) == []
+    # nothing was created next to it or in the working directory
+    assert sorted(p.name for p in folder.iterdir()) == ["litrad.sqlite"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == [name]
+
+
+def test_readonly_uri_quotes_windows_paths():
+    from pathlib import PureWindowsPath
+
+    from litrad.db import readonly_uri
+
+    assert readonly_uri(Path("/data/a#b?c%d")) == "file:///data/a%23b%3Fc%25d?mode=ro"
+    windows = PureWindowsPath(r"C:\Users\Jörg\my #1\litrad.sqlite").as_uri()
+    assert windows == "file:///C:/Users/J%C3%B6rg/my%20%231/litrad.sqlite"

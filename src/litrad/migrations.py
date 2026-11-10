@@ -116,7 +116,9 @@ class MigrationResult:
 
 def read_version(path: Path) -> tuple[int, bool]:
     """(schema version, has tables) of a database file, without changing it."""
-    connection = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True, timeout=30)
+    from litrad.db import readonly_uri
+
+    connection = sqlite3.connect(readonly_uri(path), uri=True, timeout=30)
     try:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
         tables = connection.execute(
@@ -145,10 +147,10 @@ def check_version(path: Path) -> int:
 
 def _engine(path: Path):
     """An engine whose transactions also cover DDL (``BEGIN IMMEDIATE``)."""
-    from litrad.db import BUSY_TIMEOUT
+    from litrad.db import BUSY_TIMEOUT, sqlite_url
 
     engine = create_engine(
-        f"sqlite:///{path}", connect_args={"timeout": BUSY_TIMEOUT, "isolation_level": None}
+        sqlite_url(path), connect_args={"timeout": BUSY_TIMEOUT, "isolation_level": None}
     )
 
     @event.listens_for(engine, "begin")

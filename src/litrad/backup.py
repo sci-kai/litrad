@@ -48,6 +48,7 @@ from litrad.db import (
     StatusEvent,
     XpEvent,
     now,
+    readonly_uri,
 )
 from litrad.rules import GameRules
 
@@ -120,7 +121,7 @@ def check_database(path: Path) -> list[str]:
 
     if not integrity_ok(path):
         return [f"{path} is not a valid litrad database (integrity check failed)"]
-    connection = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)
+    connection = sqlite3.connect(readonly_uri(path), uri=True)
     try:
         tables = {r[0] for r in connection.execute("SELECT name FROM sqlite_master")}
         if not REQUIRED_TABLES <= tables:
