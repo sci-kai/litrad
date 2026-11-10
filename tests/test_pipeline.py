@@ -166,3 +166,31 @@ def test_outage_of_one_source_only_warns(cfg, engine, make_http, down, message):
     # the other sources still ran
     assert report.embeddings == 3
     assert papers(engine)["Barkley2022-ri"].in_library
+
+
+def test_title_and_year_do_not_merge_papers_with_different_pmids(engine):
+    from litrad.db import Library
+    from litrad.ingest.bibtex import BibEntry
+    from litrad.ingest.pipeline import IngestReport, sync_library
+
+    with Session(engine) as session:
+        library = Library(name="L")
+        session.add(library)
+        session.commit()
+        first = [BibEntry("a", "article", "Editorial", year=2020, pmid="111")]
+        sync_library(session, library, first, IngestReport())
+        session.commit()
+        both = first + [BibEntry("b", "article", "Editorial", year=2020, pmid="222")]
+        sync_library(session, library, both, IngestReport())
+        session.commit()
+        assert sorted(p.pmid for p in session.exec(select(Paper)).all()) == ["111", "222"]
+        # without a PMID, title and year still find the paper
+        sync_library(
+            session,
+            library,
+            [BibEntry("c", "article", "Editorial", year=2020)],
+            IngestReport(),
+            replace=False,
+        )
+        session.commit()
+        assert len(session.exec(select(Paper)).all()) == 2

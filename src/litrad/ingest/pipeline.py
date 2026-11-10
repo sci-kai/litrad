@@ -126,8 +126,12 @@ def sync_library(
             paper = by_doi.get(entry.doi)
         if paper is None and entry.pmid:
             paper = by_pmid.get(entry.pmid)
+            if paper is not None and _contradicts(paper, entry):
+                paper = None  # same PMID, another DOI: not the same paper
         if paper is None and not entry.doi:
             paper = by_title.get(_title_key(entry.title, entry.year))
+            if paper is not None and _contradicts(paper, entry):
+                paper = None  # same title and year, another PMID: two papers
         if paper is not None and paper.id in seen:
             # the same paper twice in one file (same DOI, PMID or title): keep the first
             report.duplicates.append(f"{entry.key} ({entry.doi or entry.pmid or 'same title'})")
