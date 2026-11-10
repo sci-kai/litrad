@@ -69,8 +69,8 @@ def kinds(award) -> dict[str, int]:
 
 def test_levels_of_the_default_ladder():
     assert level_for(0, RULES).number == 1 and level_for(0, RULES).title == "Curious Undergrad"
-    assert level_for(14, RULES).number == 1 and level_for(15, RULES).number == 2
-    assert level_for(35, RULES).progress(35) == pytest.approx(0.5)  # 15 -> 55
+    assert level_for(19, RULES).number == 1 and level_for(20, RULES).number == 2
+    assert level_for(45, RULES).progress(45) == pytest.approx(0.5)  # 20 -> 70
     assert level_for(0, RULES).next_title == "First-Year Student"
     assert level_for(0, RULES).icon == "🎓"
     top = level_for(10**6, RULES)
@@ -294,7 +294,7 @@ def test_inbox_zero_only_by_reading(db):
     record_reading(session, cfg, a, ReadStatus.dismissed, at=MONDAY)
     award = record_reading(session, cfg, b, ReadStatus.read, at=MONDAY).award
     assert "inbox_zero" in kinds(award)
-    assert "inbox_zero" in [x.code for x in award.badges]
+    assert stats(session, MONDAY.date(), cfg.game)["inbox_zero"] == 1  # the badge needs 3
     # dismissing the last paper does not count (and costs the drop penalty)
     c = add_paper(session, "C")
     queue_add(session, cfg, c)
@@ -443,7 +443,14 @@ def test_rules_reject_inf_and_nan(value):
 
 
 def test_bonuses_set_to_zero_xp_still_count_for_badges(cfg):
-    cfg.game = GameRules(classic_xp=0, hot_xp=0, reflection_xp=0, inbox_zero_xp=0, quest_xp=0)
+    cfg.game = GameRules(
+        classic_xp=0,
+        hot_xp=0,
+        reflection_xp=0,
+        inbox_zero_xp=0,
+        quest_xp=0,
+        badge_targets={"inbox_zero": 1, "questing": 1},
+    )
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         paper = add_paper(

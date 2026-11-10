@@ -19,6 +19,7 @@ from litrad.db import (
     init_db,
 )
 from litrad.ingest.pipeline import ingest_library
+from litrad.rules import GameRules
 from litrad.web.settings import SettingsError, parse_form
 
 CONFIG = """\
@@ -281,7 +282,8 @@ def test_invalid_read_and_note(app_env):
     post(client, f"/papers/{pid}/read", {"level": "abstract"})
     assert celebration(post(client, f"/papers/{pid}/note", {"text": "  "}))["kind"] == "error"
     payload = celebration(post(client, f"/papers/{pid}/note", {"text": "y" * 150}))
-    assert {e["kind"]: e["points"] for e in payload["events"]}["reflection"] == 10
+    points = {e["kind"]: e["points"] for e in payload["events"]}
+    assert points["reflection"] == GameRules().reflection_xp
 
 
 def test_dismiss(app_env):

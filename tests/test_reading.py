@@ -14,7 +14,7 @@ from litrad.db import (
     RecommendationBatch,
     init_db,
 )
-from litrad.game import level_for, total_xp
+from litrad.game import level_for, stats, total_xp
 from litrad.reading import (
     ReadingError,
     add_note,
@@ -199,7 +199,7 @@ def test_long_note_later_earns_reflection_bonus_once(db):
     record_reading(session, cfg, papers[0], ReadStatus.read, at=AT)
     award = add_note(session, cfg, papers[0], "y" * 200, at=AT)
     assert [e.kind for e in award.events if e.kind != "badge"] == ["reflection"]
-    assert [b.code for b in award.badges] == ["note_taker"]  # its first-tier badge
+    assert stats(session, AT.date())["reflections"] == 1  # Note Taker needs 5
     assert add_note(session, cfg, papers[0], "z" * 200, at=AT).points == 0
 
 

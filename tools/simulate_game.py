@@ -9,6 +9,11 @@ quest completion rate and how often the drop penalty hits. Nothing touches
 the network or a real profile; the random choices come from a fixed seed,
 so two runs give the same tables.
 
+Two more checks: the share of XP per source (reading, badges, quests,
+other) after one and two years, and the *first 10 papers* of a new profile
+(``early_game``): level and badges after each reading, for a mixed, a
+skimming and a deep reader.
+
 Personas:
 
 - ``new``: bachelor/master student, 0-4 papers a week, mostly abstracts and
@@ -43,6 +48,7 @@ from litrad.db import (
     Achievement,
     Category,
     Paper,
+    Profile,
     QueueItem,
     ReadStatus,
     Recommendation,
@@ -57,6 +63,13 @@ from litrad.reading import ReadingError, drop_from_queue, queue_add, record_read
 from litrad.rules import GameRules
 
 START = date(2027, 1, 4)  # a Monday
+# where XP comes from: reading itself (base points and the bonuses for how and
+# when you read) versus badges, quests and the rest
+SOURCES = {
+    "reading": {"read", "earlier", "streak", "cheese", "classic", "hot"},
+    "badges": {"badge"},
+    "quests": {"quest"},
+}
 REPORT_WEEKS = [1, 2, 4, 8, 12, 26, 52, 104]
 DEPTHS = [ReadStatus.abstract, ReadStatus.skimmed, ReadStatus.read, ReadStatus.thorough]
 NOTE = "Key result, method and how it relates to my project. " * 4  # > 140 characters
@@ -410,7 +423,127 @@ def summarize(sim: Sim, weeks: int) -> dict:
         "backlog": sim.backlog_level,
         "levels": len(sim.rules.levels),
         "level_floors": [level.xp for level in sim.rules.levels],
+        "shares": {
+            limit: xp_shares(session, datetime.combine(START + timedelta(weeks=limit), time()))
+            for limit in (52, 104)
+            if limit <= weeks
+        },
     }
+
+
+def xp_shares(session: Session, until: datetime) -> dict[str, float]:
+    """Share of the XP earned before ``until`` per source (``SOURCES``; penalties left out)."""
+    totals = dict.fromkeys([*SOURCES, "other"], 0)
+    for kind, points in session.exec(
+        select(XpEvent.kind, XpEvent.points).where(XpEvent.at < until, XpEvent.points > 0)
+    ).all():
+        source = next((name for name, kinds in SOURCES.items() if kind in kinds), "other")
+        totals[source] += points
+    whole = sum(totals.values()) or 1
+    return {name: value / whole for name, value in totals.items()}
+
+
+# --- the first papers of a new profile ---------------------------------------------------
+
+S, R, A, T = ReadStatus.skimmed, ReadStatus.read, ReadStatus.abstract, ReadStatus.thorough
+EARLY_SCENARIOS = {
+    "mixed": [S, R, S, S, R, A, S, R, S, T],
+    "skimmer": [S, S, S, A, S, S, R, S, S, S],
+    "deep": [R, R, T, R, S, R, T, R, R, S],
+}
+
+
+def early_game(sequence: list[ReadStatus], rules: GameRules | None = None) -> list[dict]:
+    """The first papers of a new profile, read in one week from a queue of library papers.
+
+    Every second paper is rated, deep reads get substantial notes, the top of
+    the queue is read first (cheese) and the queue is refilled with three
+    papers whenever it is empty. Per reading: the XP it earned, the level
+    before and after, and the badges it unlocked.
+    """
+    with tempfile.TemporaryDirectory(prefix="litrad-early-") as folder:
+        cfg = Config.model_validate(
+            {
+                "paths": {
+                    "database": str(Path(folder) / "early.sqlite"),
+                    "cache_dir": str(Path(folder) / "cache"),
+                    "bibtex": str(Path(folder) / "none.bib"),
+                }
+            }
+        )
+        engine = init_db(cfg.paths.database)
+        session = Session(engine)
+        try:
+            start_profile(session, cfg, rules=rules, at=datetime.combine(START, time(8)))
+            locked = profile_rules(session.exec(select(Profile)).one())
+            papers = [
+                Paper(
+                    title=f"Early paper {i + 1}",
+                    topics=[f"Topic {i % 3 + 1}"],
+                    in_library=True,
+                    citation_percentile=50.0,
+                    pub_date=START - timedelta(days=400),
+                    year=START.year - 1,
+                )
+                for i in range(len(sequence))
+            ]
+            session.add_all(papers)
+            session.commit()
+            at = datetime.combine(START, time(9))
+            rows = []
+            for i, (paper, status) in enumerate(zip(papers, sequence, strict=True)):
+                if i % 3 == 0:
+                    for queued in papers[i : i + 3]:
+                        queue_add(session, cfg, queued, source="library")
+                xp_before = total_xp(session)
+                outcome = record_reading(
+                    session,
+                    cfg,
+                    paper,
+                    status,
+                    rating=4 if i % 2 == 0 else None,
+                    note=NOTE if depth(status) >= 3 else None,
+                    at=at,
+                )
+                xp = total_xp(session)
+                rows.append(
+                    {
+                        "paper": i + 1,
+                        "status": status.value,
+                        "points": xp - xp_before,
+                        "xp": xp,
+                        "level_before": level_for(xp_before, locked).number,
+                        "level": level_for(xp, locked).number,
+                        "badges": [b.name for b in outcome.award.badges],
+                    }
+                )
+                at += timedelta(hours=5 if i % 2 else 20)
+        finally:
+            session.close()
+            engine.dispose()
+    return rows
+
+
+def early_markdown(rules: GameRules | None = None) -> str:
+    lines = ["## The first 10 papers of a new profile", ""]
+    for name, sequence in EARLY_SCENARIOS.items():
+        rows = early_game(sequence, rules)
+        lines += [
+            f"**{name}**",
+            "",
+            "| # | Depth | XP | Level | Badges (total) |",
+            "|---:|---|---:|---|---|",
+        ]
+        total = 0
+        for row in rows:
+            total += len(row["badges"])
+            lines.append(
+                f"| {row['paper']} | {row['status']} | +{row['points']} ({row['xp']}) | "
+                f"L{row['level_before']} → L{row['level']} | "
+                f"{', '.join(row['badges']) or '–'} ({total}) |"
+            )
+        lines.append("")
+    return "\n".join(lines)
 
 
 def milestone_gaps(result: dict) -> tuple[list[int], float, int]:
@@ -518,8 +651,14 @@ def markdown(result: dict) -> str:
         f"| Papers read (skimmed+) | {result['stats']['papers_read']} |",
         f"| Deep reads (read+) | {result['stats']['deep_reads']} |",
         f"| Best streak (weeks) | {result['stats']['best_streak']} |",
-        "",
     ]
+    for limit, shares in result["shares"].items():
+        lines.append(
+            f"| XP shares, {limit // 52} year{'s' if limit > 52 else ''} | "
+            + ", ".join(f"{name} {value:.0%}" for name, value in shares.items())
+            + " |"
+        )
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -573,7 +712,21 @@ def main(argv=None) -> int:
         f"# Game simulation (litrad {__version__}, rules {rules.fingerprint()}, "
         f"{args.weeks} weeks, seed {args.seed}, read earlier: {'yes' if HAS_EARLIER else 'no'})\n"
     )
-    summary = header + "\nLevel (XP) by week:\n\n" + summary_table(results)
+    shares = ["", "XP shares (reading / badges / quests / other):", ""]
+    for r in results:
+        cells = [
+            f"{limit // 52}y: " + " / ".join(f"{v:.0%}" for v in r["shares"][limit].values())
+            for limit in r["shares"]
+        ]
+        shares.append(f"- {r['persona'].name}: " + "; ".join(cells or ["(shorter run)"]))
+    summary = (
+        header
+        + "\nLevel (XP) by week:\n\n"
+        + summary_table(results)
+        + "\n".join(shares)
+        + "\n\n"
+        + early_markdown()
+    )
     texts = {r["persona"].name: markdown(r) for r in results}
     print(summary)
     for text in texts.values():

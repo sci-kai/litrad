@@ -27,65 +27,65 @@ class LevelDef(BaseModel):
 # Gamification).
 DEFAULT_LEVELS = [
     (0, "Curious Undergrad", "🎓"),
-    (15, "First-Year Student", "✏️"),
-    (55, "Bachelor Student", "📘"),
-    (125, "Study Group Member", "👥"),
-    (220, "Lab Intern", "🥼"),
-    (340, "Lab Rotation Student", "🧪"),
-    (485, "Tutor", "🧑‍🏫"),
-    (655, "Bachelor Graduate", "🎉"),
-    (855, "Master's Student", "📗"),
-    (1070, "Student Assistant", "🗂️"),
-    (1320, "Seminar Speaker", "🗣️"),
-    (1590, "Master's Graduate", "🎊"),
-    (1880, "Research Assistant", "🧫"),
-    (2190, "PhD Candidate", "📚"),
-    (2530, "Journal Club Regular", "☕"),
-    (2890, "Lab Meeting Presenter", "📊"),
-    (3270, "Poster Presenter", "🪧"),
-    (3680, "Conference Speaker", "🎤"),
-    (4100, "Thesis Defender", "🛡️"),
-    (4550, "Doctor of Philosophy", "📜"),
-    (5000, "Postdoc", "🔬"),
-    (5500, "Peer Reviewer", "🔎"),
-    (6000, "Fellowship Holder", "🏅"),
-    (6550, "Senior Postdoc", "🧬"),
-    (7100, "Grant Writer", "✍️"),
-    (7650, "Research Fellow", "🧑‍🔬"),
-    (8250, "Visiting Scholar", "✈️"),
-    (8850, "Lecturer", "🎙️"),
-    (9500, "Junior Group Leader", "🌱"),
-    (10100, "Assistant Professor", "🪴"),
-    (10750, "Group Leader", "👩‍🔬"),
-    (11450, "Mentor", "🤝"),
-    (12150, "Principal Investigator", "🧭"),
-    (12850, "Associate Professor", "🏫"),
-    (13600, "Invited Speaker", "📣"),
-    (14300, "Keynote Speaker", "🌟"),
-    (15050, "Grant Panelist", "📋"),
-    (15850, "Professor", "🎩"),
-    (16650, "Consortium Lead", "🕸️"),
-    (17450, "Department Head", "🏛️"),
-    (18250, "Review Editor", "🖋️"),
-    (19100, "Associate Editor", "📝"),
-    (19900, "Institute Director", "🏢"),
-    (20800, "Dean", "🦉"),
-    (21650, "Editor-in-Chief", "📰"),
-    (22550, "Academy Member", "🏺"),
-    (23400, "Distinguished Professor", "💫"),
-    (24350, "Honorary Doctor", "🎖️"),
-    (25250, "Provost", "🗝️"),
-    (26150, "University President", "🏰"),
-    (27100, "Academy President", "👑"),
-    (28050, "Science Advisor", "🧑‍⚖️"),
-    (29000, "Lifetime Fellow", "🌿"),
-    (30000, "Prize Winner", "🥇"),
-    (30950, "Medalist", "🏵️"),
-    (31950, "Laureate", "🌠"),
-    (32950, "Living Legend", "✨"),
-    (33950, "Textbook Author", "📖"),
-    (35000, "Field Founder", "🚀"),
-    (36000, "Hallmarks Author", "🏆"),
+    (20, "First-Year Student", "✏️"),
+    (70, "Bachelor Student", "📘"),
+    (140, "Study Group Member", "👥"),
+    (240, "Lab Intern", "🥼"),
+    (400, "Lab Rotation Student", "🧪"),
+    (560, "Tutor", "🧑‍🏫"),
+    (730, "Bachelor Graduate", "🎉"),
+    (910, "Master's Student", "📗"),
+    (1090, "Student Assistant", "🗂️"),
+    (1280, "Seminar Speaker", "🗣️"),
+    (1475, "Master's Graduate", "🎊"),
+    (1685, "Research Assistant", "🧫"),
+    (1910, "PhD Candidate", "📚"),
+    (2155, "Journal Club Regular", "☕"),
+    (2415, "Lab Meeting Presenter", "📊"),
+    (2690, "Poster Presenter", "🪧"),
+    (2985, "Conference Speaker", "🎤"),
+    (3285, "Thesis Defender", "🛡️"),
+    (3610, "Doctor of Philosophy", "📜"),
+    (3935, "Postdoc", "🔬"),
+    (4295, "Peer Reviewer", "🔎"),
+    (4655, "Fellowship Holder", "🏅"),
+    (5050, "Senior Postdoc", "🧬"),
+    (5445, "Grant Writer", "✍️"),
+    (5840, "Research Fellow", "🧑‍🔬"),
+    (6270, "Visiting Scholar", "✈️"),
+    (6700, "Lecturer", "🎙️"),
+    (7170, "Junior Group Leader", "🌱"),
+    (7600, "Assistant Professor", "🪴"),
+    (8070, "Group Leader", "👩‍🔬"),
+    (8575, "Mentor", "🤝"),
+    (9080, "Principal Investigator", "🧭"),
+    (9585, "Associate Professor", "🏫"),
+    (10125, "Invited Speaker", "📣"),
+    (10630, "Keynote Speaker", "🌟"),
+    (11170, "Grant Panelist", "📋"),
+    (11745, "Professor", "🎩"),
+    (12320, "Consortium Lead", "🕸️"),
+    (12895, "Department Head", "🏛️"),
+    (13470, "Review Editor", "🖋️"),
+    (14080, "Associate Editor", "📝"),
+    (14655, "Institute Director", "🏢"),
+    (15305, "Dean", "🦉"),
+    (15915, "Editor-in-Chief", "📰"),
+    (16565, "Academy Member", "🏺"),
+    (17175, "Distinguished Professor", "💫"),
+    (17860, "Honorary Doctor", "🎖️"),
+    (18510, "Provost", "🗝️"),
+    (19160, "University President", "🏰"),
+    (19845, "Academy President", "👑"),
+    (20530, "Science Advisor", "🧑‍⚖️"),
+    (21215, "Lifetime Fellow", "🌿"),
+    (21935, "Prize Winner", "🥇"),
+    (22620, "Medalist", "🏵️"),
+    (23340, "Laureate", "🌠"),
+    (24060, "Living Legend", "✨"),
+    (24780, "Textbook Author", "📖"),
+    (25535, "Field Founder", "🚀"),
+    (26255, "Hallmarks Author", "🏆"),
 ]
 
 
@@ -170,7 +170,7 @@ BADGE_CATALOG = [
         "Cheese Taster",
         "Get the cheese: read your top paper first, {target} times",
         "cheeses",
-        10,
+        12,
         "🧀",
         "Discipline",
     ),
@@ -186,9 +186,9 @@ BADGE_CATALOG = [
     BadgeDef(
         "inbox_zero",
         "Inbox Zero",
-        "Empty your reading queue by reading it",
+        "Empty your reading queue by reading it, {target} times",
         "inbox_zero",
-        1,
+        3,
         "📭",
         "Discipline",
     ),
@@ -248,7 +248,7 @@ BADGE_CATALOG = [
         "Consistency",
     ),
     BadgeDef(
-        "questing", "Questing", "Complete your first weekly quest", "quests", 1, "🧭", "Consistency"
+        "questing", "Questing", "Complete {target} weekly quests", "quests", 2, "🧭", "Consistency"
     ),
     BadgeDef(
         "quest_master",
@@ -300,7 +300,7 @@ BADGE_CATALOG = [
         "marathon", "Marathon Day", "Read {target} papers in one day", "max_day", 4, "🏅", "Pace"
     ),
     BadgeDef(
-        "binge_week", "Binge Week", "Read {target} papers in one week", "max_week", 8, "🍿", "Pace"
+        "binge_week", "Binge Week", "Read {target} papers in one week", "max_week", 10, "🍿", "Pace"
     ),
     BadgeDef(
         "night_owl",
@@ -369,9 +369,9 @@ BADGE_CATALOG = [
     BadgeDef(
         "archaeologist",
         "Archaeologist",
-        "Read a paper that is 25+ years old",
+        "Read {target} papers that are 25+ years old",
         "old_papers",
-        1,
+        2,
         "🦴",
         "Breadth",
     ),
@@ -407,7 +407,7 @@ BADGE_CATALOG = [
         "Library Diver",
         "Read {target} papers from your libraries",
         "from_library",
-        10,
+        15,
         "📁",
         "Breadth",
     ),
@@ -430,10 +430,10 @@ BADGE_CATALOG = [
 MORE_TIERS = [
     BadgeDef(
         "first_glance",
-        "First Glance",
-        "Look at {target} paper (abstract or deeper)",
+        "Glancer",
+        "Look at {target} papers (abstract or deeper)",
         "papers_seen",
-        1,
+        15,
         "👁️",
         "Reading",
     ),
@@ -442,7 +442,7 @@ MORE_TIERS = [
         "Browser",
         "Look at {target} papers (abstract or deeper)",
         "papers_seen",
-        10,
+        25,
         "🛍️",
         "Reading",
     ),
@@ -455,9 +455,9 @@ MORE_TIERS = [
         "💡",
         "Reading",
     ),
-    BadgeDef("warm_up", "Warm-Up", "Read {target} papers", "papers_read", 3, "🔆", "Reading"),
+    BadgeDef("warm_up", "Warm-Up", "Read {target} papers", "papers_read", 6, "🔆", "Reading"),
     BadgeDef(
-        "reading_list", "Reading List", "Read {target} papers", "papers_read", 5, "🔖", "Reading"
+        "reading_list", "Reading List", "Read {target} papers", "papers_read", 8, "🔖", "Reading"
     ),
     BadgeDef(
         "regular", "Regular Reader", "Read {target} papers", "papers_read", 15, "📑", "Reading"
@@ -485,9 +485,9 @@ MORE_TIERS = [
     BadgeDef(
         "close_reader",
         "Close Reader",
-        "Read {target} paper at least fully",
+        "Read {target} papers at least fully",
         "deep_reads",
-        1,
+        7,
         "🔍",
         "Depth",
     ),
@@ -540,7 +540,7 @@ MORE_TIERS = [
         "sage", "Sage", "Read {target} papers at least fully", "deep_reads", 250, "🧙", "Depth"
     ),
     BadgeDef(
-        "first_dive", "First Dive", "Read {target} paper thoroughly", "thorough", 1, "🏊", "Depth"
+        "first_dive", "Diving In", "Read {target} papers thoroughly", "thorough", 2, "🏊", "Depth"
     ),
     BadgeDef(
         "free_diver", "Free Diver", "Read {target} papers thoroughly", "thorough", 10, "🐬", "Depth"
@@ -566,9 +566,9 @@ MORE_TIERS = [
     BadgeDef(
         "note_taker",
         "Note Taker",
-        "Write substantial notes on {target} paper",
+        "Write substantial notes on {target} papers",
         "reflections",
-        1,
+        5,
         "🗒️",
         "Depth",
     ),
@@ -608,14 +608,14 @@ MORE_TIERS = [
         "📕",
         "Depth",
     ),
-    BadgeDef("referee", "Referee", "Rate {target} papers", "ratings", 5, "⚖️", "Depth"),
+    BadgeDef("referee", "Referee", "Rate {target} papers", "ratings", 6, "⚖️", "Depth"),
     BadgeDef("connoisseur", "Connoisseur", "Rate {target} papers", "ratings", 50, "🍷", "Depth"),
     BadgeDef(
         "first_bite",
         "First Bite",
-        "Get the cheese: read your top paper first, {target} time",
+        "Get the cheese: read your top paper first, {target} times",
         "cheeses",
-        1,
+        3,
         "🐭",
         "Discipline",
     ),
@@ -780,9 +780,9 @@ MORE_TIERS = [
     BadgeDef(
         "top_marks",
         "Top Marks",
-        "Get grade A or S in {target} week",
+        "Get grade A or S in {target} weeks",
         "a_weeks",
-        1,
+        2,
         "✅",
         "Consistency",
     ),
@@ -816,9 +816,9 @@ MORE_TIERS = [
     BadgeDef(
         "distinction",
         "Distinction",
-        "Get grade S in {target} week",
+        "Get grade S in {target} weeks",
         "s_weeks",
-        1,
+        2,
         "✨",
         "Consistency",
     ),
@@ -917,7 +917,7 @@ MORE_TIERS = [
         "Curious Mind",
         "Read papers from {target} different topics",
         "topics",
-        3,
+        4,
         "🌿",
         "Breadth",
     ),
@@ -1029,7 +1029,7 @@ MORE_TIERS = [
         "🦄",
         "Breadth",
     ),
-    BadgeDef("rising_star", "Rising Star", "Earn {target} XP", "xp", 500, "🌠", "Experience"),
+    BadgeDef("rising_star", "Rising Star", "Earn {target} XP", "xp", 750, "🌠", "Experience"),
     BadgeDef("silver_club", "Silver Club", "Earn {target} XP", "xp", 2500, "🥈", "Experience"),
     BadgeDef("ten_thousand", "Ten Thousand", "Earn {target} XP", "xp", 10000, "🔟", "Experience"),
     BadgeDef("gold_club", "Gold Club", "Earn {target} XP", "xp", 15000, "🥇", "Experience"),
@@ -1076,7 +1076,7 @@ class GameRules(BaseModel):
     # the stored rules mean raises it (and reads every earlier format)
     rules_format: int = Field(RULES_FORMAT, ge=1, le=RULES_FORMAT)
     # share of the base points for a paper read before litrad ("read earlier")
-    backlog_share: float = Field(1.0, ge=0, le=1)
+    backlog_share: float = Field(0.8, ge=0, le=1)
     # base points per reading level (paid up to the deepest level ever reached)
     xp_abstract: int = Field(5, ge=0, le=10000)
     xp_skimmed: int = Field(15, ge=0, le=10000)
@@ -1094,20 +1094,20 @@ class GameRules(BaseModel):
     hot_days: int = Field(30, ge=0, le=3650)
     hot_xp: int = Field(10, ge=0, le=10000)
     # bonus: read a paper from the recommendations (any real depth)
-    recommendation_xp: int = Field(15, ge=0, le=10000)
+    recommendation_xp: int = Field(8, ge=0, le=10000)
     # bonus: first rating of a paper
     rating_xp: int = Field(2, ge=0, le=10000)
     # bonus: notes on a paper reach this length
     reflection_chars: int = Field(140, ge=1, le=100000)
-    reflection_xp: int = Field(10, ge=0, le=10000)
+    reflection_xp: int = Field(5, ge=0, le=10000)
     # bonus: the queue becomes empty because you read its last paper (once per day)
-    inbox_zero_xp: int = Field(10, ge=0, le=10000)
+    inbox_zero_xp: int = Field(5, ge=0, le=10000)
     # weekly quest: papers at least "read" + further papers at least skimmed
     weekly_detail_goal: int = Field(1, ge=0, le=100)
     weekly_skim_goal: int = Field(1, ge=0, le=100)
-    quest_xp: int = Field(50, ge=0, le=10000)
+    quest_xp: int = Field(20, ge=0, le=10000)
     # per unlocked badge
-    badge_xp: int = Field(25, ge=0, le=10000)
+    badge_xp: int = Field(8, ge=0, le=10000)
     # penalty: a queued paper leaves the queue before it was at least skimmed
     drop_penalty: int = Field(15, ge=0, le=10000)
     levels: list[LevelDef] = Field(

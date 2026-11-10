@@ -61,7 +61,9 @@ of every earlier 1.x version.
   penalty for queued papers dropped unread.
 - Weekly quests with a report card, 60 levels from *Curious Undergrad* on,
   more than 120 badges (e.g. *First Bite*, *Big Cheese*, *Chair of Cheese
-  Studies*), personal bests and hints.
+  Studies*), personal bests and hints. Most XP comes from reading itself
+  (about three quarters for a regular reader); the first papers bring a
+  level at a time and badges one or two at a time.
 - Rules are locked per profile when it is created and carry a fingerprint, so
   profiles are compared fairly; rules can be set before creating a profile.
 

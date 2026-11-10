@@ -241,7 +241,7 @@ def test_custom_rules_are_used(db):
     award = record_reading(session, cfg, add(session), ReadStatus.read, at=MONDAY).award
     kinds = {e.kind: e.points for e in award.events}
     assert kinds["read"] == 100 and "badge" not in kinds  # badges unlock without XP
-    assert {"first_read", "first_glance", "close_reader"} == {b.code for b in award.badges}
+    assert {"first_read"} == {b.code for b in award.badges}
     paper = add(session, "Picked")
     queue_add(session, cfg, paper, source="recommendation")
     assert drop_from_queue(session, cfg, paper, at=MONDAY).points == -33
@@ -401,7 +401,11 @@ def test_pace_comeback_and_age_badges(db):
     later = MONDAY + timedelta(weeks=6)
     old = add(session, "Ancient", pub_date=date(1990, 1, 1))
     unlocked = codes(record_reading(session, cfg, old, ReadStatus.read, at=later).award)
-    assert {"comeback", "archaeologist"} <= unlocked
+    assert "comeback" in unlocked  # archaeologist needs 2 old papers
+    older = add(session, "Older", pub_date=date(1985, 1, 1))
+    assert "archaeologist" in codes(
+        record_reading(session, cfg, older, ReadStatus.skimmed, at=later).award
+    )
     scoop = add(session, "Brand new", pub_date=later.date() - timedelta(days=2))
     figures_before = stats(session, later.date())["scoops"]
     record_reading(session, cfg, scoop, ReadStatus.skimmed, at=later)

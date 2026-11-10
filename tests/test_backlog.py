@@ -345,3 +345,52 @@ def test_simulator_runs_briefly_offline(tmp_path, monkeypatch):
     # the backlog earns no time-based badge
     for code in ("marathon", "binge_week", "night_owl", "early_riser", "weekend_warrior"):
         assert code not in raw["experienced"]["badges"]
+    assert "XP shares (reading / badges / quests / other)" in summary
+    assert "The first 10 papers of a new profile" in summary
+
+
+def simulator(monkeypatch):
+    monkeypatch.syspath_prepend(str(REPO / "tools"))
+    sys.modules.pop("simulate_game", None)
+    import simulate_game
+
+    return simulate_game
+
+
+def test_the_first_papers_are_motivating_but_not_too_fast(monkeypatch):
+    """Default rules: at most one level per skim, two per deep read; badges step by step."""
+    sim = simulator(monkeypatch)
+    for name, sequence in sim.EARLY_SCENARIOS.items():
+        rows = sim.early_game(sequence)
+        total = 0
+        for row in rows:
+            total += len(row["badges"])
+            jump = row["level"] - row["level_before"]
+            deep = row["status"] in ("read", "thorough")
+            assert jump <= (2 if deep else 1), (name, row)
+            assert len(row["badges"]) <= 2, (name, row)
+            if row["paper"] in (3, 4, 5):
+                assert row["level"] <= 5 and 1 <= total <= 2, (name, row, total)
+        assert rows[0]["badges"] == ["First Steps"], name
+
+
+def test_xp_shares_count_reading_bonuses_as_reading(monkeypatch, cfg):
+    sim = simulator(monkeypatch)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        for kind, points in (
+            ("read", 40),
+            ("cheese", 20),
+            ("earlier", 20),
+            ("badge", 8),
+            ("quest", 20),
+            ("rating", 2),
+            ("penalty", -15),
+        ):
+            session.add(XpEvent(kind=kind, points=points, reason="x", at=datetime(2027, 1, 5)))
+        session.commit()
+        shares = sim.xp_shares(session, datetime(2028, 1, 1))
+    engine.dispose()
+    assert shares == pytest.approx(
+        {"reading": 80 / 110, "badges": 8 / 110, "quests": 20 / 110, "other": 2 / 110}
+    )

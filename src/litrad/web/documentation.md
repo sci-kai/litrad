@@ -967,17 +967,17 @@ planned to read first), not volume.
 | Rule | Default | Meaning |
 |---|---|---|
 | `xp_abstract` / `xp_skimmed` / `xp_read` / `xp_thorough` | 5 / 15 / 40 / 80 | base points for the depth **you** choose; deeper may never pay less |
-| `backlog_share` | 1.0 | 🕰️ share of the base points for a paper you **read earlier**, before litrad ([below](#starting-with-papers-you-already-read)) |
+| `backlog_share` | 0.8 | 🕰️ share of the base points for a paper you **read earlier**, before litrad ([below](#starting-with-papers-you-already-read)) |
 | `cheese_bonus` | 0.5 | 🧀 *Got the cheese: read your top paper first*: +50 % of the base points when the paper was **q1** (up next) and read at least skimmed (XP kind `cheese`) |
 | `streak_step` / `streak_max_steps` | 0.05 / 10 | 🔥 +5 % per consecutive reading week, at most +50 % ("next reads earn ×N") |
 | `classic_percentile` / `classic_xp` | 99 / 20 | 🏛️ landmark (top 1 % cited) read at least at "read" depth |
 | `hot_days` / `hot_xp` | 30 / 10 | 📰 read within 30 days of publication |
-| `recommendation_xp` | 15 | 🎯 read (≥ skimmed) a paper from your recommendations; it counts only if it was recommended before you first read it |
+| `recommendation_xp` | 8 | 🎯 read (≥ skimmed) a paper from your recommendations; it counts only if it was recommended before you first read it |
 | `rating_xp` | 2 | ⭐ first rating of a paper |
-| `reflection_chars` / `reflection_xp` | 140 / 10 | ✍️ notes on a paper reach 140 characters |
-| `inbox_zero_xp` | 10 | 📭 the queue becomes empty because you *read* its last paper (once per day) |
-| `weekly_detail_goal` / `weekly_skim_goal` / `quest_xp` | 1 / 1 / 50 | 🗓️ weekly quest: 1 paper at least "read" + 1 more at least skimmed |
-| `badge_xp` | 25 | 🏅 per unlocked badge |
+| `reflection_chars` / `reflection_xp` | 140 / 5 | ✍️ notes on a paper reach 140 characters |
+| `inbox_zero_xp` | 5 | 📭 the queue becomes empty because you *read* its last paper (once per day) |
+| `weekly_detail_goal` / `weekly_skim_goal` / `quest_xp` | 1 / 1 / 20 | 🗓️ weekly quest: 1 paper at least "read" + 1 more at least skimmed |
+| `badge_xp` | 8 | 🏅 per unlocked badge |
 | `drop_penalty` | 15 | ⚠️ a queued paper (from anywhere) leaves the queue, removed or marked not relevant, before you at least skimmed it |
 | `levels` | 60 levels | the ladder below |
 | `badge_targets` | see below | how much each badge needs |
@@ -1007,7 +1007,7 @@ page tick the papers and use *🕰️ Mark as read earlier* with one depth
 (papers already read at least that deeply are skipped).
 
 - They earn the base points of their depth times `backlog_share` (default:
-  all of them) and count for papers read, depth, topics, landmark papers,
+  80 %) and count for papers read, depth, topics, landmark papers,
   library papers, badges of counts and levels: your experience shows from
   day one.
 - They count for nothing that measures *when* or *how* you read here:
@@ -1020,7 +1020,7 @@ page tick the papers and use *🕰️ Mark as read earlier* with one depth
 - The history shows them as *read earlier* (with the date, if given).
 
 With the defaults, a backlog of about 35 papers read in detail and 150
-skimmed lands at level 21 (🔬 Postdoc) with about 40 badges of counts; the
+skimmed lands at level 20 (📜 Doctor of Philosophy) with about 30 badges of counts; the
 next level is a few weeks of normal reading away, and the badges of time and
 the higher tiers are still ahead.
 
@@ -1042,32 +1042,37 @@ the higher tiers are still ahead.
 
 | Level | Title | XP | Level | Title | XP | Level | Title | XP |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 🎓 Curious Undergrad | 0 | 21 | 🔬 Postdoc | 5 000 | 41 | 🖋️ Review Editor | 18 250 |
-| 2 | ✏️ First-Year Student | 15 | 22 | 🔎 Peer Reviewer | 5 500 | 42 | 📝 Associate Editor | 19 100 |
-| 3 | 📘 Bachelor Student | 55 | 23 | 🏅 Fellowship Holder | 6 000 | 43 | 🏢 Institute Director | 19 900 |
-| 4 | 👥 Study Group Member | 125 | 24 | 🧬 Senior Postdoc | 6 550 | 44 | 🦉 Dean | 20 800 |
-| 5 | 🥼 Lab Intern | 220 | 25 | ✍️ Grant Writer | 7 100 | 45 | 📰 Editor-in-Chief | 21 650 |
-| 6 | 🧪 Lab Rotation Student | 340 | 26 | 🧑‍🔬 Research Fellow | 7 650 | 46 | 🏺 Academy Member | 22 550 |
-| 7 | 🧑‍🏫 Tutor | 485 | 27 | ✈️ Visiting Scholar | 8 250 | 47 | 💫 Distinguished Professor | 23 400 |
-| 8 | 🎉 Bachelor Graduate | 655 | 28 | 🎙️ Lecturer | 8 850 | 48 | 🎖️ Honorary Doctor | 24 350 |
-| 9 | 📗 Master's Student | 855 | 29 | 🌱 Junior Group Leader | 9 500 | 49 | 🗝️ Provost | 25 250 |
-| 10 | 🗂️ Student Assistant | 1 070 | 30 | 🪴 Assistant Professor | 10 100 | 50 | 🏰 University President | 26 150 |
-| 11 | 🗣️ Seminar Speaker | 1 320 | 31 | 👩‍🔬 Group Leader | 10 750 | 51 | 👑 Academy President | 27 100 |
-| 12 | 🎊 Master's Graduate | 1 590 | 32 | 🤝 Mentor | 11 450 | 52 | 🧑‍⚖️ Science Advisor | 28 050 |
-| 13 | 🧫 Research Assistant | 1 880 | 33 | 🧭 Principal Investigator | 12 150 | 53 | 🌿 Lifetime Fellow | 29 000 |
-| 14 | 📚 PhD Candidate | 2 190 | 34 | 🏫 Associate Professor | 12 850 | 54 | 🥇 Prize Winner | 30 000 |
-| 15 | ☕ Journal Club Regular | 2 530 | 35 | 📣 Invited Speaker | 13 600 | 55 | 🏵️ Medalist | 30 950 |
-| 16 | 📊 Lab Meeting Presenter | 2 890 | 36 | 🌟 Keynote Speaker | 14 300 | 56 | 🌠 Laureate | 31 950 |
-| 17 | 🪧 Poster Presenter | 3 270 | 37 | 📋 Grant Panelist | 15 050 | 57 | ✨ Living Legend | 32 950 |
-| 18 | 🎤 Conference Speaker | 3 680 | 38 | 🎩 Professor | 15 850 | 58 | 📖 Textbook Author | 33 950 |
-| 19 | 🛡️ Thesis Defender | 4 100 | 39 | 🕸️ Consortium Lead | 16 650 | 59 | 🚀 Field Founder | 35 000 |
-| 20 | 📜 Doctor of Philosophy | 4 550 | 40 | 🏛️ Department Head | 17 450 | 60 | 🏆 Hallmarks Author | 36 000 |
+| 1 | 🎓 Curious Undergrad | 0 | 21 | 🔬 Postdoc | 3 935 | 41 | 🖋️ Review Editor | 13 470 |
+| 2 | ✏️ First-Year Student | 20 | 22 | 🔎 Peer Reviewer | 4 295 | 42 | 📝 Associate Editor | 14 080 |
+| 3 | 📘 Bachelor Student | 70 | 23 | 🏅 Fellowship Holder | 4 655 | 43 | 🏢 Institute Director | 14 655 |
+| 4 | 👥 Study Group Member | 140 | 24 | 🧬 Senior Postdoc | 5 050 | 44 | 🦉 Dean | 15 305 |
+| 5 | 🥼 Lab Intern | 240 | 25 | ✍️ Grant Writer | 5 445 | 45 | 📰 Editor-in-Chief | 15 915 |
+| 6 | 🧪 Lab Rotation Student | 400 | 26 | 🧑‍🔬 Research Fellow | 5 840 | 46 | 🏺 Academy Member | 16 565 |
+| 7 | 🧑‍🏫 Tutor | 560 | 27 | ✈️ Visiting Scholar | 6 270 | 47 | 💫 Distinguished Professor | 17 175 |
+| 8 | 🎉 Bachelor Graduate | 730 | 28 | 🎙️ Lecturer | 6 700 | 48 | 🎖️ Honorary Doctor | 17 860 |
+| 9 | 📗 Master's Student | 910 | 29 | 🌱 Junior Group Leader | 7 170 | 49 | 🗝️ Provost | 18 510 |
+| 10 | 🗂️ Student Assistant | 1 090 | 30 | 🪴 Assistant Professor | 7 600 | 50 | 🏰 University President | 19 160 |
+| 11 | 🗣️ Seminar Speaker | 1 280 | 31 | 👩‍🔬 Group Leader | 8 070 | 51 | 👑 Academy President | 19 845 |
+| 12 | 🎊 Master's Graduate | 1 475 | 32 | 🤝 Mentor | 8 575 | 52 | 🧑‍⚖️ Science Advisor | 20 530 |
+| 13 | 🧫 Research Assistant | 1 685 | 33 | 🧭 Principal Investigator | 9 080 | 53 | 🌿 Lifetime Fellow | 21 215 |
+| 14 | 📚 PhD Candidate | 1 910 | 34 | 🏫 Associate Professor | 9 585 | 54 | 🥇 Prize Winner | 21 935 |
+| 15 | ☕ Journal Club Regular | 2 155 | 35 | 📣 Invited Speaker | 10 125 | 55 | 🏵️ Medalist | 22 620 |
+| 16 | 📊 Lab Meeting Presenter | 2 415 | 36 | 🌟 Keynote Speaker | 10 630 | 56 | 🌠 Laureate | 23 340 |
+| 17 | 🪧 Poster Presenter | 2 690 | 37 | 📋 Grant Panelist | 11 170 | 57 | ✨ Living Legend | 24 060 |
+| 18 | 🎤 Conference Speaker | 2 985 | 38 | 🎩 Professor | 11 745 | 58 | 📖 Textbook Author | 24 780 |
+| 19 | 🛡️ Thesis Defender | 3 285 | 39 | 🕸️ Consortium Lead | 12 320 | 59 | 🚀 Field Founder | 25 535 |
+| 20 | 📜 Doctor of Philosophy | 3 610 | 40 | 🏛️ Department Head | 12 895 | 60 | 🏆 Hallmarks Author | 26 255 |
 
-A typical week (quest done, one thorough read from the top of the queue, a
-few bonuses) is worth about 200–300 XP. The steps grow slowly from 15 to
-about 1 000 XP, so a level-up comes in the first week and, for a regular
-reader, every week or two; the top takes about 2.4 years of
-steady reading. The ladder was fitted with `tools/simulate_game.py`, which
+Most XP comes from reading itself: base points and the bonuses for how
+and when you read (cheese, streak, landmark, fresh paper) are about three
+quarters of the XP of a regular reader; badges, quests and the other
+bonuses add the rest. A typical week (quest done, one thorough read from the
+top of the queue, a few bonuses) is worth about 150–250 XP. The first
+levels are spread so that one skim raises the level by at most one and one
+deep read by at most two: after the first 3–5 papers you are at about
+level 4–5 with 2 badges, and badges then come one or two at a time. Later
+steps grow slowly to about 750 XP; a regular reader gets a level-up every
+week or two and reaches the top after more than two years. The ladder was fitted with `tools/simulate_game.py`, which
 plays typical readers on the real game code ([Balancing](#balancing)).
 
 ### Badges (default targets)
@@ -1079,8 +1084,8 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Group | Badge | Requirement | Code |
 |---|---|---|---|
 | Reading | 🌱 First Steps | Read your first paper (skimmed or deeper) | `first_read` |
-| Reading | 🔆 Warm-Up | Read 3 papers | `warm_up` |
-| Reading | 🔖 Reading List | Read 5 papers | `reading_list` |
+| Reading | 🔆 Warm-Up | Read 6 papers | `warm_up` |
+| Reading | 🔖 Reading List | Read 8 papers | `reading_list` |
 | Reading | 📄 Page Turner | Read 10 papers | `page_turner` |
 | Reading | 📑 Regular Reader | Read 15 papers | `regular` |
 | Reading | 🐛 Bookworm | Read 25 papers | `bookworm` |
@@ -1093,39 +1098,39 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Reading | 🎩 Erudite | Read 300 papers | `erudite` |
 | Reading | 📊 Meta-Analyst | Read 350 papers | `meta_analyst` |
 | Reading | 🌍 Encyclopedia | Read 500 papers | `encyclopedia` |
-| Reading | 👁️ First Glance | Look at 1 paper (abstract or deeper) | `first_glance` |
-| Reading | 🛍️ Browser | Look at 10 papers (abstract or deeper) | `browser` |
+| Reading | 👁️ Glancer | Look at 15 papers (abstract or deeper) | `first_glance` |
+| Reading | 🛍️ Browser | Look at 25 papers (abstract or deeper) | `browser` |
 | Reading | 💡 Abstract Thinker | Look at 50 papers (abstract or deeper) | `abstract_thinker` |
-| Depth | 🏊 First Dive | Read 1 paper thoroughly | `first_dive` |
+| Depth | 🏊 Diving In | Read 2 papers thoroughly | `first_dive` |
 | Depth | 🤿 Deep Diver | Read 5 papers thoroughly | `deep_diver` |
 | Depth | 🐬 Free Diver | Read 10 papers thoroughly | `free_diver` |
 | Depth | 🐙 Abyss Explorer | Read 25 papers thoroughly | `abyss_explorer` |
 | Depth | 🦪 Pearl Diver | Read 50 papers thoroughly | `pearl_diver` |
 | Depth | 🌊 Mariana Trench | Read 100 papers thoroughly | `trench` |
-| Depth | 🗒️ Note Taker | Write substantial notes on 1 paper | `note_taker` |
+| Depth | 🗒️ Note Taker | Write substantial notes on 5 papers | `note_taker` |
 | Depth | ✍️ Scribe | Write substantial notes on 10 papers | `scribe` |
 | Depth | 🖍️ Annotator | Write substantial notes on 25 papers | `annotator` |
 | Depth | 🪶 Chronicler | Write substantial notes on 50 papers | `chronicler` |
 | Depth | 🖊️ Essayist | Write 5000 characters of notes in total | `essayist` |
 | Depth | 📝 Novelist | Write 20000 characters of notes in total | `novelist` |
 | Depth | 📕 Monograph | Write 50000 characters of notes in total | `monograph` |
-| Depth | ⚖️ Referee | Rate 5 papers | `referee` |
+| Depth | ⚖️ Referee | Rate 6 papers | `referee` |
 | Depth | ⭐ Critic | Rate 20 papers | `critic` |
 | Depth | 🍷 Connoisseur | Rate 50 papers | `connoisseur` |
 | Depth | 🌟 Fan Club | Give 10 five-star ratings | `fan_club` |
-| Depth | 🔍 Close Reader | Read 1 paper at least fully | `close_reader` |
+| Depth | 🔍 Close Reader | Read 7 papers at least fully | `close_reader` |
 | Depth | 🧐 Careful Reader | Read 10 papers at least fully | `careful` |
 | Depth | 🫖 Journal Club | Read 25 papers at least fully | `journal_club` |
 | Depth | 💭 Deep Thinker | Read 50 papers at least fully | `deep_thinker` |
 | Depth | ⚗️ Critical Mind | Read 75 papers at least fully | `critical_mind` |
 | Depth | 🧠 Scholar | Read 100 papers at least fully | `scholar` |
 | Depth | 🧙 Sage | Read 250 papers at least fully | `sage` |
-| Discipline | 🐭 First Bite | Get the cheese: read your top paper first, 1 time | `first_bite` |
-| Discipline | 🧀 Cheese Taster | Get the cheese: read your top paper first, 10 times | `cheese_taster` |
+| Discipline | 🐭 First Bite | Get the cheese: read your top paper first, 3 times | `first_bite` |
+| Discipline | 🧀 Cheese Taster | Get the cheese: read your top paper first, 12 times | `cheese_taster` |
 | Discipline | 📜 Cheese Scholar | Get the cheese: read your top paper first, 25 times | `cheese_scholar` |
 | Discipline | 🐀 Big Cheese | Get the cheese: read your top paper first, 50 times | `big_cheese` |
 | Discipline | 👑 Chair of Cheese Studies | Get the cheese: read your top paper first, 100 times | `chair_of_cheese` |
-| Discipline | 📭 Inbox Zero | Empty your reading queue by reading it | `inbox_zero` |
+| Discipline | 📭 Inbox Zero | Empty your reading queue by reading it, 3 times | `inbox_zero` |
 | Discipline | 🧘 Minimalist | Empty your reading queue 5 times | `minimalist` |
 | Discipline | ☯️ Zen Master | Empty your reading queue 15 times | `zen` |
 | Discipline | 🗂️ Curator | Mark 10 papers as not relevant (teaches the recommender) | `curator` |
@@ -1138,7 +1143,7 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Consistency | 🗓️ Year of Reading | Read something 52 weeks in a row | `streak_52` |
 | Consistency | 🚂 Unstoppable | Read something 78 weeks in a row | `streak_78` |
 | Consistency | 🏔️ Two Years Strong | Read something 104 weeks in a row | `streak_104` |
-| Consistency | 🧭 Questing | Complete your first weekly quest | `questing` |
+| Consistency | 🧭 Questing | Complete 2 weekly quests | `questing` |
 | Consistency | 🎒 Adventurer | Complete 3 weekly quests | `adventurer` |
 | Consistency | 🥾 Pathfinder | Complete 5 weekly quests | `pathfinder` |
 | Consistency | 🗺️ Quest Master | Complete 10 weekly quests | `quest_master` |
@@ -1146,12 +1151,12 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Consistency | ⛵ Odyssey | Complete 50 weekly quests | `odyssey` |
 | Consistency | 📯 Saga | Complete 75 weekly quests | `saga` |
 | Consistency | 🏰 Epic | Complete 100 weekly quests | `epic` |
-| Consistency | ✅ Top Marks | Get grade A or S in 1 week | `top_marks` |
+| Consistency | ✅ Top Marks | Get grade A or S in 2 weeks | `top_marks` |
 | Consistency | 🅰️ Straight A | Get grade A or S in 5 weeks | `straight_a` |
 | Consistency | 🎖️ Honor Roll | Get grade A or S in 15 weeks | `honor_roll` |
 | Consistency | 📋 Dean's List | Get grade A or S in 30 weeks | `deans_list` |
 | Consistency | 🎤 Valedictorian | Get grade A or S in 52 weeks | `valedictorian` |
-| Consistency | ✨ Distinction | Get grade S in 1 week | `distinction` |
+| Consistency | ✨ Distinction | Get grade S in 2 weeks | `distinction` |
 | Consistency | 💎 Perfectionist | Get grade S in 3 weeks | `perfectionist` |
 | Consistency | 🏵️ Summa cum Laude | Get grade S in 10 weeks | `summa` |
 | Consistency | 🔄 Comeback Kid | Read again after a break of 4 weeks or more | `comeback` |
@@ -1163,7 +1168,7 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Consistency | 🍂 Seasoned | Read something in 75 different weeks | `seasoned` |
 | Consistency | 🎗️ Veteran | Read something in 100 different weeks | `veteran` |
 | Pace | 🏅 Marathon Day | Read 4 papers in one day | `marathon` |
-| Pace | 🍿 Binge Week | Read 8 papers in one week | `binge_week` |
+| Pace | 🍿 Binge Week | Read 10 papers in one week | `binge_week` |
 | Pace | 🦉 Night Owl | Read 5 different papers between 22:00 and 04:00 | `night_owl` |
 | Pace | 🌙 Night Shift | Read 20 different papers between 22:00 and 04:00 | `night_shift` |
 | Pace | 🌅 Early Riser | Read 5 different papers between 05:00 and 08:00 | `early_riser` |
@@ -1179,9 +1184,9 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Breadth | 🔪 Cutting Edge | Read 30 papers within 30 days of publication | `cutting_edge` |
 | Breadth | 📰 Scoop | Read 3 papers within 7 days of publication | `scoop` |
 | Breadth | 🗞️ Breaking News | Read 10 papers within 7 days of publication | `breaking_news` |
-| Breadth | 🦴 Archaeologist | Read a paper that is 25+ years old | `archaeologist` |
+| Breadth | 🦴 Archaeologist | Read 2 papers that are 25+ years old | `archaeologist` |
 | Breadth | ⏳ Historian | Read 5 papers that are 25+ years old | `historian` |
-| Breadth | 🌿 Curious Mind | Read papers from 3 different topics | `curious` |
+| Breadth | 🌿 Curious Mind | Read papers from 4 different topics | `curious` |
 | Breadth | 🚶 Wanderer | Read papers from 5 different topics | `wanderer` |
 | Breadth | 🧩 Polymath | Read papers from 8 different research topics | `polymath` |
 | Breadth | 🌉 Bridge Builder | Read papers from 12 different topics | `bridge_builder` |
@@ -1192,14 +1197,14 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 | Breadth | 🚀 Pioneer | Read 25 papers from your recommendations | `pioneer` |
 | Breadth | 🗻 Expedition Leader | Read 50 papers from your recommendations | `expedition` |
 | Breadth | 🗺 Cartographer | Read 100 papers from your recommendations | `cartographer` |
-| Breadth | 📁 Library Diver | Read 10 papers from your libraries | `library_diver` |
+| Breadth | 📁 Library Diver | Read 15 papers from your libraries | `library_diver` |
 | Breadth | 🗄️ Archivist | Read 25 papers from your libraries | `archivist` |
 | Breadth | 🏷️ Librarian | Read 50 papers from your libraries | `librarian` |
 | Breadth | 🗝️ Head Librarian | Read 100 papers from your libraries | `head_librarian` |
 | Breadth | 📇 Bibliographer | Read 200 papers from your libraries | `bibliographer` |
 | Breadth | 🪁 Free Spirit | Read 5 papers you added yourself | `free_spirit` |
 | Breadth | 🦄 Maverick | Read 15 papers you added yourself | `maverick` |
-| Experience | 🌠 Rising Star | Earn 500 XP | `rising_star` |
+| Experience | 🌠 Rising Star | Earn 750 XP | `rising_star` |
 | Experience | 💰 Thousand Club | Earn 1000 XP | `thousand_club` |
 | Experience | 🥈 Silver Club | Earn 2500 XP | `silver_club` |
 | Experience | 🖐️ High Five | Earn 5000 XP | `high_five` |
@@ -1213,14 +1218,21 @@ paper counts once); "looked at" includes abstracts; "fully" means at least
 `tools/simulate_game.py` plays four readers for two years on a temporary
 database with the real game code (offline, fixed seed) and prints XP and
 level by week, badges by week, the badges reached within one and two years,
-the quest rate, drop penalties and the longest stretch without a level-up
-or badge. The defaults above give:
+the quest rate, drop penalties, the longest stretch without a level-up
+or badge, the share of XP per source (reading, badges, quests, other) and
+the first 10 papers of a new profile, reading by reading. The defaults
+above give:
 
-| Reader | Week 1 | Week 4 | Week 52 | Week 104 | Badges in 2 years | Longest gap (reading weeks) |
-|---|---|---|---|---|---|---|
-| New researcher, 0–4 papers a week, mostly abstracts at first | level 4 | level 8 | level 19 | level 26 | 68 | 5 |
-| Experienced researcher, 185-paper backlog on day 1 | level 21 | level 22 | level 34 | level 41 | 93 | 5 |
-| Very regular, 1 deep read + 2 skims every week | level 6 | level 11 | level 37 | level 53 | 105 | 4 |
+| Reader | Week 1 | Week 4 | Week 52 | Week 104 | Badges in 2 years | Longest gap (reading weeks) | XP from reading (2 years) |
+|---|---|---|---|---|---|---|---|
+| New researcher, 0–4 papers a week, mostly abstracts at first | level 2 | level 6 | level 17 | level 25 | 68 | 5 | 70 % |
+| Experienced researcher, 185-paper backlog on day 1 | level 20 | level 21 | level 33 | level 42 | 92 | 4 | 81 % |
+| Very regular, 1 deep read + 2 skims every week | level 4 | level 8 | level 37 | level 55 | 104 | 4 | 78 % |
+
+The first papers of a new profile (a mix of skims and reads from the queue,
+every second one rated, notes on deep reads): after 3 papers level 3–5
+with 2 badges, after 5 papers level 3–5 with 2 badges, after 10 papers
+level 5–8 with 4–11 badges; no reading unlocks more than 2 badges.
 
 ### Saving, loading and comparing profiles
 
