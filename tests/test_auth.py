@@ -256,3 +256,15 @@ def test_login_checks_off_the_event_loop_and_backs_off(protected, monkeypatch):
         "/login", data={"password": "lab-meeting-42", "next": "/queue"}, follow_redirects=False
     )
     assert response.headers["location"] == "/queue" and COOKIE in protected.cookies
+
+
+@pytest.mark.parametrize("content", ["", "\n", "abcd", "not hex at all" * 10, "00" * 16])
+def test_unusable_secret_files_get_a_new_secret(tmp_path, content):
+    path = tmp_path / "web_secret"
+    path.write_text(content)
+    secret = load_secret(path)
+    assert len(secret) == 32 and secret != b"\0" * 16
+    assert path.read_text().strip() == secret.hex()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert load_secret(path) == secret
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["web_secret"]  # no temporary file

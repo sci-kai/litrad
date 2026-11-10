@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import tempfile
 import time
 from collections import deque
 from pathlib import Path
@@ -75,14 +76,51 @@ class LoginGuard:
         self._failures.append(self._clock())
 
 
+SECRET_BYTES = 32
+
+
+def _read_secret(path: Path) -> bytes | None:
+    try:
+        secret = bytes.fromhex(path.read_text(encoding="ascii").strip())
+    except (FileNotFoundError, ValueError, UnicodeDecodeError):
+        return None
+    return secret if len(secret) >= SECRET_BYTES else None
+
+
 def load_secret(path: Path) -> bytes:
-    """Read (or create) the cookie signing secret."""
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w") as handle:
-            handle.write(secrets.token_hex(32))
-    return bytes.fromhex(path.read_text().strip())
+    """Read (or create) the cookie signing secret.
+
+    A missing, empty, short or damaged file gets a new secret, written to a
+    temporary file (readable only by you) and moved into place in one step,
+    so a crash never leaves an empty secret behind.
+    """
+    secret = _read_secret(path)
+    if secret is not None:
+        return secret
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        os.chmod(tmp, 0o600)
+        with os.fdopen(fd, "w", encoding="ascii") as handle:
+            handle.write(secrets.token_hex(SECRET_BYTES))
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.exists():
+            if _read_secret(path) is None:  # (unless another process just made one)
+                os.replace(tmp, path)  # an unusable file: replaced
+        else:
+            try:
+                os.link(tmp, path)  # never replaces a secret another process just made
+            except FileExistsError:
+                pass
+            except OSError:  # no hard links on this file system
+                os.replace(tmp, path)
+    finally:
+        Path(tmp).unlink(missing_ok=True)
+    secret = _read_secret(path)
+    if secret is None:
+        raise OSError(f"Cannot create the session secret {path}")
+    return secret
 
 
 def make_session(secret: bytes, password_hash: str, now: float | None = None) -> str:
