@@ -988,6 +988,9 @@ Fairness rules that always apply:
 - Paper bonuses (landmark, fresh, recommendation, rating, notes) are paid
   once per paper; the reading bonuses only with a step to a deeper level. The
   cheese bonus is a share of *newly* earned base points.
+- **Rounding.** Shares of points (cheese, streak, `backlog_share`) are
+  rounded half up to whole points: 7.5 → 8, 2.5 → 3 (never to the even
+  number).
 - Dismissing a recommendation you never queued is free.
 - Penalties can lower the total and the level, but never below level 1.
 

@@ -16,6 +16,7 @@ Functions that need rules accept either ``GameRules`` or a ``Config`` (whose
 passes the profile's rules (``profile.active_rules``).
 """
 
+import math
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -433,6 +434,14 @@ class Award:
         return sum(e.points for e in self.events)
 
 
+def round_half_up(value: float) -> int:
+    """Points are rounded half up (2.5 -> 3), not to the even number as ``round`` does.
+
+    The tiny epsilon absorbs float noise such as ``0.15 * 50 = 7.499999...``.
+    """
+    return math.floor(value + 0.5 + 1e-9)
+
+
 def _already(session: Session, kind: str, paper_id: int | None = None, reason: str | None = None):
     query = select(XpEvent).where(XpEvent.kind == kind)
     if paper_id is not None:
@@ -481,7 +490,7 @@ def award_reading(
     deeper = new_depth > previous_depth
     if deeper and earlier:
         previous_xp = base_xp[READ_LEVELS[previous_depth - 1].value] if previous_depth else 0
-        base = round((base_xp[status.value] - previous_xp) * rules.backlog_share)
+        base = round_half_up((base_xp[status.value] - previous_xp) * rules.backlog_share)
         add(base, EARLIER_KIND, f"read earlier, {status.value}: {paper.title[:60]}")
     elif deeper:
         previous_xp = base_xp[READ_LEVELS[previous_depth - 1].value] if previous_depth else 0
@@ -490,13 +499,13 @@ def award_reading(
         current_streak, _ = streaks(reading_weeks(session), today)
         multiplier = streak_multiplier(current_streak, rules)
         add(
-            round(base * (multiplier - 1)),
+            round_half_up(base * (multiplier - 1)),
             "streak",
             f"{current_streak}-week streak x{multiplier:.2f}",
         )
         if was_queue_top and new_depth >= 2:
             add(
-                round(base * rules.cheese_bonus),
+                round_half_up(base * rules.cheese_bonus),
                 "cheese",
                 "Got the cheese: read your top paper first",
             )

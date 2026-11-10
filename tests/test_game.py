@@ -463,3 +463,20 @@ def test_bonuses_set_to_zero_xp_still_count_for_badges(cfg):
         codes = set(session.exec(select(Achievement.code)).all())
         assert {"inbox_zero", "questing"} <= codes
     engine.dispose()
+
+
+def test_points_are_rounded_half_up():
+    from litrad.game import round_half_up
+
+    assert [round_half_up(x) for x in (0.5, 1.5, 2.5, 7.5, 2.4999, 0.15 * 50)] == [1, 2, 3, 8, 2, 8]
+
+
+def test_cheese_share_rounds_half_up(cfg):
+    cfg.game = GameRules(xp_abstract=5, cheese_bonus=0.5, xp_skimmed=5)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        top = add_paper(session, "Top")
+        queue_add(session, cfg, top)
+        award = record_reading(session, cfg, top, ReadStatus.skimmed, at=MONDAY).award
+        assert kinds(award)["cheese"] == 3  # 5 x 0.5 = 2.5 -> 3 (round() would give 2)
+    engine.dispose()
