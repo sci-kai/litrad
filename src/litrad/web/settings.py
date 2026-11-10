@@ -254,15 +254,6 @@ GROUPS = (
                 1,
             ),
             Setting(
-                ("selection", "citations_per_year_saturation"),
-                "Impact: citations/year for 1.0 (fallback)",
-                "Used for landmark papers without a citation percentile.",
-                "int",
-                1,
-                5000,
-                1,
-            ),
-            Setting(
                 ("selection", "landmark_timeliness"),
                 "Timeliness of landmark papers",
                 "Fresh papers get 0.5–1.0 depending on age; landmarks get this constant.",

@@ -850,7 +850,9 @@ Only two kinds of papers are scored; the rest is dropped
 score = w_r × relevance + w_i × impact + w_t × timeliness       weights = selection.weights (0.5 / 0.3 / 0.2)
 ```
 
-All components are in [0, 1]; only the ratio of the weights matters.
+All components are in [0, 1]. The weights are divided by their sum before
+scoring (score in [0, 1]), so only their ratio matters: 5 / 3 / 2 ranks
+exactly like 0.5 / 0.3 / 0.2. At least one weight must be above 0.
 
 **Relevance**
 
@@ -870,8 +872,7 @@ relevance = s × similarity_rank + (1 − s) × topic_bonus        s = selection
 
 **Impact**
 
-- *Landmark*: citation percentile ÷ 100; without a percentile, citations per
-  year on a log scale, `citations_per_year_saturation` (200) per year = 1.0.
+- *Landmark*: citation percentile ÷ 100 (a landmark always has one).
 - *Fresh* (no meaningful citations yet), the journal counts:
 
   ```
@@ -919,7 +920,7 @@ Shown under **🌳 Evidence tree**:
 | Found by | each search (topic, query, position) or the S2 recommendation rank |
 | Eligible as | fresh (age vs. window) or landmark (percentile and age vs. thresholds) |
 | Relevance | method (SPECTER2/TF-IDF), mean similarity, rank among N candidates, nearest library papers, topic bonus and reason |
-| Impact | basis (journal / percentile / citations per year) with inputs |
+| Impact | basis (journal / citation percentile) with inputs |
 | Timeliness | age and window |
 | Selection | score rank, best score and floor, MMR pick order, most similar earlier pick |
 | Category | relevance + impact and its position among the picks |
@@ -1422,7 +1423,6 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 | `top_venue_citedness` | 30 | journal citedness that counts as impact 1.0 (fresh papers) |
 | `unknown_venue_impact` | 0.05 | impact of fresh papers without a known journal |
 | `early_citation_bonus` / `early_citation_saturation` | 0.2 / 50 | extra impact for already-cited fresh papers |
-| `citations_per_year_saturation` | 200 | citations/year for impact 1.0 without a percentile |
 | `landmark_timeliness` | 0.4 | timeliness of landmark papers |
 | `min_relative_score` | 0.6 | picks need this share of the best score |
 | `s2_positive_rules` | `[liked, recent]` | rules for the positive examples of Semantic Scholar, in order: `liked`, `read`, `recent`, `impact`, `fwci`, `cited` ([rules](#1-candidates)) |

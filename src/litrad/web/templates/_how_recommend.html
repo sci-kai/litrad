@@ -73,7 +73,7 @@
 
   <h3>🏛️ Impact</h3>
   <ul>
-    <li><b>landmark</b>: citation percentile ÷ 100 (OpenAlex, field- and year-normalised); without one: citations per year, log scale, <code>{{ s.citations_per_year_saturation }}</code>/year = 1.0.</li>
+    <li><b>landmark</b>: citation percentile ÷ 100 (OpenAlex, field- and year-normalised; a landmark always has one).</li>
     <li><b>fresh</b>: journal 2-year mean citedness, log scale, <code>{{ s.top_venue_citedness }}</code> = 1.0 (unknown journal <code>{{ s.unknown_venue_impact }}</code>), plus up to <code>{{ s.early_citation_bonus }}</code> for early citations (full at <code>{{ s.early_citation_saturation }}</code>).</li>
   </ul>
 

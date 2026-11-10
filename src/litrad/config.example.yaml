@@ -79,6 +79,7 @@ selection:
   cooldown_weeks: 8
   # remind me to get new recommendations after this many days (0 = never)
   reminder_days: 7
+  # divided by their sum: only the ratio matters
   weights:
     relevance: 0.5
     impact: 0.3

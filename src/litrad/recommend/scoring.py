@@ -166,19 +166,11 @@ def impact_score(paper: Paper, kind: str, today: date, sel: Selection) -> tuple[
             "citations": paper.citation_count or 0,
             "early_citation_bonus": round(early, 3),
         }
-    if paper.citation_percentile is not None:
-        return paper.citation_percentile / 100, {
-            "basis": "citation percentile",
-            "citation_percentile": paper.citation_percentile,
-            "citations": paper.citation_count,
-        }
-    years = max((age_days(paper, today) or 365) / 365.25, 1)
-    per_year = (paper.citation_count or 0) / years
-    return log_scale(per_year, sel.citations_per_year_saturation), {
-        "basis": "citations per year",
+    # a landmark always has a citation percentile (see ``paper_kind``)
+    return (paper.citation_percentile or 0) / 100, {
+        "basis": "citation percentile",
+        "citation_percentile": paper.citation_percentile,
         "citations": paper.citation_count,
-        "citations_per_year": round(per_year, 1),
-        "saturation": sel.citations_per_year_saturation,
     }
 
 
@@ -383,16 +375,17 @@ def rank_candidates(
         eligible, library, candidate_tfidf, library_tfidf, topic_weights, sel
     )
 
-    w = sel.weights
+    # divided by their sum: only the ratio of the weights matters
+    w = sel.weights.normalized()
     scored = []
     for i, (candidate, kind) in enumerate(zip(eligible, kinds, strict=True)):
         paper = candidate.paper
         impact, impact_evidence = impact_score(paper, kind, today, sel)
         timeliness, time_evidence = timeliness_score(kind, age_days(paper, today) or 0, sel)
         contributions = {
-            "relevance": w.relevance * relevance[i],
-            "impact": w.impact * impact,
-            "timeliness": w.timeliness * timeliness,
+            "relevance": w["relevance"] * relevance[i],
+            "impact": w["impact"] * impact,
+            "timeliness": w["timeliness"] * timeliness,
         }
         total = sum(contributions.values())
         evidence = {
@@ -401,7 +394,7 @@ def rank_candidates(
             "relevance": relevance_evidence[i],
             "impact": impact_evidence,
             "timeliness": time_evidence,
-            "weights": {"relevance": w.relevance, "impact": w.impact, "timeliness": w.timeliness},
+            "weights": {k: round(v, 4) for k, v in w.items()},
             "contributions": {k: round(float(v), 4) for k, v in contributions.items()},
         }
         scored.append(

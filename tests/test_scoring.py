@@ -3,7 +3,7 @@ from datetime import date
 import numpy as np
 import pytest
 
-from litrad.config import Selection
+from litrad.config import Selection, Weights
 from litrad.db import Category, Paper
 from litrad.recommend.scoring import (
     Candidate,
@@ -91,16 +91,11 @@ def test_impact_fresh_uses_venue_and_early_citations():
     assert capped == 1
 
 
-def test_impact_landmark_uses_percentile_or_citations_per_year():
+def test_impact_landmark_uses_the_percentile():
     value, evidence = impact_score(paper(citation_percentile=99.5), "landmark", TODAY, SEL)
     assert value == 0.995 and evidence["basis"] == "citation percentile"
-    many, _ = impact_score(
-        paper(pub_date=date(2016, 1, 1), citation_count=5000), "landmark", TODAY, SEL
-    )
-    few, few_ev = impact_score(
-        paper(pub_date=date(2016, 1, 1), citation_count=50), "landmark", TODAY, SEL
-    )
-    assert 0 < few < many <= 1 and few_ev["basis"] == "citations per year"
+    # only a paper with a percentile can be a landmark at all
+    assert classify(paper(pub_date=date(2016, 1, 1), citation_count=5000), TODAY, SEL) is None
 
 
 def test_timeliness():
@@ -315,3 +310,19 @@ def test_knn_with_self_masking_and_tiny_library():
     library = np.array([[1.0, 0.0]])
     mean, top, _ = knn(np.array([[1.0, 0.0]]), library, k=5, self_columns=[0])
     assert mean.tolist() == [0.0] and top.shape == (1, 0)
+
+
+def test_only_the_ratio_of_the_weights_matters():
+    candidates = [candidate(f"Paper {i}", [1.0, i / 10, 0, 0], topics=["evo"]) for i in range(8)]
+    small = rank(candidates)
+    scaled = SEL.model_copy(update={"weights": Weights(relevance=5, impact=3, timeliness=2)})
+    large = rank(candidates, sel=scaled)
+    assert [r.candidate.paper.title for r in large.picks] == [
+        r.candidate.paper.title for r in small.picks
+    ]
+    assert [r.score for r in large.picks] == pytest.approx([r.score for r in small.picks])
+    assert all(0 <= r.score <= 1 for r in large.picks)
+    with pytest.raises(ValueError):
+        Weights(relevance=0, impact=0, timeliness=0)
+    with pytest.raises(ValueError):
+        Weights(relevance=-1)

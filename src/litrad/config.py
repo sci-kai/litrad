@@ -98,9 +98,24 @@ class Embeddings(_Base):
 
 
 class Weights(_Base):
-    relevance: float = 0.5
-    impact: float = 0.3
-    timeliness: float = 0.2
+    # divided by their sum before scoring: only the ratio matters
+    relevance: float = Field(0.5, ge=0)
+    impact: float = Field(0.3, ge=0)
+    timeliness: float = Field(0.2, ge=0)
+
+    @model_validator(mode="after")
+    def _some_weight(self):
+        if self.relevance + self.impact + self.timeliness <= 0:
+            raise ValueError("at least one score weight must be above 0")
+        return self
+
+    def normalized(self) -> dict[str, float]:
+        total = self.relevance + self.impact + self.timeliness
+        return {
+            "relevance": self.relevance / total,
+            "impact": self.impact / total,
+            "timeliness": self.timeliness / total,
+        }
 
 
 class Selection(_Base):
@@ -132,8 +147,6 @@ class Selection(_Base):
     # maximal impact bonus of fresh papers for early citations, reached at this many
     early_citation_bonus: float = Field(0.2, ge=0, le=1)
     early_citation_saturation: int = Field(50, ge=1)
-    # citations per year that count as maximal impact when no percentile is known
-    citations_per_year_saturation: int = Field(200, ge=1)
     # timeliness of landmark papers (fresh papers: 0.5-1.0)
     landmark_timeliness: float = Field(0.4, ge=0, le=1)
     # picks need at least this share of the best score (diversity must not pull in weak papers)

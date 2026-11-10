@@ -143,10 +143,8 @@
             <li>Journal {{ im.venue or "unknown" }}: 2-year mean citedness {{ im.venue_mean_citedness | round(1) if im.venue_mean_citedness is not none else "unknown" }}
               → {{ "%.3f" | format(im.venue_score) }} (log scale, {{ im.top_venue_citedness }} = 1.0)</li>
             <li>Early citations: {{ im.citations }} → +{{ "%.3f" | format(im.early_citation_bonus) }}</li>
-            {% elif im.basis == "citation percentile" %}
-            <li>Cited more than {{ im.citation_percentile }} % of papers of the same field and year ({{ "{:,}".format(im.citations or 0) }} citations)</li>
             {% else %}
-            <li>{{ im.citations_per_year }} citations per year (log scale, {{ im.saturation }} = 1.0)</li>
+            <li>Cited more than {{ im.citation_percentile }} % of papers of the same field and year ({{ "{:,}".format(im.citations or 0) }} citations)</li>
             {% endif %}
           </ul>
         </li>
