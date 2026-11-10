@@ -533,12 +533,56 @@ def test_not_a_zip(base, tmp_path):
         import_new(base, path)
 
 
-def test_unsafe_names_are_refused(base, tmp_path):
+@pytest.mark.parametrize(
+    "name",
+    [
+        "../evil.md",
+        "/etc/evil.md",
+        "notes/../../evil.md",
+        "notes/C:/Users/evil.md",
+        "notes/C:evil.md",
+        "C:/evil.md",
+        "notes\\..\\evil.md",
+        "notes//evil.md",
+        "notes/./evil.md",
+        "notes/a\x1bb.md",
+    ],
+)
+def test_unsafe_names_are_refused(base, tmp_path, name):
     path = tmp_path / "evil.zip"
     with zipfile.ZipFile(path, "w") as handle:
-        handle.writestr("../evil.md", "x")
+        handle.writestr(name, "x")
     with pytest.raises(ArchiveError, match="unsafe file name"):
         import_new(base, path)
+    assert not list(profiles.profiles_dir(base).glob("*"))
+
+
+def test_safe_member_names():
+    from pathlib import PureWindowsPath
+
+    assert archive.safe_member("notes/sub/Muller2020-ab.md")
+    for name in ("C:/x.md", "notes/C:x.md", "//server/share/x.md", "notes/x:y.md", "a\\b"):
+        assert not archive.safe_member(name), name
+    # the reason: on Windows these leave the notes folder
+    assert PureWindowsPath("C:/vault/litrad") / "C:/x.md" == PureWindowsPath("C:/x.md")
+
+
+def test_crafted_note_name_never_leaves_the_notes_folder(base, exported, tmp_path, monkeypatch):
+    _, path = exported
+    escaped = tmp_path / "escaped.md"
+    evil = archive.NOTES + "../" * 40 + str(escaped).lstrip("/")
+
+    def change(files):
+        files[evil] = b"---\ntitle: x\n---\nescaped\n"
+
+    crafted = rewrite(path, tmp_path / "crafted.zip", change)
+    with pytest.raises(ArchiveError, match="unsafe file name"):
+        import_new(base, crafted, "Crafted")
+    # even if the name check let it through, the file is not written outside
+    monkeypatch.setattr(archive, "safe_member", lambda name: True)
+    result = import_new(base, crafted, "Crafted")
+    assert not escaped.exists()
+    assert any("unsafe file name" in p.message for p in result.report.notes)
 
 
 # --- all or nothing, partial, dry run ------------------------------------------------------

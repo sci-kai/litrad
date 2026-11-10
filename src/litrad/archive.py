@@ -573,7 +573,7 @@ def read_archive(path: Path) -> Archive:
             if info.is_dir():
                 continue
             name = info.filename
-            if name.startswith("/") or "\\" in name or ".." in name.split("/"):
+            if not safe_member(name):
                 raise ArchiveError(f"{path.name}: unsafe file name {name!r}")
             if info.file_size > MAX_MEMBER:
                 raise ArchiveError(f"{path.name}: {name} is too large")
@@ -998,6 +998,17 @@ def _rewrite_id(text: str, paper_id: int) -> str:
     return f"---\n{out.getvalue()}---\n{body}"
 
 
+def safe_member(name: str) -> bool:
+    """A relative path of plain names, safe on every system (no drive, ``:``, ``\\``, ``..``)."""
+    from pathlib import PurePosixPath, PureWindowsPath
+
+    if not name or any(c in name for c in ":\\") or any(ord(c) < 32 for c in name):
+        return False
+    if PurePosixPath(name).is_absolute() or PureWindowsPath(name).drive:
+        return False
+    return all(part not in ("", ".", "..") for part in name.split("/"))
+
+
 def _stage_notes(
     session: Session, cfg: Config, checked: Checked, ids: dict[str, int], staging: Path | None
 ) -> tuple[list[tuple[Path, Path]], int]:
@@ -1013,9 +1024,13 @@ def _stage_notes(
     rows = {r.paper_id: r for r in session.exec(select(NoteFile)).all()}
     taken = {r.path for r in rows.values()}
     moves, kept = [], 0
+    inside = folder.resolve()
     for note in checked.notes:
         paper_id = ids.get(note.paper) if note.paper else None
         target = folder / note.name
+        if not safe_member(note.name) or not target.resolve().is_relative_to(inside):
+            checked.report.add(Problem(NOTES + note.name, "unsafe file name, not written", "note"))
+            continue
         if paper_id is not None:
             paper = session.get(Paper, paper_id)
             reading = session.get(Reading, paper_id)
