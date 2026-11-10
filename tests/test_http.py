@@ -3,6 +3,7 @@ from datetime import timedelta
 import httpx
 import pytest
 
+from litrad import __version__
 from litrad.sources.http import HttpClient, HttpError, ResponseCache
 
 
@@ -41,9 +42,9 @@ def client(responses, seen, sleeps, tmp_path=None, **kwargs):
 
 def test_json_and_user_agent(sleeps):
     seen = []
-    http = client([httpx.Response(200, json={"a": 1})], seen, sleeps, contact_email="me@x.org")
+    http = client([httpx.Response(200, json={"a": 1})], seen, sleeps)
     assert http.get("https://h.org/x", params={"q": 1}) == {"a": 1}
-    assert "mailto:me@x.org" in seen[0].headers["User-Agent"]
+    assert seen[0].headers["User-Agent"] == f"litrad/{__version__}"
     assert seen[0].url.params["q"] == "1"
 
 

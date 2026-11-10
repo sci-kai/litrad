@@ -76,18 +76,16 @@ class HttpClient:
     def __init__(
         self,
         cache: ResponseCache | None = None,
-        contact_email: str | None = None,
         min_interval: dict[str, float] | None = None,
         max_retries: int = 5,
         timeout: float = 30.0,
         transport: httpx.BaseTransport | None = None,
         sleep=time.sleep,
     ):
-        agent = f"litrad/{__version__}"
-        if contact_email:
-            agent += f" (mailto:{contact_email})"
+        # no contact e-mail here: every service would get it; Crossref and
+        # OpenAlex take it as their ``mailto`` parameter (api.contact_email)
         self._client = httpx.Client(
-            headers={"User-Agent": agent},
+            headers={"User-Agent": f"litrad/{__version__}"},
             timeout=timeout,
             transport=transport,
             follow_redirects=True,

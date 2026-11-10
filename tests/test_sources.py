@@ -165,3 +165,53 @@ def test_s2_batch_length_mismatch_raises():
     http = HttpClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=[None])))
     with pytest.raises(HttpError, match="expected 2 results"):
         SemanticScholar(http).papers(["DOI:10.1/a", "DOI:10.1/b"])
+
+
+# --- what each service receives ------------------------------------------------------------
+
+
+def test_contact_email_only_goes_to_crossref_and_openalex(cfg):
+    import contextlib
+
+    from litrad.cli import make_http
+    from litrad.sources.europepmc import EuropePMC
+    from litrad.sources.pubmed import PubMed
+
+    cfg.api.contact_email = "me@example.org"
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={})
+
+    http = make_http(cfg)
+    http._client = httpx.Client(
+        headers=http._client.headers, transport=httpx.MockTransport(handler)
+    )
+    calls = {
+        "api.crossref.org": lambda: crossref.resolve_doi(
+            http, "A title", "Smith, A", 2020, cfg.api.contact_email
+        ),
+        "api.openalex.org": lambda: OpenAlex(http, None, cfg.api.contact_email).works_by_doi(
+            ["10.1/a"]
+        ),
+        "api.semanticscholar.org": lambda: SemanticScholar(http).papers(["DOI:10.1/a"]),
+        "www.ebi.ac.uk": lambda: EuropePMC(http).search("evolution"),
+        "eutils.ncbi.nlm.nih.gov": lambda: PubMed(http).search("evolution"),
+    }
+    try:
+        for host, call in calls.items():
+            seen.clear()
+            with contextlib.suppress(Exception):  # the empty answers do not matter here
+                call()
+            assert seen and all(r.url.host == host for r in seen), host
+            for request in seen:
+                headers = " ".join(f"{k}: {v}" for k, v in request.headers.items())
+                assert "me@example.org" not in headers, host
+                assert request.headers["User-Agent"].startswith("litrad/")
+                in_params = request.url.params.get("mailto") == "me@example.org"
+                assert in_params is (host in ("api.crossref.org", "api.openalex.org")), host
+                if not in_params:
+                    assert "me@example.org" not in str(request.url) + request.content.decode()
+    finally:
+        http.close()

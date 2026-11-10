@@ -1296,7 +1296,9 @@ topic queries (OpenAlex); what you type into the paper search (Europe PMC,
 PubMed); the DOIs of the positive and negative example papers (Semantic
 Scholar recommendations; switch off with `sources.semanticscholar`). PubMed
 requests carry `tool=litrad` but no e-mail; `api.contact_email` stays
-`n/a` unless you want the polite pools.
+`n/a` unless you want the polite pools, and if set it is sent only to
+Crossref and OpenAlex (as their `mailto` parameter), never in the
+User-Agent (`litrad/<version>`) that every service sees.
 
 Answers are cached in `data/cache/http_cache.sqlite` (Crossref 1 year,
 OpenAlex look-ups 14 days, searches and S2 recommendations 1 day, Semantic

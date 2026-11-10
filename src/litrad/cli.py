@@ -79,7 +79,6 @@ def make_http(cfg: Config) -> HttpClient:
     s2_interval = 1.1 if cfg.api.semanticscholar_key else 3.0
     return HttpClient(
         cache=ResponseCache(cfg.paths.cache_dir / "http_cache.sqlite"),
-        contact_email=cfg.api.contact_email,
         min_interval={
             "api.semanticscholar.org": s2_interval,
             "api.crossref.org": 0.2,
