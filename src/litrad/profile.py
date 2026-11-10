@@ -50,7 +50,7 @@ def start_profile(
     name = (name or "").strip() or DEFAULT_NAME
     if len(name) > 80:
         raise ProfileError("Use a profile name of at most 80 characters")
-    rules = rules or cfg.game
+    rules = (rules or cfg.game).locked()
     profile = Profile(
         name=name,
         created_at=at or now(),

@@ -523,7 +523,7 @@ def merge(
                         "merging would mix incomparable points. Load it as a profile instead."
                     )
         elif incoming_profile:
-            rules = GameRules.model_validate(incoming_profile["rules"])
+            rules = GameRules.model_validate(incoming_profile["rules"]).locked()
             session.add(
                 Profile(
                     name=incoming_profile["name"],

@@ -24,6 +24,7 @@ from litrad.profile import (
     active_rules,
     ensure_profile,
     get_profile,
+    profile_rules,
     start_profile,
 )
 from litrad.reading import drop_from_queue, queue_add, record_reading
@@ -207,6 +208,30 @@ def test_profile_locks_the_rules(db):
     assert active_rules(session, cheat).xp_read == 40
     award = record_reading(session, cheat, add(session), ReadStatus.read, at=MONDAY).award
     assert {e.kind: e.points for e in award.events}["read"] == 40
+
+
+def test_a_changed_catalogue_default_never_changes_a_locked_profile(db, monkeypatch):
+    import dataclasses
+
+    from litrad import rules as rules_module
+
+    cfg, session = db
+    profile = start_profile(session, cfg, "Kai", at=MONDAY)
+    stored = profile.rules
+    assert stored["badge_targets"]["bookworm"] == 25  # every target is written out
+    assert set(stored["badge_targets"]) == {b.code for b in BADGE_CATALOG}
+    assert set(stored) == set(GameRules.model_fields)  # and every other rule value
+    before = profile_rules(profile)
+    # a later release changes the default target of a badge
+    catalog = [
+        dataclasses.replace(b, target=99) if b.code == "bookworm" else b for b in BADGE_CATALOG
+    ]
+    monkeypatch.setattr(rules_module, "BADGE_CATALOG", catalog)
+    monkeypatch.setattr(rules_module, "_CATALOG", {b.code: b for b in catalog})
+    assert GameRules().badges()[[b.code for b in catalog].index("bookworm")].target == 99
+    locked = profile_rules(session.get(type(profile), profile.id))
+    assert {b.code: b.target for b in locked.badges()}["bookworm"] == 25
+    assert locked.fingerprint() == before.fingerprint() == profile.fingerprint
 
 
 def test_custom_rules_are_used(db):

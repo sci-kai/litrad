@@ -944,7 +944,9 @@ planned to read first), not volume.
 1. **Create** a profile (welcome screen, `litrad profile create`) and
    choose every reward, the penalty, the level ladder and badge targets; the
    form is pre-filled from the `game` section of `config.yaml`.
-2. The rules are copied into the profile's database and **locked**. Their
+2. The rules are copied into the profile's database and **locked**: every
+   value, including the target of every badge, so a default changed in a
+   later version never changes a running profile. Their
    **fingerprint** (a short hash of the rule set) is on the profile page. All
    points use these stored rules; editing the config cannot inflate them.
    The fingerprint covers every rule and badge of 1.0. A rule or badge

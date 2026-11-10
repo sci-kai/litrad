@@ -1171,6 +1171,16 @@ class GameRules(BaseModel):
             )
         return result
 
+    def locked(self) -> "GameRules":
+        """A copy with every badge target written out, as a profile stores it.
+
+        Every rule value is stored anyway; with the resolved targets, a later
+        change of a catalogue default never changes a locked profile.
+        The fingerprint stays the same (it is computed from resolved targets).
+        """
+        targets = {badge.code: badge.target for badge in self.badges()}
+        return self.model_copy(update={"badge_targets": targets})
+
     def fingerprint(self) -> str:
         """Short hash of the complete rule set (equal rules = equal fingerprint).
 
