@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import ladder_table %}
 {% set active = "profile" %}
 {% block title %}Profile{% endblock %}
 {% block heading %}🎮 Your profile{% endblock %}
@@ -46,7 +47,7 @@
   </div>
   <details style="margin-top:.8rem"><summary>🪜 Level ladder ({{ rules.levels | length }} levels) and 🏅 badge targets ({{ rules.badges() | length }})</summary>
     <div class="grid two" style="margin-top:.6rem">
-      <table>{% for level in rules.levels %}<tr><td>{{ level.icon }} {{ level.title }}</td><td class="num">{{ level.xp }} XP</td></tr>{% endfor %}</table>
+      <div>{{ ladder_table(rules.levels) }}</div>
       <table>{% for badge in rules.badges() %}<tr><td>{{ badge.icon }} {{ badge.name }}</td><td>{{ badge.description }}</td></tr>{% endfor %}</table>
     </div>
   </details>

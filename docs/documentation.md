@@ -1040,6 +1040,11 @@ the higher tiers are still ahead.
 
 ### Levels (default ladder)
 
+Progress (🪜 *Career ladder*) shows the ladder as a rank table (level,
+title, XP needed) with your level highlighted and the XP to the next
+one, first the levels around yours, then all of them; the profile page
+shows the locked ladder and `litrad score` the levels around yours.
+
 | Level | Title | XP | Level | Title | XP | Level | Title | XP |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 🎓 Curious Undergrad | 0 | 21 | 🔬 Postdoc | 3 935 | 41 | 🖋️ Review Editor | 13 470 |

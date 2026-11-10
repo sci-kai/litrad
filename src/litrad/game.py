@@ -808,7 +808,9 @@ def next_goals(
     xp = total_xp(session)
     level = level_for(xp, rules)
     if level.next_floor:
-        hints.append(f"{level.next_floor - xp} XP until {level.next_title}")
+        hints.append(
+            f"{level.next_floor - xp:,} XP until Lv {level.number + 1} · {level.next_title}"
+        )
     weeks = reading_weeks(session)
     streak, _ = streaks(weeks, today)
     if streak and week_start(today) not in weeks:

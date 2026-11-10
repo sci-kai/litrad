@@ -425,7 +425,7 @@ def test_personal_bests_and_hints(db):
     cfg, session = db
     hints = next_goals(session, cfg, MONDAY.date())
     assert any("Weekly quest: 1 deep read and 1 more skim" in h for h in hints)
-    assert any("XP until First-Year Student" in h for h in hints)
+    assert any("XP until Lv 2 · First-Year Student" in h for h in hints)
     for i in range(3):
         record_reading(session, cfg, add_paper(session, f"P{i}"), ReadStatus.read, at=MONDAY)
     bests = personal_bests(session, cfg, MONDAY.date())

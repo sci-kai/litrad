@@ -445,6 +445,27 @@ def note(
 # --- score ----------------------------------------------------------------------
 
 
+def ladder_table(levels, current: int, xp: int, around: int = 2):
+    """The career ladder near your level as a rank table (Lv, rank, XP needed)."""
+    from rich.table import Table
+
+    table = Table(title="Career ladder", title_justify="left", box=None, pad_edge=False)
+    table.add_column("Lv", justify="right")
+    table.add_column("Rank")
+    table.add_column("XP needed", justify="right")
+    first = max(1, min(current - around, len(levels) - 2 * around - 1))
+    for number in range(first, min(len(levels), first + 2 * around + 1) + 1):
+        step = levels[number - 1]
+        rank = f"{step.icon} {step.title}"
+        if number == current:
+            rank += "  ← you"
+        elif number == current + 1:
+            rank += f"  ({step.xp - xp:,} XP to go)"
+        style = "bold" if number == current else None
+        table.add_row(str(number), rank, f"{step.xp:,}", style=style)
+    return table
+
+
 @app.command()
 def score(config: Path = ConfigOpt):
     """Your reading dashboard: level, streak, weekly report card, badges."""
@@ -460,6 +481,7 @@ def score(config: Path = ConfigOpt):
             f"[bold]{level.icon} Level {level.number} · {level.title}[/bold]   {s['xp']} XP  "
             f"[{bar(level.progress(s['xp']))}] {to_go}"
         )
+        console.print(ladder_table(rules.levels, level.number, s["xp"]))
         flame = " 🔥" if s["streak"] >= 2 else ""
         console.print(
             f"Streak: {s['streak']} week(s){flame} (best {s['best_streak']}) · "

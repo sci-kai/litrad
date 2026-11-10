@@ -477,6 +477,10 @@ a.library-card:hover { text-decoration: none; border-color: var(--accent); }
 .kind-list a.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .kind-list .grow { flex: 1 1 auto; min-width: 0; }
 .table-wrap { overflow-x: auto; }
+.ladder-all { max-height: 24rem; overflow-y: auto; }
+.ladder { width: 100%; }
+.ladder tr.current td { background: var(--accent-soft); font-weight: 650; }
+.ladder .you { color: var(--accent); }
 .pager { display: flex; gap: .6rem; align-items: center; justify-content: center; margin-top: .8rem; flex-wrap: wrap; }
 .list-row { display: flex; gap: .5rem; align-items: baseline; margin: .35rem 0; }
 .list-row > a, .list-row > .grow { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }

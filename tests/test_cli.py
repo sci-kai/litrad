@@ -142,6 +142,9 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert code == 0 and re.search(r"Level \d+ · \w", out)
     assert re.search(rf"Badges \d+/{len(GameRules().badges())}\b", out)
     assert "Reading Impact Factor" in out and "This week" in out
+    # the career ladder near your level as a rank table
+    assert "Career ladder" in out and "XP needed" in out and "← you" in out
+    assert "XP to go" in out and re.search(r"\b1\s+🎓 Curious Undergrad", out)
 
     code, out = invoke("history", "-c", config)
     assert "abstract" in out and "read" in out

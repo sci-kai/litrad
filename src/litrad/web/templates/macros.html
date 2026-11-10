@@ -237,3 +237,32 @@
   <div class="hint"><span>{{ {"error": "❌", "warning": "⚠️", "info": "ℹ️", "ok": "✅"}[f.level] }}</span><span class="{{ 'neg' if f.level == 'error' }}">{{ f.message }}</span></div>
   {% endfor %}
 {%- endmacro %}
+
+{# the career ladder as a rank table; ``current``: your level number, ``xp``: your XP #}
+{% macro ladder_rows(levels, rows, current=None, xp=None) -%}
+  <table class="ladder">
+    <thead><tr><th scope="col" class="num">Lv</th><th scope="col">Rank</th><th scope="col" class="num">XP needed</th></tr></thead>
+    <tbody>
+    {% for n in rows %}{% set step = levels[n - 1] %}
+    <tr{% if n == current %} class="current" aria-current="true"{% endif %}>
+      <td class="num">{{ n }}</td>
+      <td>{{ step.icon }} {{ step.title }}{% if n == current %} <b class="you">· you</b>{% elif current and xp is not none and n == current + 1 %} <small class="muted">· {{ "{:,}".format(step.xp - xp) }} XP to go</small>{% endif %}</td>
+      <td class="num">{{ "{:,}".format(step.xp) }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{%- endmacro %}
+
+{% macro ladder_table(levels, current=None, xp=None) -%}
+{% set total = levels | length %}
+{% if current %}
+{% set first = [current - 2, 1] | max %}{% set last = [first + 5, total] | min %}{% set first = [last - 5, 1] | max %}
+<div class="table-wrap">{{ ladder_rows(levels, range(first, last + 1), current, xp) }}</div>
+<details style="margin-top:.5rem"><summary>All {{ total }} levels</summary>
+  <div class="table-wrap ladder-all">{{ ladder_rows(levels, range(1, total + 1), current, xp) }}</div>
+</details>
+{% else %}
+<div class="table-wrap ladder-all">{{ ladder_rows(levels, range(1, total + 1)) }}</div>
+{% endif %}
+{%- endmacro %}

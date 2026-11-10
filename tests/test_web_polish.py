@@ -1,5 +1,6 @@
 """Usability of the web UI: labels, error pages, readable messages, paging."""
 
+import html
 import json
 import re
 import tempfile
@@ -325,3 +326,30 @@ def test_progress_computes_stats_once(big, monkeypatch):
     calls.clear()
     assert client.get("/").status_code == 200
     assert len(calls) == 1
+
+
+def test_career_ladder_is_a_rank_table(user):
+    client, path = user
+    engine = init_db(profile_cfg(path).paths.database)
+    with Session(engine) as session:
+        session.add(XpEvent(points=1500, kind="read", reason="test"))
+        session.commit()
+    engine.dispose()
+    page = client.get("/progress").text
+    ladder = page.split('id="ladder"')[1].split("XP ledger")[0]
+    assert '<th scope="col" class="num">Lv</th>' in ladder and "XP needed" in ladder
+    current = ladder.split('aria-current="true"')[1].split("</tr>")[0]
+    rules = GameRules()
+    level = next(i for i, step in enumerate(rules.levels, 1) if step.xp > 1500) - 1
+
+    def esc(text):  # as Jinja escapes it
+        return html.escape(text).replace("&#x27;", "&#39;")
+
+    title = esc(rules.levels[level - 1].title)
+    assert f">{level}</td>" in current and title in current
+    assert "· you" in current and "XP to go" in ladder
+    assert f"All {len(rules.levels)} levels" in ladder
+    assert f"XP to <b>Lv {level + 1} · {esc(rules.levels[level].title)}</b>" in page
+    assert ladder.count("<tr") == 1 + 6 + 1 + len(rules.levels)  # near you, then all
+    profile = client.get("/profile").text
+    assert "XP needed" in profile and esc(rules.levels[-1].title) in profile

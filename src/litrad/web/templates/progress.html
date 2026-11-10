@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import ladder_table %}
 {% set active = "progress" %}
 {% block title %}Progress{% endblock %}
 {% block heading %}🏆 Progress &amp; XP{% endblock %}
@@ -14,7 +15,7 @@
     </div>
     <div>
       <div class="title">{{ level.title }}</div>
-      <p><b>{{ stats.xp }}</b> XP{% if level.next_floor %} · {{ level.next_floor - stats.xp }} XP to <b>{{ level.next_title }}</b>{% else %} · maximum level reached 🎉{% endif %}</p>
+      <p><b>{{ stats.xp }}</b> XP{% if level.next_floor %} · {{ "{:,}".format(level.next_floor - stats.xp) }} XP to <b>Lv {{ level.number + 1 }} · {{ level.next_title }}</b>{% else %} · maximum level reached 🎉{% endif %}</p>
       {% for hint in hints %}<div class="hint">💡 <span>{{ hint }}</span></div>{% endfor %}
     </div>
   </div>
@@ -93,12 +94,8 @@
 </div>
 
 <div class="card" style="margin-top:1rem">
-  <h2>🪜 Career ladder</h2>
-  <div class="row" style="gap:.4rem">
-    {% for step in levels %}
-    <span class="chip {{ 'queued' if loop.index == level.number }}" title="{{ step.xp }} XP">{{ step.icon }} {{ step.title }} <small>{{ step.xp }}</small></span>
-    {% endfor %}
-  </div>
+  <h2 id="ladder">🪜 Career ladder</h2>
+  {{ ladder_table(levels, level.number, stats.xp) }}
 </div>
 
 <h2 id="ledger" style="margin-top:1.6rem">💰 XP ledger</h2>
