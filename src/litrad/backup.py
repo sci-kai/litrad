@@ -164,27 +164,65 @@ def snapshot(database: Path, destination: Path) -> Path:
     return destination
 
 
-def rotate(directory: Path, keep: int) -> list[Path]:
-    """Delete the oldest snapshots and backup archives beyond ``keep`` each.
+# beyond ``backup.keep``: the newest backup of each of this many earlier weeks
+WEEKLY_KEEP = 8
+# safety copies made before a restore, rotated separately from the snapshots
+RESTORE_KEEP = 5
+_SNAPSHOT_NAME = re.compile(r"litrad_(\d{8}_\d{6})\.sqlite")
+_SAFETY_NAME = re.compile(r"litrad_(\d{8}_\d{6})_before_restore\.sqlite")
+_ARCHIVE_NAME = re.compile(r"litrad_backup_(\d{8}_\d{6})\.zip")
 
-    Saved profiles and "export everything" files are never deleted.
+
+def _stamped(directory: Path, pattern: re.Pattern) -> dict[str, list[Path]]:
+    """Files whose whole name matches ``pattern``, by time stamp (others are not ours)."""
+    found: dict[str, list[Path]] = {}
+    for path in Path(directory).glob("litrad_*"):
+        match = pattern.fullmatch(path.name)
+        if match and path.is_file():
+            try:
+                datetime.strptime(match.group(1), "%Y%m%d_%H%M%S")
+            except ValueError:
+                continue
+            found.setdefault(match.group(1), []).append(path)
+    return found
+
+
+def _to_delete(stamps: list[str], keep: int, weekly: int) -> list[str]:
+    """The newest ``keep`` stamps stay, then the newest of each of ``weekly`` older weeks."""
+    ordered = sorted(stamps, reverse=True)
+    weeks = {datetime.strptime(s, "%Y%m%d_%H%M%S").isocalendar()[:2] for s in ordered[:keep]}
+    extra, delete = 0, []
+    for old in ordered[keep:]:
+        week = datetime.strptime(old, "%Y%m%d_%H%M%S").isocalendar()[:2]
+        if week not in weeks and extra < weekly:
+            weeks.add(week)
+            extra += 1
+        else:
+            delete.append(old)
+    return delete
+
+
+def rotate(directory: Path, keep: int) -> list[Path]:
+    """Delete old snapshots and backup archives.
+
+    Of each kind the newest ``keep`` stay, plus the newest one of each of the
+    ``WEEKLY_KEEP`` weeks before them, so frequent starts never wipe out older
+    backups. ``*_before_restore.sqlite`` copies are kept apart (the newest
+    ``RESTORE_KEEP``). Only files named exactly like litrad's backups are
+    touched: saved profiles, exports and your own files are never deleted.
     """
     removed = []
-    snapshots = sorted(files_with(directory, SNAPSHOT_PREFIX, ".sqlite"), key=stamp_order)
-    for old in snapshots[: max(len(snapshots) - keep, 0)]:
-        old.unlink()
-        removed.append(old)
-    by_stamp: dict[str, list[Path]] = {}
-    for path in files_with(directory, BACKUP_ARCHIVE_PREFIX, ".zip"):
-        found = _STAMP.search(path.name)
-        if found:  # a file without a time stamp is not one of ours
-            by_stamp.setdefault(found.group(1), []).append(path)
-    stamps = sorted(by_stamp)
-    for old_stamp in stamps[: max(len(stamps) - keep, 0)]:
-        for old in sorted(by_stamp[old_stamp]):
-            old.unlink()
-            removed.append(old)
-    return removed
+    for pattern, count, weekly in (
+        (_SNAPSHOT_NAME, keep, WEEKLY_KEEP),
+        (_ARCHIVE_NAME, keep, WEEKLY_KEEP),
+        (_SAFETY_NAME, RESTORE_KEEP, 0),
+    ):
+        by_stamp = _stamped(directory, pattern)
+        for old_stamp in _to_delete(list(by_stamp), count, weekly):
+            for old in sorted(by_stamp[old_stamp]):
+                old.unlink()
+                removed.append(old)
+    return sorted(removed)
 
 
 @dataclass
@@ -889,12 +927,24 @@ def backup_targets(base: Config) -> list[tuple[str, Config]]:
     return [(info.slug, target(info.slug)) for info in profiles.list_profiles(base)]
 
 
-def backup_all(base: Config, log=print) -> int:
-    """Back up every profile; returns the number of failures."""
+def backup_due(cfg: Config, hours: float, moment: datetime | None = None) -> bool:
+    """Whether the newest backup of this profile is at least ``hours`` old (or missing)."""
+    latest = latest_backup(cfg)
+    moment = moment or now()
+    return latest is None or latest > moment or (moment - latest).total_seconds() >= hours * 3600
+
+
+def backup_all(base: Config, log=print, due_hours: float | None = None) -> int:
+    """Back up every profile; returns the number of failures.
+
+    ``due_hours``: only profiles whose newest backup is at least this old.
+    """
     from litrad.db import init_db
 
     failures = 0
     for label, cfg in backup_targets(base):
+        if due_hours is not None and not backup_due(cfg, due_hours):
+            continue
         engine = init_db(cfg.paths.database)
         try:
             with Session(engine) as session:
@@ -922,8 +972,16 @@ def profile_settings(cfg: Config) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
+# how often the backup thread checks whether a profile's backup is due (seconds)
+CHECK_SECONDS = 3600
+
+
 def backup_loop(config_path: Path, stop, log) -> None:
-    """Back up all profiles now and then every ``backup.interval_hours``."""
+    """Back up each profile whose newest backup is ``backup.interval_hours`` old.
+
+    Checked at start and then hourly: restarting the server does not add a
+    backup, and no profile goes much longer than the interval without one.
+    """
     from litrad.config import ConfigError, load_config
 
     while not stop.is_set():
@@ -931,12 +989,13 @@ def backup_loop(config_path: Path, stop, log) -> None:
             base = load_config(config_path)
         except ConfigError as error:  # e.g. while config.yaml is being edited
             log(f"WARNING: no backup, the configuration cannot be read: {error}")
-            stop.wait(3600)
+            stop.wait(CHECK_SECONDS)
             continue
-        if base.backup.interval_hours <= 0:
+        hours = base.backup.interval_hours
+        if hours <= 0:
             return
-        backup_all(base, log)
-        stop.wait(base.backup.interval_hours * 3600)
+        backup_all(base, log, due_hours=hours)
+        stop.wait(min(hours * 3600, CHECK_SECONDS))
 
 
 def start_backup_thread(config_path: Path, log=print):

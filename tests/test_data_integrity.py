@@ -9,7 +9,7 @@ import pytest
 from sqlmodel import Session, func, select
 
 from conftest import FakeApis, archive_data
-from litrad import libraries
+from litrad import backup, libraries
 from litrad.backup import (
     merge,
     restore,
@@ -279,16 +279,18 @@ def test_backups_over_months(db, cfg):
     cfg.backup.dir = cfg.paths.database.parent / "backups"
     session.add(Paper(title="x"))
     session.commit()
-    for day in range(10):
+    for day in range(15):
         run_backup(cfg, session, moment=AT + timedelta(days=30 * day))
     files = sorted(p.name for p in cfg.backup.dir.iterdir())
-    assert len(files) == 6, files
-    assert files[-1] == "litrad_backup_20261002_090000.zip"
+    # the 3 newest of each kind and the newest of each of 8 weeks before them
+    assert len(files) == 2 * (3 + backup.WEEKLY_KEEP), files
+    assert files[-1] == f"litrad_backup_{backup.stamp(AT + timedelta(days=30 * 14))}.zip"
+    assert f"litrad_backup_{backup.stamp(AT + timedelta(days=30 * 3))}.zip" not in files
     assert not [p for p in cfg.backup.dir.iterdir() if p.name.startswith(".")]
 
 
-def test_rotation_by_time_includes_restore_safety_copies(tmp_path):
-    """Saved profiles are never rotated; safety copies of restores age like snapshots."""
+def test_rotation_keeps_restore_safety_copies_apart(tmp_path):
+    """Saved profiles are never rotated; safety copies of restores are rotated apart."""
     for day in range(1, 6):
         (tmp_path / f"litrad_2026010{day}_070000.sqlite").write_text("x")
         (tmp_path / f"litrad_backup_2026010{day}_070000.zip").write_text("x")
@@ -297,6 +299,8 @@ def test_rotation_by_time_includes_restore_safety_copies(tmp_path):
     (tmp_path / "litrad_profile_kai_20260101_070000.zip").write_text("x")
     rotate(tmp_path, 2)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "litrad_20260101_080000_before_restore.sqlite",
+        "litrad_20260104_070000.sqlite",
         "litrad_20260105_070000.sqlite",
         "litrad_20260105_080000_before_restore.sqlite",
         "litrad_backup_20260104_070000.zip",

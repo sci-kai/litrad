@@ -1428,8 +1428,8 @@ Formulas: [How papers are recommended](#5-how-papers-are-recommended).
 | `queue.max_size` | 5 | maximum queue length (1–20); keep it small |
 | `game.*` | see [Gamification](#rules-you-can-set-defaults) | defaults for the **next** profile; copied and locked when a profile is created (easier to set on the welcome screen) |
 | `backup.dir` | `data/backups` | snapshots and archives, one subfolder per profile; a cloud-synced folder is ideal |
-| `backup.keep` | 14 | snapshots (and exports) to keep |
-| `backup.interval_hours` | 24 | `serve` backs up at start and then every N hours; 0 = off |
+| `backup.keep` | 14 | newest snapshots (and backup archives) to keep, plus one of each of the 8 weeks before them |
+| `backup.interval_hours` | 24 | `serve` backs up a profile whose newest backup is N hours old (checked at start and hourly); 0 = off |
 
 ### `web`, `llm`, `schedule`
 
@@ -1486,7 +1486,9 @@ All paths are settings, so everything can live in one folder of your choice.
      interval_hours: 24
    ```
 
-   While `serve` runs it backs up every profile at start and every 24 h.
+   While `serve` runs it checks at start and then hourly, and backs up
+   every profile whose newest backup is 24 h old (restarting the server
+   adds no backup).
    Backups keep running even if a profile's `settings.yaml` or
    `config.yaml` is invalid (the problem is logged). On demand:
    `litrad backup` or **Back up now** under Settings → Data & backups.
@@ -1507,10 +1509,11 @@ Two files per backup, named with `YYYYMMDD_HHMMSS`:
 | `litrad_20261008_070000.sqlite` | complete database snapshot (SQLite online backup API, consistent while the server writes, integrity-checked) | `litrad restore FILE` |
 | `litrad_backup_20261008_070000.zip` | the whole **profile** as an [archive](#the-archive-export-everything) (the same as *Export everything*): rules, settings, statuses, ratings, notes and note files, history, queue, XP, badges, recommendations, libraries, example choices | `profile load` (new profile), `import-all --into` (merge); `restore` takes the note files from it |
 
-The oldest files beyond `backup.keep` (default 14 of each kind) are
-deleted. Profiles you save yourself
-(`litrad_profile_<name>_<date>_<time>.zip`) and *Export everything*
-files are never deleted.
+Of each kind, the newest `backup.keep` (default 14) are kept, plus the
+newest one of each of the 8 calendar weeks before them; older ones are
+deleted. Only files named exactly like these two are rotated: profiles you
+save yourself (`litrad_profile_<name>_<date>_<time>.zip`), *Export
+everything* files and any other file in `backup.dir` are never deleted.
 
 ### Restoring
 
@@ -1520,8 +1523,8 @@ litrad restore /path/to/backups/litrad_20261008_070000.sqlite
 ```
 
 The current database is first saved as `…_before_restore.sqlite`, so a
-restore can be undone; these copies are rotated by time like other snapshots
-and count toward `backup.keep`. Before anything changes, the snapshot is
+restore can be undone; the newest 5 of these copies are kept, apart from
+the snapshots (ordinary backups never push them out). Before anything changes, the snapshot is
 checked: integrity, a litrad database at all, a schema version this
 version understands (a snapshot of a newer litrad is refused; an older
 1.x one is upgraded when it is next opened) and no rows referring to papers,

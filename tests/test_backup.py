@@ -22,6 +22,7 @@ from litrad.backup import (
     rotate,
     run_backup,
     snapshot,
+    stamp,
 )
 from litrad.config import Config
 from litrad.db import (
@@ -206,10 +207,36 @@ def test_restore_refuses_an_archive_with_a_hint(source, tmp_path):
 
 def test_rotate_ignores_other_files(tmp_path):
     (tmp_path / "notes.txt").write_text("keep me")
-    for i in range(3):
+    yours = ["litrad_mycopy.sqlite", "litrad_backup_mine.zip", "litrad_20260101_000000_x.sqlite"]
+    for name in yours:
+        (tmp_path / name).write_text("yours")
+    for i in range(1, 4):
         (tmp_path / f"litrad_2026010{i}_000000.sqlite").write_text("")
     removed = rotate(tmp_path, keep=1)
     assert len(removed) == 2 and (tmp_path / "notes.txt").exists()
+    assert all((tmp_path / name).exists() for name in yours)
+
+
+def test_rotation_keeps_weekly_copies_and_restore_copies(tmp_path):
+    start = datetime(2026, 1, 5, 7)  # a Monday
+    # one backup a day for 12 weeks, then 20 restarts within one day
+    moments = [start + timedelta(days=d) for d in range(84)]
+    moments += [moments[-1] + timedelta(minutes=10 * i) for i in range(1, 21)]
+    for moment in moments:
+        (tmp_path / f"litrad_{stamp(moment)}.sqlite").write_text("")
+        (tmp_path / f"litrad_backup_{stamp(moment)}.zip").write_text("")
+    for day in range(7):
+        moment = start + timedelta(days=day, hours=1)
+        (tmp_path / f"litrad_{stamp(moment)}_before_restore.sqlite").write_text("")
+    rotate(tmp_path, keep=14)
+    snapshots = sorted(p.name for p in tmp_path.glob("litrad_*.sqlite") if "restore" not in p.name)
+    archives = sorted(p.name for p in tmp_path.glob("litrad_backup_*.zip"))
+    assert len(snapshots) == len(archives) == 14 + 8
+    # the 14 newest, then the newest of each of 8 earlier weeks
+    weeks = {datetime.strptime(n[7:22], "%Y%m%d_%H%M%S").isocalendar()[1] for n in snapshots}
+    assert len(weeks) == 9 and snapshots[-1] == f"litrad_{stamp(moments[-1])}.sqlite"
+    safety = sorted(p.name for p in tmp_path.glob("*_before_restore.sqlite"))
+    assert len(safety) == 5 and safety[-1].startswith("litrad_20260111")
 
 
 def test_latest_backup_without_backups(tmp_path):
@@ -392,12 +419,29 @@ def test_backup_loop_backs_up_and_survives_errors(tmp_path, monkeypatch):
 
     backup_loop(path, OneShot(), messages.append)
     assert messages[0].startswith("backup written")
+    backups = sorted((tmp_path / "backups" / "tester").iterdir())
+
+    class Twice:  # two rounds: a restart soon after the last backup adds none
+        rounds = 0
+
+        def is_set(self):
+            return self.rounds >= 2
+
+        def wait(self, seconds):
+            assert seconds == 3600  # checked hourly
+            self.rounds += 1
+            return False
+
+    messages.clear()
+    backup_loop(path, Twice(), messages.append)
+    assert messages == [] and sorted((tmp_path / "backups" / "tester").iterdir()) == backups
 
     def broken(*_args, **_kwargs):
         raise BackupError("disk full")
 
+    for old in backups:
+        old.unlink()
     monkeypatch.setattr("litrad.backup.run_backup", broken)
-    messages.clear()
     backup_loop(path, OneShot(), messages.append)
     assert messages == ["WARNING: backup of tester failed: disk full"]
     assert not stop.is_set()

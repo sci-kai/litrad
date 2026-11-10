@@ -170,9 +170,9 @@ class Queue(_Base):
 class Backup(_Base):
     # put this in a cloud-synced folder (Nextcloud, Dropbox, Syncthing, rclone mount ...)
     dir: Path = Path("data/backups")
-    # number of snapshots (and archives) to keep
+    # number of snapshots (and archives) to keep, plus one per week of 8 earlier weeks
     keep: int = Field(14, ge=1, le=1000)
-    # the web server makes a backup at start and then every this many hours (0 = off)
+    # the web server backs up a profile whose newest backup is this many hours old (0 = off)
     interval_hours: float = Field(24, ge=0)
 
 

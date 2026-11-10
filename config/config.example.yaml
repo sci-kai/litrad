@@ -102,8 +102,9 @@ backup:
   # consistent database snapshots + archives of everything (zip, open formats);
   # point this to a cloud-synced folder; the profiles (their databases) stay local
   dir: data/backups
+  # the newest N snapshots (and archives), plus one of each of the 8 weeks before
   keep: 14
-  # `litrad serve` backs up at start and then every N hours (0 = off)
+  # `litrad serve` backs up a profile whose newest backup is N hours old (0 = off)
   interval_hours: 24
 
 llm:

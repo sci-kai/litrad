@@ -83,7 +83,10 @@ of every earlier 1.x version.
   and written all or nothing, or only the consistent part on request
   (`litrad import-all`).
 - Automatic backups while the web server runs: a database snapshot and an
-  archive, rotated; `litrad backup`, `litrad restore`, `litrad check`.
+  archive when the newest backup is `backup.interval_hours` old (restarts
+  add none), rotated to the newest 14 plus one per week for 8 weeks; only
+  litrad's own backup files are ever deleted; `litrad backup`,
+  `litrad restore`, `litrad check`.
 
 **Running litrad**
 
