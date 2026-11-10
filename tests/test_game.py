@@ -440,3 +440,26 @@ def test_personal_bests_and_hints(db):
 def test_rules_reject_inf_and_nan(value):
     with pytest.raises(ValidationError):
         GameRules.model_validate({"cheese_bonus": value})
+
+
+def test_bonuses_set_to_zero_xp_still_count_for_badges(cfg):
+    cfg.game = GameRules(classic_xp=0, hot_xp=0, reflection_xp=0, inbox_zero_xp=0, quest_xp=0)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        paper = add_paper(
+            session,
+            "Classic and new",
+            citation_percentile=99.5,
+            pub_date=MONDAY.date() - timedelta(days=3),
+        )
+        queue_add(session, cfg, paper)
+        record_reading(session, cfg, paper, ReadStatus.read, note="x" * 150, at=MONDAY)
+        record_reading(session, cfg, add_paper(session, "Second"), ReadStatus.skimmed, at=MONDAY)
+        current = stats(session, MONDAY.date(), cfg.game)
+        for stat in ("classics", "hot", "reflections", "inbox_zero", "quests"):
+            assert current[stat] == 1, stat
+        zero = session.exec(select(XpEvent).where(XpEvent.points == 0)).all()
+        assert {e.kind for e in zero} == {"classic", "hot", "reflection", "inbox_zero", "quest"}
+        codes = set(session.exec(select(Achievement.code)).all())
+        assert {"inbox_zero", "questing"} <= codes
+    engine.dispose()

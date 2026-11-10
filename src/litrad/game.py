@@ -246,6 +246,10 @@ def grade(progress: dict, week_over: bool) -> tuple[str, str]:
     return ("-", "Rest week") if week_over else ("-", "Nothing read yet this week")
 
 
+# bonuses that badges count (``stats``): recorded even when the rules give them 0 XP
+COUNTED_KINDS = frozenset({"classic", "hot", "reflection", "inbox_zero", "quest"})
+
+
 def _count_kind(session: Session, kind: str) -> int:
     return session.exec(select(func.count()).select_from(XpEvent).where(XpEvent.kind == kind)).one()
 
@@ -466,7 +470,8 @@ def award_reading(
     today = at.date()
 
     def add(points: int, kind: str, reason: str, paper_id: int | None = paper.id):
-        if points:
+        # a bonus set to 0 XP is still recorded: badges count these events
+        if points or kind in COUNTED_KINDS:
             events.append(
                 XpEvent(paper_id=paper_id, points=points, kind=kind, reason=reason, at=at)
             )
@@ -534,7 +539,7 @@ def award_reading(
 
     progress = week_progress(session, rules, today)
     quest = f"Weekly quest {progress['week_start'].isoformat()}"
-    if progress["done"] and rules.quest_xp and not _already(session, "quest", reason=quest):
+    if progress["done"] and not _already(session, "quest", reason=quest):
         event = XpEvent(points=rules.quest_xp, kind="quest", reason=quest, at=at)
         session.add(event)
         events.append(event)
