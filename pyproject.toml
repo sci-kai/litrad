@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "litrad"
-version = "0.2.0-dev"
+version = "1.0.0-rc.1"
 description = "litrad, the Literature Radar Game: paper recommendations, a reading queue and a reading game on top of a Paperpile library"
 readme = "README.md"
 license = "LicenseRef-MIT-Commons-Clause"

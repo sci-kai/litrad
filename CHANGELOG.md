@@ -3,7 +3,7 @@
 All notable changes are listed here. Versions follow
 [semantic versioning](https://semver.org); dates are ISO 8601.
 
-## 1.0.0-rc.1 (2026-11-09)
+## 1.0.0-rc.1 (2026-11-10)
 
 The first release candidate of litrad 1.0, the Literature Radar Game. From
 1.0 on, every 1.x version reads and upgrades the data, settings and archives

@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "litrad: The Literature Radar Game"
 abstract: "Paper recommendations, a reading queue and a reading game on top of your reference-manager libraries."
-version: "0.2.0-dev"
-date-released: "2026-10-09"
+version: "1.0.0-rc.1"
+date-released: "2026-11-10"
 license-url: "https://commonsclause.com"
 authors:
   - family-names: Horny
