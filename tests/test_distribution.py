@@ -198,3 +198,18 @@ def test_workflows_are_valid_yaml_with_the_needed_permissions():
     assert docker["jobs"]["test"]["strategy"]["matrix"] == matrix
     build = next(s for s in docker["jobs"]["image"]["steps"] if "build-push" in s.get("uses", ""))
     assert build["with"]["platforms"] == "linux/amd64,linux/arm64"
+
+
+def test_development_status_matches_the_version():
+    from packaging.version import Version
+
+    project = tomllib.loads((REPO / "pyproject.toml").read_text())["project"]
+    status = [c for c in project["classifiers"] if c.startswith("Development Status")]
+    version = Version(project["version"])
+    expected = "4 - Beta" if version.is_prerelease else "5 - Production/Stable"
+    assert status == [f"Development Status :: {expected}"]
+
+
+def test_desktop_docs_warn_about_other_local_users():
+    text = (REPO / "docs" / "documentation.md").read_text(encoding="utf-8")
+    assert "anyone logged in to this computer" in text and "litrad set-password" in text

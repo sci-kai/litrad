@@ -63,8 +63,11 @@ first time:
 starts on this computer only (`http://127.0.0.1:47290/`, another free port
 if that one is taken) and opens it in your default browser, where you create
 your profile ([step 5](#5-create-your-profile-and-import-your-library)).
-Nothing is reachable from other computers. Starting it again while it runs
-just opens the browser on the running one.
+Nothing is reachable from other computers. Without a password, however,
+anyone logged in to this computer (another user account, too) can open
+that address while litrad runs; on a shared computer set one with
+`litrad set-password`. Starting it again while it runs just opens the
+browser on the running one.
 
 **Quit:** **⏻ Quit** at the bottom of the sidebar (or on the welcome page).
 Closing the browser tab does not stop litrad; started from a terminal,
