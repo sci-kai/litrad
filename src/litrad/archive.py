@@ -382,7 +382,7 @@ def collect(session: Session, cfg: Config, settings_text: str | None = None) -> 
             "xp_total": balance,
         }
     )
-    files[SETTINGS] = (settings_text or "").encode("utf-8")
+    files[SETTINGS] = _without_paths(settings_text or "").encode("utf-8")
     log = history.rows(session, history.HistoryFilter(sort="first", dismissed=True))
     files["reading_log.tsv"] = history.to_tsv(history.entries(session, log)).encode("utf-8")
     files["xp_ledger.tsv"] = _ledger_tsv(ledger, titles).encode("utf-8")
@@ -438,6 +438,20 @@ class ExportResult:
     path: Path
     counts: dict
     size: int
+
+
+def _without_paths(text: str) -> str:
+    """settings.yaml without ``paths``: an archive holds no file paths of this machine."""
+    import yaml
+
+    try:
+        data = yaml.safe_load(text) if text.strip() else None
+    except yaml.YAMLError:
+        return text  # the archive check reports it
+    if not isinstance(data, dict) or "paths" not in data:
+        return text
+    data.pop("paths")
+    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True) if data else ""
 
 
 def export_archive(
@@ -507,7 +521,7 @@ FILE_DOCS = {
     "profile.json": "The profile: `name`, `created_at`, the locked game `rules`, their "
     "`fingerprint`, the `app_version` that created it; `xp_total`.",
     "settings.yaml": "The profile's settings (topics, excluded terms, selection, sources, "
-    "queue, library, paths); paths are not taken over on import.",
+    "queue, library), without `paths`: no file paths of this machine are included.",
     "reading_log.tsv": "The reading log as a table for spreadsheets (as Reading → Read "
     "papers exports it). Not read on import.",
     "xp_ledger.tsv": "The XP ledger as a table for spreadsheets. Not read on import.",

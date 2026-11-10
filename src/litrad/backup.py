@@ -246,6 +246,8 @@ def settings_text(cfg: Config, settings: dict | None = None) -> str | None:
             settings = profile_settings(cfg)
         except (yaml.YAMLError, OSError, UnicodeDecodeError):
             return None
+    # no file paths of this machine (Paperpile export, Obsidian vault) in an archive
+    settings = {k: v for k, v in settings.items() if k != "paths"}
     if not settings:
         return None
     return yaml.safe_dump(settings, sort_keys=False, allow_unicode=True)

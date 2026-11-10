@@ -1646,7 +1646,7 @@ from `papers.json`.
 | `recommendations.json` | `batches`: `week_start`, `created_at`, `n_candidates`, `warnings`, `funnel`, `params`, `items` (`paper`, `rank`, `category`, `score`, `breakdown` with the evidence, `reason`) |
 | `example_choices.json` | `example_choices`: `paper`, `kind` (positive, negative), `action` (include, exclude), `at` |
 | `profile.json` | `profile` (`name`, `created_at`, locked `rules`, `fingerprint`, `app_version`) and `xp_total` |
-| `settings.yaml` | the profile's `settings.yaml` (topics, selection, sources, queue, library, paths) |
+| `settings.yaml` | the profile's `settings.yaml` (topics, selection, sources, queue, library), without `paths`: no file paths of your machine |
 | `reading_log.tsv`, `xp_ledger.tsv` | the reading log and the XP ledger as tables for spreadsheets (not read on import) |
 | `notes/…` | the [note files](#notes-and-obsidian) as they are, with `note_template.md` |
 | `schemas/*.schema.json` | the JSON Schemas |

@@ -901,3 +901,22 @@ def test_large_profile_export_and_import_in_acceptable_time(base, tmp_path):
         again = import_into(profiles.profile_config(base, result.slug), path, backup=False)
     assert result.merge.papers_created == 5000 and again.merge.papers_created == 0
     assert again.merge.readings_added == 0
+
+
+def test_exported_settings_contain_no_file_paths(base, tmp_path):
+    slug = profiles.create_profile(base, "Paths")
+    vault = tmp_path / "private vault"
+    vault.mkdir()
+    profiles.write_overlay(
+        base,
+        slug,
+        {
+            "topics": [{"name": "t", "queries": ["q"]}],
+            "paths": {"obsidian_vault": str(vault), "bibtex": str(tmp_path / "mine.bib")},
+        },
+    )
+    path = export(base, slug, tmp_path / "export.zip")
+    files = members(path)
+    settings = yaml.safe_load(files["settings.yaml"])
+    assert "paths" not in settings and settings["topics"][0]["name"] == "t"
+    assert not any(str(tmp_path).encode() in data for data in files.values())
