@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import os
 import sqlite3
+import stat
 from pathlib import Path
 
 import pytest
@@ -333,6 +335,20 @@ def test_special_characters_in_the_data_path(tmp_path, name):
     # nothing was created next to it or in the working directory
     assert sorted(p.name for p in folder.iterdir()) == ["litrad.sqlite"]
     assert sorted(p.name for p in tmp_path.iterdir()) == [name]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file modes")
+def test_new_databases_are_readable_only_by_you(tmp_path):
+    old = os.umask(0o022)
+    try:
+        engine = init_db(tmp_path / "new" / "litrad.sqlite")
+        with Session(engine) as session:
+            session.add(Paper(title="private"))
+            session.commit()
+        engine.dispose()
+    finally:
+        os.umask(old)
+    assert stat.S_IMODE((tmp_path / "new" / "litrad.sqlite").stat().st_mode) == 0o600
 
 
 def test_readonly_uri_quotes_windows_paths():

@@ -35,7 +35,9 @@ def update_yaml(path: Path, updates: dict) -> None:
     """
     text = updated_text(path.read_text(encoding="utf-8") if path.exists() else "", updates)
     if path.exists():
-        shutil.copy2(path, path.with_name(path.name + ".bak"))
+        backup = path.with_name(path.name + ".bak")
+        shutil.copy2(path, backup)
+        backup.chmod(0o600)  # like the file itself: password hash, API keys
     atomic_write_text(path, text)
 
 

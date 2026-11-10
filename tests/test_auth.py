@@ -1,3 +1,4 @@
+import os
 import stat
 
 import pytest
@@ -168,6 +169,9 @@ def test_set_password_keeps_comments(tmp_path):
     stored = load_config(path).web.password_hash
     assert verify_password("lab-meeting-42", stored)
     assert path.with_name("config.yaml.bak").exists()
+    if os.name == "posix":  # the password hash: readable only by you
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(path.with_name("config.yaml.bak").stat().st_mode) == 0o600
 
     result = runner.invoke(cli.app, ["set-password", "-c", str(path)], input="short\nshort\n")
     assert result.exit_code == 1 and "at least 8" in result.stdout

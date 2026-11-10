@@ -1,5 +1,7 @@
 """Where the config file and the data are found (litrad.locations)."""
 
+import os
+import stat
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
@@ -76,6 +78,8 @@ def test_first_run_creates_the_user_config(tmp_path):
     assert cfg.backup.dir == data / "backups"
     # comments of the example are kept
     assert "# one folder per profile" in choice.path.read_text(encoding="utf-8")
+    if os.name == "posix":  # API keys and the password hash go here
+        assert stat.S_IMODE(choice.path.stat().st_mode) == 0o600
     # the second run uses it without creating anything
     assert locations.locate_config(None, announce=messages.append).rule == "user"
     assert len(messages) == 1

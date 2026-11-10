@@ -78,7 +78,11 @@ def stamp(moment: datetime) -> str:
 
 
 def atomic_write_text(path: Path, text: str) -> None:
-    """Write via a temporary file and rename, so a crash never leaves half a file."""
+    """Write via a temporary file and rename, so a crash never leaves half a file.
+
+    The file is readable only by you (mode 0600 from ``mkstemp``): config.yaml
+    holds the password hash and API keys.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:

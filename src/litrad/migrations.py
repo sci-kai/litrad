@@ -177,6 +177,16 @@ def snapshot_path(path: Path, old: int, moment: datetime | None = None) -> Path:
     return Path(path).parent / BACKUP_FOLDER / name
 
 
+def _create_private(path: Path) -> None:
+    """An empty database file readable only by you (notes, ratings; POSIX mode 0600)."""
+    import os
+
+    try:
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+    except FileExistsError:  # created meanwhile by another process
+        pass
+
+
 def migrate(path: Path, steps: tuple[Step, ...] | None = None) -> MigrationResult:
     """Bring the database at ``path`` to ``SCHEMA_VERSION`` (see the module doc)."""
     from litrad.backup import snapshot
@@ -193,6 +203,8 @@ def migrate(path: Path, steps: tuple[Step, ...] | None = None) -> MigrationResul
     if version == SCHEMA_VERSION:
         return result
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        _create_private(path)
     engine = _engine(path)
     try:
         if not has_tables:
