@@ -1,6 +1,5 @@
 """Several profiles side by side: folders, settings, the welcome screen and the CLI."""
 
-import json
 import zipfile
 from datetime import date, datetime, timedelta
 
@@ -11,9 +10,9 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from conftest import SAMPLE_BIB, enter_profile, profile_cfg, rules_form
-from litrad import profiles
-from litrad.backup import BackupError, export_progress
+from conftest import enter_profile, profile_cfg, rules_form
+from litrad import archive, profiles
+from litrad.backup import save_profile_archive
 from litrad.config import ConfigError, load_config
 from litrad.db import Paper, Profile, QueueItem, RecommendationBatch, init_db
 from litrad.profile import profile_rules
@@ -25,8 +24,6 @@ runner = CliRunner()
 
 CONFIG = """\
 paths:
-  bibtex: {bib}
-  database: {db}
   cache_dir: {cache}
 topics:
   - name: evo
@@ -41,29 +38,13 @@ backup:
 @pytest.fixture
 def config_path(tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(
-        CONFIG.format(
-            bib=SAMPLE_BIB,
-            db=tmp_path / "legacy.sqlite",
-            cache=tmp_path / "cache",
-            backups=tmp_path / "backups",
-        )
-    )
+    path.write_text(CONFIG.format(cache=tmp_path / "cache", backups=tmp_path / "backups"))
     return path
 
 
 @pytest.fixture
 def base(config_path):
     return load_config(config_path)
-
-
-def legacy_data(base, title="Old library paper"):
-    """A database from before profiles existed."""
-    engine = init_db(base.paths.database)
-    with Session(engine) as session:
-        session.add(Paper(title=title, doi="10.1/old", in_library=True))
-        session.commit()
-    engine.dispose()
 
 
 def stored(session, title: str) -> Paper:
@@ -180,24 +161,7 @@ def test_current_profile(base):
 # --- existing data and saved files --------------------------------------------------------
 
 
-def test_adopt_existing_data(base):
-    assert profiles.legacy_available(base) is None  # nothing there
-    legacy_data(base)
-    info = profiles.legacy_available(base)
-    assert info["library"] == 1 and info["readings"] == 0
-    slug = profiles.adopt_legacy(base, "Kai")
-    cfg = profiles.profile_config(base, slug)
-    assert papers(cfg) == ["Old library paper"]
-    # topics come along; the Paperpile export keeps being read where it is
-    assert [t.name for t in cfg.topics] == ["evo"] and cfg.topics[0].mesh_terms
-    assert cfg.excluded_terms == ["mouse"] and cfg.paths.bibtex == SAMPLE_BIB
-    assert profiles.legacy_available(base) is None  # offered once
-    assert papers(base) == ["Old library paper"]  # the original stays
-    with pytest.raises(profiles.ProfilesError, match="no existing data"):
-        profiles.adopt_legacy(base, "Again")
-
-
-def test_load_a_saved_profile_as_a_new_one(base):
+def test_load_a_saved_profile_as_a_new_one(base, tmp_path):
     slug = profiles.create_profile(base, "Ada")
     profiles.write_overlay(
         base,
@@ -208,17 +172,13 @@ def test_load_a_saved_profile_as_a_new_one(base):
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         queue_add(session, cfg, stored(session, "Queued"))
-        data = export_progress(session, settings=profiles.overlay(base, slug))
+        saved = save_profile_archive(session, cfg, tmp_path, settings=profiles.overlay(base, slug))
     engine.dispose()
-    copy = profiles.import_profile_file(base, data, name="Ada on the laptop")
+    copy = archive.import_new(base, saved, name="Ada on the laptop").slug
     copied = profiles.profile_config(base, copy)
     assert profiles.describe(base, copy).name == "Ada on the laptop"
     assert "Queued" in papers(copied) and [t.name for t in copied.topics] == ["t"]
     assert copied.paths.bibtex.name == "library.bib"  # paths of another machine are dropped
-    data["profile"]["name"] = "Edited by hand"
-    with pytest.raises(BackupError, match="modified"):
-        profiles.import_profile_file(base, data, name="Tampered")
-    assert not profiles.exists(base, "tampered")
 
 
 # --- web: choosing a profile --------------------------------------------------------------
@@ -236,12 +196,12 @@ def test_nothing_without_a_profile(client):
     assert client.post("/queue/add", data={"title": "x"}).status_code == 401
     page = client.get("/").text
     assert "Create a new profile" in page and "Load a saved profile" in page
-    assert "Continue with your profile" not in page and "EXISTING DATA" not in page
+    assert "Continue with your profile" not in page
     assert client.get("/static/app.css").status_code == 200
 
 
 def test_forged_profile_cookie_is_ignored(client):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     client.cookies.set(PROFILE_COOKIE, "ada.0000")
     assert client.get("/", follow_redirects=False).headers["location"] == "/welcome"
 
@@ -256,12 +216,12 @@ def test_invalid_rules_create_nothing(client, base):
 
 
 def test_profiles_are_separate(client, config_path):
-    enter_profile(client, "Ada", adopt=False, xp_read="55")
+    enter_profile(client, "Ada", xp_read="55")
     client.post("/queue/add", data={"title": "Ada's paper"})
     client.post("/papers/1/read", data={"level": "read"})
     page = client.get("/").text
     assert "Ada" in page and "55" in page
-    enter_profile(client, "Grace", adopt=False)
+    enter_profile(client, "Grace")
     queue = client.get("/queue").text
     assert "Grace" in queue and "Ada&#39;s paper" not in queue and "Inbox zero" in queue
     # switching back
@@ -274,20 +234,9 @@ def test_profiles_are_separate(client, config_path):
     assert "does not exist" in client.post("/welcome/select", data={"slug": "nobody"}).text
 
 
-def test_adopt_existing_data_in_the_browser(client, base):
-    legacy_data(base)
-    page = client.get("/welcome").text
-    assert "EXISTING DATA FOUND" in page and "1 library papers" in page
-    enter_profile(client, "Kai")
-    assert "Old library paper" in client.get("/library/1").text
-    assert "EXISTING DATA FOUND" not in client.get("/welcome").text
-
-
 def test_load_profile_in_the_browser(client, config_path, tmp_path):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     client.post("/queue/add", data={"title": "Saved paper"})
-    download = client.get("/profile/download")
-    assert download.json()["settings"]["topics"] == []
     saved = client.post("/profile/save", follow_redirects=True)
     assert "Profile saved" in saved.text
     saves = list((tmp_path / "backups/ada").glob("litrad_profile_ada_*.zip"))
@@ -307,43 +256,34 @@ def test_load_profile_in_the_browser(client, config_path, tmp_path):
         follow_redirects=True,
     )
     assert "Loaded profile Ada upload" in uploaded.text
-    client.post("/welcome/leave")
-    response = client.post(
-        "/welcome/load",
-        data={"name": "Ada copy"},
-        files={"file": ("ada.json", download.content)},
-        follow_redirects=True,
-    )
-    assert "Loaded profile Ada copy" in response.text
     assert "Saved paper" in client.get("/queue").text
     refused = client.post("/welcome/load", data={}, follow_redirects=True)
     assert "Choose a saved profile" in refused.text
     broken = client.post(
-        "/welcome/load", files={"file": ("x.json", b"{nope")}, follow_redirects=True
+        "/welcome/load", files={"file": ("x.zip", b"PK\x03\x04nope")}, follow_redirects=True
     )
     assert "Not loaded" in broken.text
 
 
 def test_profile_page(client):
-    enter_profile(client, "Ada", adopt=False, xp_read="55")
-    enter_profile(client, "Grace", adopt=False)
+    enter_profile(client, "Ada", xp_read="55")
+    enter_profile(client, "Grace")
     page = client.get("/profile").text
     assert "RULES LOCKED" in page and "Grace" in page and "Ada" in page  # Ada: other profile
     assert "data/profiles/grace" in page and "Switch profile" in page
     compare = client.post(
-        "/profile/compare", files={"file": ("me.json", client.get("/profile/download").content)}
+        "/profile/compare", files={"file": ("me.zip", client.get("/profile/export-all").content)}
     )
-    assert "same rules" in compare.text and "unmodified" in compare.text
-    # the removed actions are gone
-    for url in ("/profile/start", "/profile/load", "/profile/reset"):
-        assert client.post(url).status_code in (404, 405)
+    assert "same rules" in compare.text
+    refused = client.post("/profile/compare", files={"file": ("me.json", b"{}")})
+    assert "not a zip archive" in refused.text
 
 
 # --- web: topics, reminders and merged pages --------------------------------------------------
 
 
 def test_topics_are_asked_for_first(client, config_path):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     page = client.get("/recommendations").text
     assert "What are you interested in?" in page and "Skip: library only" in page
     bad = {"topic_name": "evo", "topic_weight": "lots", "topic_queries": "q"}
@@ -364,7 +304,7 @@ def test_topics_are_asked_for_first(client, config_path):
 
 
 def test_topics_can_be_skipped(client, config_path):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     page = client.post("/recommendations/topics/skip", follow_redirects=True).text
     assert "library" in page and "What are you interested in" not in page
     assert profile_cfg(config_path).topics == []
@@ -380,7 +320,7 @@ def add_batch(config_path, days_ago: int):
 
 
 def test_reminder_for_new_recommendations(client, config_path):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     assert 'title="time for new recommendations"' in client.get("/queue").text
     assert "✨ No recommendations yet." in client.get("/").text
     add_batch(config_path, days_ago=2)
@@ -401,7 +341,7 @@ def test_reminder_for_new_recommendations(client, config_path):
 
 
 def test_old_pages_redirect(client):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
 
     def location(url):
         return client.get(url, follow_redirects=False).headers["location"]
@@ -415,7 +355,7 @@ def test_old_pages_redirect(client):
 
 
 def test_merged_pages(client):
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     client.post("/queue/add", data={"title": "T"})
     client.post("/papers/1/read", data={"level": "read"})
     dashboard = client.get("/").text
@@ -478,9 +418,10 @@ def test_cli_profiles(config_path, plain_console, tmp_path):
     assert isinstance(result.exception, ConfigError) and "No profile 'nobody'" in str(
         result.exception
     )
-    target = tmp_path / "grace.json"
+    target = tmp_path / "grace.zip"
     assert run("profile", "save", str(target), profile="Grace").exit_code == 0
-    assert json.loads(target.read_text())["settings"]["topics"] == []
+    with zipfile.ZipFile(target) as handle:
+        assert yaml.safe_load(handle.read("settings.yaml"))["topics"] == []
     result = run("profile", "load", str(target), "--name", "Grace 2")
     assert result.exit_code == 0 and "Created 'Grace 2'" in result.stdout
     assert "Grace's paper" in run("queue").stdout  # the loaded profile is current now
@@ -490,19 +431,6 @@ def test_cli_profiles(config_path, plain_console, tmp_path):
     (tmp_path / "data/profiles/.current").unlink()
     result = run("queue")
     assert isinstance(result.exception, ConfigError) and "several profiles" in str(result.exception)
-
-
-def test_cli_without_profiles_uses_existing_data(config_path, base, plain_console):
-    legacy_data(base)
-    result = runner.invoke(cli.app, ["status", "-c", str(config_path)])
-    assert result.exit_code == 0 and "1" in result.stdout
-    result = runner.invoke(cli.app, ["profile", "list", "-c", str(config_path)])
-    assert "profile adopt NAME" in result.stdout
-    result = runner.invoke(cli.app, ["profile", "adopt", "Kai", "--yes", "-c", str(config_path)])
-    assert result.exit_code == 0 and "Created 'Kai'" in result.stdout
-    assert papers(profile_cfg(config_path)) == ["Old library paper"]
-    result = runner.invoke(cli.app, ["profile", "adopt", "Again", "--yes", "-c", str(config_path)])
-    assert result.exit_code == 1 and "no existing data" in result.stdout
 
 
 def test_cli_recommend_shows_the_latest_list(config_path, plain_console, monkeypatch):
@@ -524,19 +452,18 @@ def test_cli_recommend_shows_the_latest_list(config_path, plain_console, monkeyp
 def test_backup_all_profiles(base, tmp_path):
     from litrad.backup import backup_all
 
-    legacy_data(base)
     profiles.create_profile(base, "Ada")
     messages = []
     assert backup_all(base, messages.append) == 0
-    assert [m.split(":")[1].strip() for m in messages] == ["ada", "(no profile)"]
+    assert [m.split(":")[1].strip() for m in messages] == ["ada"]
     assert list((tmp_path / "backups/ada").glob("litrad_*.sqlite"))
     archives = sorted((tmp_path / "backups/ada").glob("litrad_backup_*.zip"))
     with zipfile.ZipFile(archives[-1]) as handle:
         assert yaml.safe_load(handle.read("settings.yaml"))["topics"] == []
-    profiles.adopt_legacy(base, "Kai")
+    profiles.create_profile(base, "Kai")
     messages.clear()
     backup_all(base, messages.append)
-    assert len(messages) == 2 and all("(no profile)" not in m for m in messages)
+    assert len(messages) == 2
 
 
 def test_queue_items_stay_in_their_profile(base):
@@ -577,13 +504,12 @@ def test_cli_save_load_compare_and_merge_archives(config_path, plain_console, tm
     assert saved.exit_code == 0, saved.output
     archive_file = next((tmp_path / "backups/ada").glob("litrad_profile_ada_*.zip"))
     assert zipfile.is_zipfile(archive_file)
-    legacy = tmp_path / "ada.json"
-    assert run("profile", "save", str(legacy), profile="ada").exit_code == 0
-    assert json.loads(legacy.read_text())["format"] == "litrad-progress"
+    exported = tmp_path / "ada.zip"
+    assert run("export-progress", str(exported), profile="ada").exit_code == 0
 
-    compared = run("profile", "compare", str(archive_file), str(legacy), profile="ada")
+    compared = run("profile", "compare", str(archive_file), str(exported), profile="ada")
     assert compared.exit_code == 0, compared.output
-    assert compared.stdout.count("same rules") == 3 and "unmodified" in compared.stdout
+    assert compared.stdout.count("same rules") == 3
 
     loaded = run("profile", "load", str(archive_file), "--name", "Ada copy")
     assert loaded.exit_code == 0, loaded.output
@@ -596,8 +522,8 @@ def test_cli_save_load_compare_and_merge_archives(config_path, plain_console, tm
 
 
 def test_loading_a_broken_file_fails_cleanly(config_path, plain_console, tmp_path, base):
-    """Not a dict, not UTF-8, not JSON: a message, no traceback, no profile folder."""
-    for name, raw in (("list.json", b"[1, 2]"), ("latin.json", b"\xff\xfe{"), ("x.json", b"{")):
+    """Not a zip, a broken zip, JSON: a message, no traceback, no profile folder."""
+    for name, raw in (("list.json", b"[1, 2]"), ("broken.zip", b"PK\x03\x04oops"), ("x.zip", b"{")):
         path = tmp_path / name
         path.write_bytes(raw)
         result = runner.invoke(cli.app, ["profile", "load", str(path), "-c", str(config_path)])

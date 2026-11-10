@@ -357,7 +357,6 @@ def ingest_library(
     That is the library whose source file it is, else "My library" (created
     if needed). For all libraries with a source file: ``refresh_libraries``.
     """
-    libraries.migrate(session, cfg)
     target = cfg.paths.bibtex.resolve()
     library = next(
         (lib for lib in libraries.all_libraries(session) if lib.source_path == str(target)),

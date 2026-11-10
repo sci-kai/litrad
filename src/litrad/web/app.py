@@ -30,7 +30,6 @@ import contextvars
 import csv
 import hmac
 import io
-import json
 import os
 import secrets
 import shutil
@@ -61,14 +60,11 @@ from litrad import __version__, archive, examples, export, history, libraries, p
 from litrad import notes as note_files
 from litrad.backup import (
     BackupError,
-    export_progress,
     latest_backup,
     profile_settings,
     run_backup,
     save_profile_archive,
     saved_files,
-    slug,
-    summarize,
     summarize_session,
 )
 from litrad.config import load_config
@@ -325,7 +321,7 @@ def create_app(
         return cfg, engine
 
     def secret() -> bytes:
-        return load_secret(base_config().paths.database.parent / "web_secret")
+        return load_secret(base_config().paths.profiles_dir.parent / "web_secret")
 
     def profile_cookie(slug: str) -> str:
         return f"{slug}.{sign_value(secret(), 'profile:' + slug)}"
@@ -581,14 +577,13 @@ def create_app(
 
     @app.get("/welcome", response_class=HTMLResponse)
     def welcome(request: Request):
-        """The first screen: choose, create, take over or load a profile."""
+        """The first screen: choose, create or load a profile."""
         base = base_config()
         return templates.TemplateResponse(
             request,
             "welcome.html",
             {
                 "profiles": profiles.list_profiles(base),
-                "legacy": profiles.legacy_available(base),
                 "saves": [(p, p.relative_to(base.backup.dir)) for p in all_saved_files(base)],
                 "rule_groups": RULE_GROUPS,
                 "form_rules": base.game,
@@ -604,16 +599,13 @@ def create_app(
             return error("/welcome", "That profile does not exist")
         return enter(slug)
 
-    async def _new_profile(request: Request, adopt: bool):
+    @app.post("/welcome/create")
+    async def welcome_create(request: Request):
         form = await request.form()
         base = base_config()
         try:
             rules = parse_rules_form(dict(form), base.game)
-            name = str(form.get("name", ""))
-            if adopt:
-                slug = profiles.adopt_legacy(base, name, rules)
-            else:
-                slug = profiles.create_profile(base, name, rules)
+            slug = profiles.create_profile(base, str(form.get("name", "")), rules)
         except (SettingsError, ProfilesError, ProfileError, BackupError) as exc:
             return error("/welcome", f"Not created: {friendly_error(exc)}")
         info = profiles.describe(base, slug)
@@ -628,14 +620,6 @@ def create_app(
                 f"(fingerprint {info.fingerprint}).",
             },
         )
-
-    @app.post("/welcome/create")
-    async def welcome_create(request: Request):
-        return await _new_profile(request, adopt=False)
-
-    @app.post("/welcome/adopt")
-    async def welcome_adopt(request: Request):
-        return await _new_profile(request, adopt=True)
 
     @app.post("/welcome/load")
     async def welcome_load(request: Request):
@@ -655,10 +639,7 @@ def create_app(
             if not uploads:
                 raise BackupError("Choose a saved profile or upload a file")
             name = str(form.get("name", "")).strip() or None
-            if "path" in uploads[0]:  # an archive
-                slug = archive.import_new(base, uploads[0]["path"], name).slug
-            else:
-                slug = profiles.import_profile_file(base, uploads[0]["data"], name)
+            slug = archive.import_new(base, uploads[0]["path"], name).slug
         except archive.ArchiveError as exc:
             return archive_problems(request, exc) or error("/welcome", f"Not loaded: {exc}")
         except (BackupError, ProfilesError, ValueError, OSError) as exc:
@@ -1471,7 +1452,6 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                libraries.migrate(session, cfg)
                 lists = examples.refresh(session, cfg)
                 session.commit()
                 queue = queue_items(session)
@@ -1497,7 +1477,6 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                libraries.migrate(session, cfg)
                 return render_import(
                     request, session, cfg, {"target": "existing" if to else "new", "library_id": to}
                 )
@@ -1555,7 +1534,6 @@ def create_app(
             tmp.write_bytes(raw)
             check = check_file(tmp, cfg.library.ignore_labels)
             with Session(engine) as session:
-                libraries.migrate(session, cfg)
                 try:
                     if fields["target"] == "new":
                         if not fields["name"]:
@@ -1646,7 +1624,6 @@ def create_app(
         cfg, engine = open_session()
         try:
             with Session(engine) as session:
-                libraries.migrate(session, cfg)
                 library = session.get(Library, library_id)
                 if library is None:
                     return error("/library", "That library does not exist")
@@ -2125,23 +2102,6 @@ def create_app(
         finally:
             engine.dispose()
 
-    @app.get("/profile/download")
-    def profile_download():
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                note_files.refresh_quietly(session, cfg)
-                data = export_progress(session, settings=profile_settings(cfg))
-            name = slug((data["profile"] or {}).get("name", "profile"))
-            filename = f"litrad_profile_{name}_{date.today().strftime('%Y%m%d')}.json"
-            return Response(
-                json.dumps(data, indent=1),
-                media_type="application/json",
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
-            )
-        finally:
-            engine.dispose()
-
     @app.get("/profile/export-all")
     def profile_export_all():
         """Everything of this profile as one zip archive (see Data formats)."""
@@ -2200,10 +2160,8 @@ def create_app(
         )
 
     def saved_entry(path: Path) -> dict:
-        """A saved file for loading or comparing: an archive by path, JSON by content."""
-        if archive.is_archive(path):
-            return {"name": path.name, "path": path}
-        return {"name": path.name, "data": json.loads(path.read_text("utf-8"))}
+        """A saved archive for loading or comparing."""
+        return {"name": path.name, "path": path}
 
     def remove_temporary(entries: list[dict]) -> None:
         for entry in entries:
@@ -2211,7 +2169,7 @@ def create_app(
                 Path(entry["path"]).unlink(missing_ok=True)
 
     async def read_upload(request: Request, field_name: str = "file") -> list[dict]:
-        """Uploaded profile files: JSON as ``data``, archives as a temporary ``path``."""
+        """Uploaded archives, each as a temporary ``path``."""
         form = await request.form()
         files = [f for f in form.getlist(field_name) if hasattr(f, "read")]
         result = []
@@ -2223,20 +2181,15 @@ def create_app(
             if len(raw) > MAX_UPLOAD:
                 remove_temporary(result)
                 raise BackupError(f"{upload.filename} is larger than {MAX_UPLOAD // 2**20} MB")
-            if raw.startswith(b"PK\x03\x04"):  # a zip archive
-                fd, name = tempfile.mkstemp(prefix="litrad-upload-", suffix=".zip")
-                with os.fdopen(fd, "wb") as handle:
-                    handle.write(raw)
-                result.append({"name": upload.filename, "path": Path(name), "temporary": True})
-                continue
-            try:
-                data = json.loads(raw)
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            if not raw.startswith(b"PK\x03\x04"):
                 remove_temporary(result)
-                raise BackupError(f"{upload.filename} is not a JSON or zip file") from exc
-            if not isinstance(data, dict):
-                raise BackupError(f"{upload.filename} is not a litrad profile file")
-            result.append({"name": upload.filename, "data": data})
+                raise BackupError(
+                    f"{upload.filename} is not a zip archive (save or export a profile first)"
+                )
+            fd, name = tempfile.mkstemp(prefix="litrad-upload-", suffix=".zip")
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(raw)
+            result.append({"name": upload.filename, "path": Path(name), "temporary": True})
         return result
 
     @app.get("/profile/compare", response_class=HTMLResponse)
@@ -2270,10 +2223,7 @@ def create_app(
                 problems = []
                 for entry in entries:
                     try:
-                        if "path" in entry:
-                            rows.append(archive.summarize_file(entry["path"], cfg, entry["name"]))
-                        else:
-                            rows.append(summarize(entry["data"], cfg, entry["name"]))
+                        rows.append(archive.summarize_file(entry["path"], cfg, entry["name"]))
                     except (BackupError, OSError) as exc:
                         problems.append(f"{entry['name']}: {exc}")
                 saves = [
@@ -2289,17 +2239,9 @@ def create_app(
             engine.dispose()
 
     def current_summary(session: Session, cfg) -> dict:
-        """The figures of ``summarize()`` for the open profile, read from its database.
-
-        ``summarize()`` first loads an export into a throw-away database, which
-        takes minutes for a profile with years of data.
-        """
+        """The comparison figures of the open profile, read from its database."""
         return summarize_session(
-            session,
-            cfg,
-            datetime.now().replace(microsecond=0),
-            label="current",
-            checksum_ok=True,
+            session, cfg, datetime.now().replace(microsecond=0), label="current"
         )
 
     @app.get("/settings", response_class=HTMLResponse)
@@ -2340,22 +2282,6 @@ def create_app(
                         "points": 0,
                     },
                 )
-        finally:
-            engine.dispose()
-
-    @app.get("/progress.json")
-    def progress_download():
-        cfg, engine = open_session()
-        try:
-            with Session(engine) as session:
-                note_files.refresh_quietly(session, cfg)
-                data = export_progress(session, settings=profile_settings(cfg))
-            name = f"litrad_progress_{date.today().strftime('%Y%m%d')}.json"
-            return Response(
-                json.dumps(data, indent=1),
-                media_type="application/json",
-                headers={"Content-Disposition": f"attachment; filename={name}"},
-            )
         finally:
             engine.dispose()
 

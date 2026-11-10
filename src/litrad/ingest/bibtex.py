@@ -29,7 +29,7 @@ class LatexDecoding(mw.LatexDecodingMiddleware):
     """bibtexparser's LaTeX decoding, but only for values that contain LaTeX.
 
     - Plain text (most abstracts) is kept as it is: decoding costs ~40 ms per
-      entry on a Raspberry Pi, i.e. minutes for a library of thousands.
+      entry on a small ARM board, i.e. minutes for a library of thousands.
     - A bare ``%`` or ``&`` (exports that do not escape them, e.g. "50% of
       patients" or a URL with ``%20``) stays text; pylatexenc would read ``%``
       as the start of a comment and drop the rest of the value.

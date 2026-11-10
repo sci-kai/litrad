@@ -50,7 +50,6 @@ def load_cfg(config: Path) -> Config:
 
     The profile is the one named with ``--profile``, else the current one
     (``litrad profile use``, the web UI, or the only profile there is).
-    Without any profiles, the data from before profiles existed is used.
     """
     from litrad import profiles
     from litrad.config import ConfigError
@@ -67,7 +66,10 @@ def load_cfg(config: Path) -> Config:
                         "There are several profiles. Choose one with --profile NAME or "
                         "'litrad profile use NAME' (list them: 'litrad profile list')."
                     )
-                return base
+                raise ConfigError(
+                    "There is no profile yet. Create one with 'litrad profile create NAME' "
+                    "or in the web UI ('litrad serve')."
+                )
         return profiles.profile_config(base, slug)
     except ValueError as error:  # ProfilesError, or invalid values in settings.yaml
         raise ConfigError(str(error)) from error
@@ -154,7 +156,6 @@ def where(
             ),
             ("Backups", cfg.backup.dir, "backup.dir"),
             ("Cache", cfg.paths.cache_dir, "paths.cache_dir"),
-            ("Data before profiles", cfg.paths.database, "paths.database"),
         ]
     else:
         rows.append(("Data folder", locations.user_data_dir(), "per-user data folder"))
@@ -179,7 +180,6 @@ def ingest(
     s2: bool = typer.Option(True, help="Fetch embeddings/TLDRs from Semantic Scholar"),
 ):
     """Update every library from its file (e.g. Paperpile's auto-export synced by rclone)."""
-    from litrad import libraries
     from litrad.ingest.pipeline import ingest_library, refresh_libraries
 
     cfg = load_cfg(config)
@@ -198,7 +198,6 @@ def ingest(
     http = make_http(cfg)
     try:
         with Session(engine) as session:
-            libraries.migrate(session, cfg)
             results = refresh_libraries(cfg, session, http, use_s2=s2)
             if not results:
                 if not cfg.paths.bibtex.exists():
@@ -290,7 +289,6 @@ def status(config: Path = ConfigOpt, top: int = typer.Option(10, help="Number of
     with Session(engine) as session:
         from litrad import libraries
 
-        libraries.migrate(session, cfg)
         rows = libraries.summaries(session)
     engine.dispose()
     if rows:

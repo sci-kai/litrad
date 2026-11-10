@@ -1,4 +1,3 @@
-import json
 import sqlite3
 import stat
 import threading
@@ -10,22 +9,19 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from conftest import enter_profile
+from conftest import archive_data, enter_profile, make_profile
 from litrad import libraries
 from litrad.backup import (
     BackupError,
     atomic_write_text,
     backup_loop,
-    checksum,
-    export_progress,
-    import_progress,
     integrity_ok,
     latest_backup,
+    merge,
     restore,
     rotate,
     run_backup,
     snapshot,
-    verify_checksum,
 )
 from litrad.config import Config
 from litrad.db import (
@@ -174,33 +170,27 @@ def test_run_backup_and_rotation(source):
     checked = archive.check_file(result.archive, cfg)
     assert not checked.report.errors
     assert checked.notes  # the note files are in the archive
-    assert result.progress == result.archive  # the name before 1.0
 
 
-def test_rotation_counts_legacy_and_new_backups_together(tmp_path):
-    """Backups from before 1.0 (progress JSON + notes zip) age out with the archives."""
-    for day in range(1, 4):
-        (tmp_path / f"litrad_progress_2026010{day}_070000.json").write_text("{}")
-        (tmp_path / f"litrad_notes_2026010{day}_070000.zip").write_text("")
-    for day in range(4, 6):
+def test_rotation_keeps_saved_profiles_and_exports(tmp_path):
+    for day in range(1, 6):
         (tmp_path / f"litrad_backup_2026010{day}_070000.zip").write_text("")
     (tmp_path / "litrad_export_kai_20260101_070000.zip").write_text("")  # yours
     (tmp_path / "litrad_profile_kai_20260101_070000.zip").write_text("")  # yours
     rotate(tmp_path, keep=3)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "litrad_backup_20260103_070000.zip",
         "litrad_backup_20260104_070000.zip",
         "litrad_backup_20260105_070000.zip",
         "litrad_export_kai_20260101_070000.zip",
-        "litrad_notes_20260103_070000.zip",
         "litrad_profile_kai_20260101_070000.zip",
-        "litrad_progress_20260103_070000.json",
     ]
 
 
-def test_latest_backup_reads_archives_and_legacy_files(tmp_path):
+def test_latest_backup_reads_the_archive_names(tmp_path):
     cfg = make_cfg(tmp_path)
     cfg.backup.dir.mkdir(parents=True)
-    (cfg.backup.dir / "litrad_progress_20261001_070000.json").write_text("{}")
+    (cfg.backup.dir / "litrad_backup_20261001_070000.zip").write_text("")
     assert latest_backup(cfg) == datetime(2026, 10, 1, 7)
     (cfg.backup.dir / "litrad_backup_20261002_070000.zip").write_text("")
     assert latest_backup(cfg) == datetime(2026, 10, 2, 7)
@@ -226,7 +216,7 @@ def test_latest_backup_without_backups(tmp_path):
     cfg = make_cfg(tmp_path)
     assert latest_backup(cfg) is None
     cfg.backup.dir.mkdir(parents=True)
-    (cfg.backup.dir / "litrad_progress_garbage.json").write_text("{}")
+    (cfg.backup.dir / "litrad_backup_garbage.zip").write_text("")
     assert latest_backup(cfg) is None
 
 
@@ -248,12 +238,10 @@ def test_atomic_write_keeps_old_file_on_failure(tmp_path, monkeypatch):
 
 
 def test_export_contents(source):
-    _, engine = source
+    cfg, engine = source
     with Session(engine) as session:
-        data = export_progress(session, AT)
-    assert data["format_version"] == 2 and data["exported_at"] == "2026-10-05T09:00:00"
+        data = archive_data(session, cfg)
     assert data["profile"]["name"] == "My reading journey"  # auto-started by the first read
-    assert verify_checksum(data) is True
     assert len(data["readings"]) == 3 and len(data["queue"]) == 1  # A left the queue
     assert {p["title"] for p in data["papers"].values()} == {
         "Clonal evolution",
@@ -262,17 +250,16 @@ def test_export_contents(source):
         "Queued paper",
     }
     assert data["achievements"][0]["code"] == "first_read"
-    json.dumps(data)  # serialisable
 
 
 def test_import_into_other_installation(source, target):
     cfg_a, engine_a = source
     cfg_b, engine_b = target
     with Session(engine_a) as session:
-        data = export_progress(session)
+        data = archive_data(session, cfg_a)
         xp_a = total_xp(session)
     with Session(engine_b) as session:
-        report = import_progress(session, cfg_b, data)
+        report = merge(session, cfg_b, data)
         assert report.papers_matched == 2 and report.papers_created == 2
         assert report.readings_added == 3 and report.queue_added == 1
         assert total_xp(session) == xp_a
@@ -287,25 +274,25 @@ def test_import_into_other_installation(source, target):
 
 
 def test_import_is_idempotent(source, target):
-    _, engine_a = source
+    cfg_a, engine_a = source
     cfg_b, engine_b = target
     with Session(engine_a) as session:
-        data = export_progress(session)
+        data = archive_data(session, cfg_a)
     with Session(engine_b) as session:
-        import_progress(session, cfg_b, data)
+        merge(session, cfg_b, data)
     first = counts(engine_b)
     with Session(engine_b) as session:
-        report = import_progress(session, cfg_b, data)
+        report = merge(session, cfg_b, data)
     assert counts(engine_b) == first
     assert report.readings_added == report.xp_added == report.events_added == 0
     assert report.papers_created == 0
 
 
 def test_import_merges_notes_and_newer_status_wins(source, target):
-    _, engine_a = source
+    cfg_a, engine_a = source
     cfg_b, engine_b = target
     with Session(engine_a) as session:
-        data = export_progress(session)
+        data = archive_data(session, cfg_a)
     with Session(engine_b) as session:
         a = session.exec(select(Paper).where(Paper.doi == "10.1/a")).one()
         later = AT + timedelta(days=1)
@@ -322,7 +309,7 @@ def test_import_merges_notes_and_newer_status_wins(source, target):
             )
         )
         session.commit()
-        report = import_progress(session, cfg_b, data)
+        report = merge(session, cfg_b, data)
         a_reading, b_reading = session.get(Reading, a.id), session.get(Reading, b.id)
     # A: the local entry is newer, so its status stays, but no note is lost
     assert a_reading.status == ReadStatus.read
@@ -333,7 +320,7 @@ def test_import_merges_notes_and_newer_status_wins(source, target):
 
 
 def test_import_respects_queue_limit(source, tmp_path):
-    _, engine_a = source
+    cfg_a, engine_a = source
     cfg_b = make_cfg(tmp_path, "c", queue={"max_size": 1})
     engine_b = init_db(cfg_b.paths.database)
     with Session(engine_b) as session:
@@ -341,42 +328,11 @@ def test_import_respects_queue_limit(source, tmp_path):
         session.commit()
         queue_add(session, cfg_b, session.exec(select(Paper)).one())
     with Session(engine_a) as session:
-        data = export_progress(session)
+        data = archive_data(session, cfg_a)
     with Session(engine_b) as session:
-        report = import_progress(session, cfg_b, data)
+        report = merge(session, cfg_b, data)
     assert report.queue_added == 0 and report.queue_skipped == ["Queued paper"]
     engine_b.dispose()
-
-
-@pytest.mark.parametrize(
-    "data, message",
-    [
-        ({"format": "something else"}, "Not a litrad progress export"),
-        ({"format": "litrad-progress", "format_version": 99}, "newer litrad"),
-        (
-            {
-                "format": "litrad-progress",
-                "papers": {},
-                "readings": [{"paper": "p1", "status": "read"}],
-            },
-            "Invalid progress file",
-        ),
-        (
-            {
-                "format": "litrad-progress",
-                "papers": {"p1": {"title": "X"}},
-                "readings": [{"paper": "p1", "status": "bogus"}],
-            },
-            "Invalid progress file",
-        ),
-    ],
-)
-def test_invalid_imports_change_nothing(target, data, message):
-    cfg_b, engine_b = target
-    before = counts(engine_b)
-    with Session(engine_b) as session, pytest.raises(BackupError, match=message):
-        import_progress(session, cfg_b, data)
-    assert counts(engine_b) == before
 
 
 # --- restore -------------------------------------------------------------------------
@@ -461,8 +417,8 @@ def test_backup_loop_disabled(tmp_path):
 def write_config(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  bibtex: x.bib\n  database: {tmp_path / 'db.sqlite'}\n"
-        f"  cache_dir: {tmp_path / 'cache'}\nbackup:\n  dir: {tmp_path / 'backups'}\n"
+        f"paths:\n  profiles_dir: {tmp_path / 'profiles'}\n  cache_dir: {tmp_path / 'cache'}\n"
+        f"backup:\n  dir: {tmp_path / 'backups'}\n"
     )
     return path
 
@@ -482,13 +438,14 @@ def test_cli_backup_export_import_check_restore(tmp_path, plain_console):
     path = write_config(tmp_path)
     c = ["-c", str(path)]
     result = runner.invoke(cli.app, ["check", *c])
-    assert result.exit_code == 1 and "does not exist yet" in result.stdout
+    assert "no profile yet" in str(result.exception)
     engine = init_db(tmp_path / "db.sqlite")
     with Session(engine) as session:
         session.add(Paper(title="P", doi="10.1/p"))
         session.add(Reading(paper_id=1, status=ReadStatus.read, notes="n"))
         session.commit()
     engine.dispose()
+    make_profile(path, database=tmp_path / "db.sqlite")
 
     result = runner.invoke(cli.app, ["check", *c])
     assert (
@@ -499,17 +456,17 @@ def test_cli_backup_export_import_check_restore(tmp_path, plain_console):
     result = runner.invoke(cli.app, ["check", *c])
     assert "Last backup" in result.stdout and "Integrity: ok" in result.stdout
 
-    export = tmp_path / "progress.json"
+    export = tmp_path / "progress.zip"
     assert runner.invoke(cli.app, ["export-progress", str(export), *c]).exit_code == 0
     result = runner.invoke(cli.app, ["import-progress", str(export), "--dry-run", *c])
     assert result.exit_code == 0 and "Dry run" in result.stdout
-    result = runner.invoke(cli.app, ["import-progress", str(tmp_path / "missing.json"), *c])
-    assert result.exit_code == 1 and "Cannot read" in result.stdout
+    result = runner.invoke(cli.app, ["import-progress", str(tmp_path / "missing.zip"), *c])
+    assert result.exit_code == 1 and "missing.zip" in result.stdout
     (tmp_path / "bad.json").write_text('{"format": "x"}')
     result = runner.invoke(cli.app, ["import-progress", str(tmp_path / "bad.json"), *c])
-    assert result.exit_code == 1 and "Not a litrad" in result.stdout
+    assert result.exit_code == 1 and "not a zip archive" in result.stdout
 
-    snap = sorted((tmp_path / "backups").glob("litrad_2*.sqlite"))[0]
+    snap = sorted((tmp_path / "backups" / "tester").glob("litrad_2*.sqlite"))[0]
     result = runner.invoke(cli.app, ["restore", str(snap), *c], input="n\n")
     assert result.exit_code == 1  # aborted
     result = runner.invoke(cli.app, ["restore", str(snap), "--yes", *c])
@@ -522,19 +479,14 @@ def test_web_backup_and_download(tmp_path):
     path = write_config(tmp_path)
     init_db(tmp_path / "db.sqlite").dispose()
     client = TestClient(create_app(path))
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     page = client.get("/settings").text
     assert "Data &amp; backups" in page and "none yet" in page
     response = client.post("/backup", follow_redirects=False)
     location = response.headers["location"]
     assert location.startswith("/settings?c=") and location.endswith("#data")
     assert "Backup written" in client.get(location.split("#")[0]).text
-    download = client.get("/progress.json")
-    assert download.headers["content-disposition"].startswith(
-        "attachment; filename=litrad_progress_"
-    )
-    assert download.json()["format"] == "litrad-progress"
-    assert download.json()["settings"]["topics"] == []  # the profile's settings travel along
+    assert 'href="/profile/export-all"' in client.get("/settings").text
     # backups of a profile go to its own subfolder
     assert list((tmp_path / "backups" / "ada").glob("litrad_*.sqlite"))
     client.close()
@@ -564,19 +516,18 @@ def test_import_named_recommended_does_not_merge_into_recommended(source, target
         session.flush()
         libraries.link(session, lib, paper)
         session.commit()
-        data = export_progress(session)
+        data = archive_data(session, cfg)
     assert sorted(e["kind"] for e in data["libraries"]) == ["imported", "recommended"]
     data["libraries"] = [e for e in data["libraries"] if e["kind"] == "imported"]
-    data["checksum"] = checksum(data)
     with Session(tengine) as session:
         local = libraries.recommended_library(session)
         session.commit()
         assert local.name == "Recommended"
-        report = import_progress(session, tcfg, data)
+        report = merge(session, tcfg, data)
         assert report.libraries_added == 1
         by_name = {lib.name: lib for lib in session.exec(select(Library)).all()}
         assert by_name["Recommended"].kind == "recommended"
         assert by_name["Recommended 2"].kind == "imported"
         assert libraries.size(session, by_name["Recommended"]) == 0
         assert libraries.size(session, by_name["Recommended 2"]) == 1
-        assert import_progress(session, tcfg, data).libraries_added == 0  # idempotent
+        assert merge(session, tcfg, data).libraries_added == 0  # idempotent

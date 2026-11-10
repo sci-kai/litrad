@@ -141,7 +141,7 @@ def delete(session: Session, library: Library) -> int:
     ids = {link.paper_id for link in links}
     for link in links:
         session.delete(link)
-    # its import history goes with it (otherwise ``migrate`` would see an old database)
+    # its import history goes with it
     for run in session.exec(select(IngestRun).where(IngestRun.library_id == library.id)).all():
         session.delete(run)
     session.delete(library)
@@ -403,35 +403,3 @@ def store_upload(cfg: Config, library: Library, raw: bytes, fmt: str) -> Path:
     finally:
         Path(tmp).unlink(missing_ok=True)
     return target
-
-
-# --- migration ---------------------------------------------------------------------------
-
-
-def migrate(session: Session, cfg: Config) -> Library | None:
-    """Databases from before libraries existed: their library becomes "My library".
-
-    Runs once (only while no library exists; the example lists do not count);
-    nothing is lost: citation keys, folders, labels and the import history are kept.
-    """
-    if session.exec(select(Library).where(Library.kind.not_in(EXAMPLE_KINDS))).first():
-        return None
-    papers = session.exec(select(Paper).where(Paper.in_library)).all()
-    runs = session.exec(select(IngestRun)).all()
-    if not papers and not runs:
-        return None
-    source = cfg.paths.bibtex
-    library = create(
-        session,
-        DEFAULT_NAME,
-        "Your library from before litrad had several libraries.",
-    )
-    library.format = "bibtex"
-    library.source_path = str(source.resolve()) if source.exists() else None
-    for paper in papers:
-        link(session, library, paper, paper.bibtex_key, paper.folders, paper.tags)
-    for run in runs:
-        run.library_id = library.id
-        session.add(run)
-    session.commit()
-    return library

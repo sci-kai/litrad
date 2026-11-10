@@ -5,29 +5,16 @@ import pytest
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-from conftest import format1_rules
-from litrad.backup import (
-    BackupError,
-    export_progress,
-    import_progress,
-    load_profile,
-    reset_progress,
-    save_profile_file,
-    summarize,
-    verify_checksum,
-)
+from conftest import archive_data, format1_rules
+from litrad.backup import BackupError, merge, summarize_session
 from litrad.config import Config
 from litrad.db import (
     Achievement,
     Category,
     Paper,
-    Profile,
-    QueueItem,
-    Reading,
     ReadStatus,
     Recommendation,
     RecommendationBatch,
-    StatusEvent,
     XpEvent,
     init_db,
 )
@@ -202,7 +189,7 @@ def test_stored_fingerprints_of_older_versions_verify(version):
     from pathlib import Path
 
     folder = Path(__file__).parent / "data" / "compat" / version
-    for name in ("profile.json", "progress.json"):
+    for name in ("profile.json",):
         profile = json.loads((folder / name).read_text(encoding="utf-8"))["profile"]
         assert GameRules.model_validate(profile["rules"]).fingerprint() == profile["fingerprint"]
 
@@ -211,15 +198,14 @@ def test_merge_compares_rules_not_stored_fingerprint_strings(db, tmp_path):
     """A stale fingerprint string (e.g. written by another version) is not a difference."""
     cfg, session = db
     played(session, cfg)
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     data["profile"]["fingerprint"] = "0000000000000000"
-    data.pop("checksum", None)
     engine = init_db(tmp_path / "other.sqlite")
     with Session(engine) as fresh:
         start_profile(fresh, cfg, "Same rules")
-        report = import_progress(fresh, cfg, data, allow_modified=True)
+        report = merge(fresh, cfg, data)
         assert report.xp_added > 0
-        assert summarize(data, cfg)["fingerprint"] == cfg.game.fingerprint()
+        assert summarize_session(fresh, cfg)["fingerprint"] == cfg.game.fingerprint()
     engine.dispose()
 
 
@@ -312,54 +298,18 @@ def played(session, cfg):
 def test_saved_profile_contains_everything(db):
     cfg, session = db
     played(session, cfg)
-    data = export_progress(session, MONDAY + timedelta(days=1))
+    data = archive_data(session, cfg)
     assert data["profile"]["name"] == "Kai's journey"
     assert data["profile"]["fingerprint"] == cfg.game.fingerprint()
     assert data["recommendations"][0]["items"][0]["reason"] == "fresh"
     assert data["recommendations"][0]["funnel"] == {"gathered": 9}
     assert {p["title"] for p in data["papers"].values()} == {"A", "B", "C"}
-    assert verify_checksum(data) is True
-    data["xp_events"][0]["points"] += 1000  # tampering
-    assert verify_checksum(data) is False
-
-
-def test_load_replaces_progress(db, tmp_path):
-    cfg, session = db
-    played(session, cfg)
-    path = save_profile_file(session, tmp_path, MONDAY + timedelta(days=1))
-    assert path.name == "litrad_profile_kai-s-journey_20261006_100000.json"
-    data = json.loads(path.read_text())
-    xp = total_xp(session)
-    # play on, then go back to the saved state
-    record_reading(session, cfg, add(session, "D"), ReadStatus.read, at=MONDAY + timedelta(days=2))
-    assert total_xp(session) > xp
-    load_profile(session, cfg, data)
-    assert total_xp(session) == xp
-    assert session.exec(select(Paper).where(Paper.title == "D")).one()  # library stays
-    assert (
-        session.get(Reading, session.exec(select(Paper.id).where(Paper.title == "D")).one()) is None
-    )
-    assert len(session.exec(select(RecommendationBatch)).all()) == 1
-    assert get_profile(session).name == "Kai's journey"
-
-
-def test_tampered_files_are_refused(db):
-    cfg, session = db
-    played(session, cfg)
-    data = export_progress(session)
-    data["xp_events"][0]["points"] = 99999
-    before = total_xp(session)
-    with pytest.raises(BackupError, match="modified outside"):
-        load_profile(session, cfg, data)
-    with pytest.raises(BackupError, match="modified outside"):
-        import_progress(session, cfg, data)
-    assert total_xp(session) == before
 
 
 def test_merge_requires_the_same_rules(db, tmp_path):
     cfg, session = db
     played(session, cfg)
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     other = with_game(cfg, xp_read=79)
     other_cfg = Config.model_validate(
         {
@@ -374,9 +324,9 @@ def test_merge_requires_the_same_rules(db, tmp_path):
     with Session(engine) as fresh:
         start_profile(fresh, other_cfg, "Other rules")
         with pytest.raises(BackupError, match="different game rules"):
-            import_progress(fresh, other_cfg, data)
+            merge(fresh, other_cfg, data)
         assert total_xp(fresh) == 0
-        report = import_progress(fresh, other_cfg, data, allow_different_rules=True)
+        report = merge(fresh, other_cfg, data, allow_different_rules=True)
         assert report.xp_added > 0 and not report.profile_adopted
     engine.dispose()
 
@@ -384,70 +334,26 @@ def test_merge_requires_the_same_rules(db, tmp_path):
 def test_merge_into_empty_database_adopts_the_profile(db, tmp_path):
     cfg, session = db
     played(session, cfg)
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     engine = init_db(tmp_path / "empty.sqlite")
     with Session(engine) as fresh:
-        report = import_progress(fresh, cfg, data)
+        report = merge(fresh, cfg, data)
         assert report.profile_adopted and report.batches_added == 1
         assert get_profile(fresh).fingerprint == cfg.game.fingerprint()
         # idempotent, also for recommendation batches
-        again = import_progress(fresh, cfg, data)
+        again = merge(fresh, cfg, data)
         assert again.batches_added == 0 and again.xp_added == 0
     engine.dispose()
-
-
-def test_version_one_files_still_import(db):
-    cfg, session = db
-    paper = add(session, "Old", doi="10.1/old")
-    data = {
-        "format": "litrad-progress",
-        "format_version": 1,
-        "papers": {"p1": {"doi": "10.1/old", "title": "Old"}},
-        "readings": [
-            {
-                "paper": "p1",
-                "status": "read",
-                "rating": None,
-                "notes": "",
-                "updated_at": "2026-01-01T10:00:00",
-            }
-        ],
-    }
-    report = import_progress(session, cfg, data)
-    assert report.readings_added == 1 and session.get(Reading, paper.id).status == ReadStatus.read
-
-
-def test_reset_keeps_the_library(db):
-    cfg, session = db
-    played(session, cfg)
-    papers = len(session.exec(select(Paper)).all())
-    reset_progress(session)
-    for model in (
-        Profile,
-        Reading,
-        StatusEvent,
-        QueueItem,
-        XpEvent,
-        Achievement,
-        Recommendation,
-        RecommendationBatch,
-    ):
-        assert session.exec(select(model)).all() == []
-    assert len(session.exec(select(Paper)).all()) == papers
-    start_profile(session, cfg, "Season 2")  # a new game can start
 
 
 def test_summary_for_comparison(db):
     cfg, session = db
     played(session, cfg)
-    data = export_progress(session, MONDAY + timedelta(days=1))
-    row = summarize(data, cfg, "saved")
+    row = summarize_session(session, cfg, label="saved")
     assert row["name"] == "Kai's journey" and row["xp"] == total_xp(session)
-    assert row["papers_read"] == 2 and row["thorough"] == 1 and row["checksum_ok"] is True
+    assert row["papers_read"] == 2 and row["thorough"] == 1
     assert row["fingerprint"] == cfg.game.fingerprint()
     assert row["level"].number >= 2 and 0 <= row["discipline"] <= 1
-    data["readings"][0]["notes"] = "edited"
-    assert summarize(data, cfg, "edited")["checksum_ok"] is False  # shown, not refused
 
 
 # --- new badges -------------------------------------------------------------------------

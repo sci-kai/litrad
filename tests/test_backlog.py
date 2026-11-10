@@ -1,7 +1,6 @@
 """Papers read before litrad ("read earlier") and the rules formats."""
 
 import json
-import sqlite3
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -12,8 +11,8 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from litrad.backup import export_progress, import_progress
-from litrad.dataformat import validate_schema
+from conftest import archive_data, make_profile
+from litrad.backup import merge
 from litrad.db import (
     Achievement,
     Paper,
@@ -36,7 +35,6 @@ from litrad.game import (
     week_start,
     weekly_summary,
 )
-from litrad.migrations import SCHEMA_VERSION, read_version
 from litrad.profile import start_profile
 from litrad.reading import ReadingError, mark_read_earlier, queue_add, record_reading
 from litrad.rules import BADGE_CODES_V1, FINGERPRINT_FIELDS, GameRules
@@ -164,18 +162,20 @@ def test_read_on_must_be_in_the_past_and_implies_earlier(db):
     assert event.earlier and event.read_on == date(2020, 1, 2)
 
 
-def _config(tmp_path, cfg) -> Path:
+def _config(tmp_path) -> Path:
     config = tmp_path / "config.yaml"
-    config.write_text(yaml.safe_dump({"paths": {"database": str(cfg.paths.database)}}), "utf-8")
+    paths = {"cache_dir": str(tmp_path / "cache"), "profiles_dir": str(tmp_path / "profiles")}
+    config.write_text(yaml.safe_dump({"paths": paths}), "utf-8")
     return config
 
 
 def test_cli_read_earlier_with_date_and_history_label(tmp_path, cfg):
-    config = _config(tmp_path, cfg)
+    config = _config(tmp_path)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         paper_id = add(session, "Backlog classic", doi="10.1/old").id
     engine.dispose()
+    make_profile(config, database=cfg.paths.database)
     runner = CliRunner()
     result = runner.invoke(
         cli.app,
@@ -207,9 +207,9 @@ def test_web_dialog_and_bulk_action(tmp_path, cfg):
     from conftest import enter_profile, profile_cfg
     from litrad import libraries
 
-    config = _config(tmp_path, cfg)
+    config = _config(tmp_path)
     client = TestClient(web.create_app(config))
-    enter_profile(client, adopt=False)
+    enter_profile(client)
     engine = init_db(profile_cfg(config).paths.database)
     with Session(engine) as session:
         papers = [add(session, f"Library paper {n}") for n in range(4)]
@@ -249,65 +249,36 @@ def test_web_dialog_and_bulk_action(tmp_path, cfg):
     engine.dispose()
 
 
-def test_migration_step_adds_the_columns_to_a_version_1_database(tmp_path):
-    path = tmp_path / "v1.sqlite"
-    engine = init_db(path)
-    with Session(engine) as session:
-        paper = add(session, "Old")
-        session.add(StatusEvent(paper_id=paper.id, status=ReadStatus.read, at=NIGHT))
-        session.commit()
-    engine.dispose()
-    # the database as schema version 1 had it: no "read earlier" columns
-    connection = sqlite3.connect(path)
-    connection.execute("ALTER TABLE statusevent DROP COLUMN earlier")
-    connection.execute("ALTER TABLE statusevent DROP COLUMN read_on")
-    connection.execute("PRAGMA user_version = 1")
-    connection.commit()
-    connection.close()
-    engine = init_db(path)
-    assert read_version(path)[0] == SCHEMA_VERSION >= 2
-    with Session(engine) as session:
-        event = session.exec(select(StatusEvent)).one()
-        assert event.earlier is False and event.read_on is None
-    engine.dispose()
-
-
-def test_progress_round_trip_keeps_the_flag_and_old_files_stay_valid(tmp_path, cfg):
+def test_merge_round_trip_keeps_the_flag(tmp_path, cfg):
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         start_profile(session, cfg, at=NIGHT)
         a, b = add(session, "Earlier", doi="10.1/a"), add(session, "Now", doi="10.1/b")
         record_reading(session, cfg, a, ReadStatus.read, at=NIGHT, read_on=date(2018, 3, 4))
         record_reading(session, cfg, b, ReadStatus.skimmed, at=NIGHT + timedelta(hours=1))
-        data = export_progress(session)
+        data = archive_data(session, cfg)
     engine.dispose()
     events = data["status_events"]
     assert events[0]["earlier"] is True and events[0]["read_on"] == "2018-03-04"
     assert "earlier" not in events[1]  # only set when true: older readers see nothing new
-    assert not validate_schema("progress", data, "progress.json")
     other = cfg.model_copy(deep=True)
     other.paths.database = tmp_path / "other.sqlite"
     engine = init_db(other.paths.database)
     with Session(engine) as session:
-        report = import_progress(session, other, data)
+        report = merge(session, other, data)
         assert report.events_added == 2
         rows = {e.read_on: e.earlier for e in session.exec(select(StatusEvent)).all()}
         assert rows == {date(2018, 3, 4): True, None: False}
     engine.dispose()
-    # a file written before "read earlier" existed
-    old = json.loads((REPO / "tests/data/compat/dev-20261109/progress.json").read_text())
-    assert all("earlier" not in e for e in old["status_events"])
-    assert not validate_schema("progress", old, "progress.json")
 
 
 def test_archive_round_trip_keeps_the_flag(tmp_path):
     from litrad import profiles
     from litrad.archive import import_new
     from litrad.config import load_config
-    from test_archive import CONFIG, export
+    from test_archive import export
 
-    path = tmp_path / "config.yaml"
-    path.write_text(CONFIG.format(tmp=tmp_path))
+    path = _config(tmp_path)
     base = load_config(path)
     slug = profiles.create_profile(base, "Source")
     cfg = profiles.profile_config(base, slug)

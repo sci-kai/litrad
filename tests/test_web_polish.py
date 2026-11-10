@@ -47,7 +47,7 @@ def celebration(response) -> dict | None:
 def env(tmp_path, monkeypatch):
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  database: {tmp_path / 'db.sqlite'}\n  cache_dir: {tmp_path / 'cache'}\n",
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(web, "make_http", lambda cfg: pytest.fail("no network in these tests"))
@@ -59,7 +59,7 @@ def env(tmp_path, monkeypatch):
 @pytest.fixture
 def user(env):
     client, path = env
-    enter_profile(client, "Kai", adopt=False)
+    enter_profile(client, "Kai")
     client.post("/queue/add", data={"title": "Manual paper"})
     return client, path
 
@@ -236,7 +236,7 @@ def test_friendly_error_uses_labels():
 @pytest.fixture
 def big(env):
     client, path = env
-    enter_profile(client, "Veteran", adopt=False)
+    enter_profile(client, "Veteran")
     ids = populate(
         profile_cfg(path).paths.database,
         n_papers=600,
@@ -303,7 +303,7 @@ def test_compare_lists_saved_files_with_dates(user):
 
 def test_new_profile_dashboard_shows_first_steps(env):
     client, _ = env
-    enter_profile(client, "Newbie", adopt=False)
+    enter_profile(client, "Newbie")
     page = client.get("/").text
     assert "Getting started" in page and "0/5 done" in page
     assert 'href="/library/import"' in page

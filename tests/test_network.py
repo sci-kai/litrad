@@ -10,7 +10,7 @@ from litrad.web.network import Interface, NetworkError, interfaces, resolve
 
 runner = CliRunner()
 
-PI = [
+SERVER = [
     Interface("lo", "127.0.0.1"),
     Interface("eth0", "192.168.50.2"),
     Interface("wlan0", "10.100.7.134"),
@@ -22,14 +22,14 @@ PI = [
 
 @pytest.mark.parametrize("spec", ["local", "localhost", "127.0.0.1", "", None, "lo"])
 def test_local(spec):
-    binding = resolve(spec, 8080, PI)
+    binding = resolve(spec, 8080, SERVER)
     assert binding.host == "127.0.0.1" and binding.local_only
     assert binding.urls == ("http://127.0.0.1:8080/",)
 
 
 @pytest.mark.parametrize("spec", ["all", "0.0.0.0", "ALL"])
 def test_all_networks(spec):
-    binding = resolve(spec, 8080, PI)
+    binding = resolve(spec, 8080, SERVER)
     assert binding.host == "0.0.0.0" and not binding.local_only
     assert binding.urls == ("http://192.168.50.2:8080/", "http://10.100.7.134:8080/")
     assert binding.description == "all networks (eth0, wlan0)"
@@ -44,7 +44,7 @@ def test_all_networks(spec):
     ],
 )
 def test_one_network(spec, host, kind):
-    binding = resolve(spec, 9000, PI)
+    binding = resolve(spec, 9000, SERVER)
     assert binding.host == host and not binding.local_only
     assert binding.urls == (f"http://{host}:9000/",) and kind in binding.description
 
@@ -59,7 +59,7 @@ def test_one_network(spec, host, kind):
 )
 def test_unknown_networks_list_the_choices(spec, message):
     with pytest.raises(NetworkError, match=message) as error:
-        resolve(spec, 8080, PI)
+        resolve(spec, 8080, SERVER)
     assert "eth0 (192.168.50.2)" in str(error.value) and "wlan0" in str(error.value)
 
 
@@ -67,7 +67,7 @@ def test_interface_kinds():
     kinds = {
         i.name: i.kind
         for i in [
-            *PI,
+            *SERVER,
             Interface("tailscale0", "100.64.0.1"),
             Interface("enp3s0", "10.0.0.2"),
             Interface("br0", "1.2.3.4"),
@@ -90,7 +90,7 @@ def test_real_interfaces_include_loopback():
 def server(monkeypatch):
     calls = {}
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.update(kwargs))
-    monkeypatch.setattr("litrad.web.network.interfaces", lambda: list(PI))
+    monkeypatch.setattr("litrad.web.network.interfaces", lambda: list(SERVER))
     monkeypatch.setattr("webbrowser.open", lambda *a, **k: pytest.fail("no browser"))
     return calls
 

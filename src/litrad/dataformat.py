@@ -18,8 +18,6 @@ Before anything is imported, the data are checked:
 
 Problems name the file and record, e.g. ``readings.json[12]: paper p77 not
 in papers.json``. Unknown fields are allowed and ignored (reported as notes).
-The same checks apply to progress and profile files (``backup.py``), with
-locations inside that file (``readings[12]``).
 """
 
 import json
@@ -204,7 +202,7 @@ def unknown_fields(name: str, data, label: str, list_key: str | None = None) -> 
 
 @dataclass
 class Naming:
-    """How locations are written: archive files or sections of a progress file."""
+    """How locations are written: the archive file of each section."""
 
     sections: dict[str, str]
     papers: str = "papers"
@@ -219,20 +217,6 @@ class Naming:
         if self.paper_index is not None and key in self.paper_index:
             return f"{self.papers}[{self.paper_index[key]}]"
         return f"{self.papers}.{key}"
-
-
-PROGRESS_NAMING = {
-    "libraries": "libraries",
-    "readings": "readings",
-    "status_events": "status_events",
-    "queue": "queue",
-    "xp_events": "xp_events",
-    "achievements": "achievements",
-    "recommendations": "recommendations",
-    "example_choices": "example_choices",
-    "profile": "profile",
-    "xp_total": "xp_total",
-}
 
 
 def parse_datetime(value) -> datetime | None:
@@ -260,7 +244,7 @@ def check_data(
     papers_file: str = "papers",
     badge_codes: set[str] | None = None,
 ) -> list[Problem]:
-    """Consistency of normalized data (the shape of a progress file).
+    """Consistency of normalized data (all sections of an archive in one dict).
 
     ``data["papers"]`` maps keys to paper records; list sections may contain
     ``None`` for records already dropped (indexes keep their meaning).
@@ -584,14 +568,3 @@ def compact(data: dict) -> dict:
                     ]
             out[section] = items
     return out
-
-
-def check_progress(data: dict) -> CheckReport:
-    """Schema and consistency of a progress or profile file (all its versions)."""
-    report = CheckReport()
-    report.extend(validate_schema("progress", data, ""))
-    if report.errors:
-        return report
-    report.extend(unknown_fields("progress", data, ""))
-    report.extend(check_data(data, Naming(PROGRESS_NAMING)))
-    return report

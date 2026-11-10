@@ -6,7 +6,6 @@ from litrad.db import (
     Paper,
     ReadStatus,
     RecommendationBatch,
-    add_missing_columns,
     depth,
     init_db,
     load_embedding,
@@ -38,7 +37,23 @@ def test_embedding_round_trip_and_update(tmp_path):
     engine.dispose()
 
 
-def test_missing_columns_are_added(tmp_path):
+def additive_upgrade(path, monkeypatch):
+    """A version-1 database upgraded by an additive step (``sync_schema``), as a 1.x
+    release that adds tables, columns or indexes does it."""
+    import sqlite3
+
+    from litrad import migrations
+
+    connection = sqlite3.connect(path)
+    connection.execute("PRAGMA user_version = 1")
+    connection.commit()
+    connection.close()
+    monkeypatch.setattr(migrations, "SCHEMA_VERSION", 2)
+    step = migrations.Step(2, "additive", migrations.sync_schema)
+    assert migrations.migrate(path, (step,)).to_version == 2
+
+
+def test_missing_columns_are_added(tmp_path, monkeypatch):
     import sqlite3
 
     path = tmp_path / "old.sqlite"
@@ -52,15 +67,19 @@ def test_missing_columns_are_added(tmp_path):
     )
     connection.commit()
     connection.close()
-    engine = init_db(path)  # creates missing tables, adds missing columns
+    additive_upgrade(path, monkeypatch)  # creates missing tables, adds missing columns
+    engine = init_db(path)
     with Session(engine) as session:
         batch = session.get(RecommendationBatch, 1)
         assert batch.n_candidates == 3 and batch.funnel is None and batch.params is None
-    assert add_missing_columns(engine) == []
+    from litrad.migrations import sync_schema
+
+    with engine.begin() as connection:
+        assert sync_schema(connection) == []
     engine.dispose()
 
 
-def test_missing_indexes_are_added_to_old_databases(tmp_path):
+def test_missing_indexes_are_added_by_an_additive_step(tmp_path, monkeypatch):
     import sqlite3
 
     path = tmp_path / "old.sqlite"
@@ -71,7 +90,7 @@ def test_missing_indexes_are_added_to_old_databases(tmp_path):
     )
     connection.commit()
     connection.close()
-    init_db(path).dispose()
+    additive_upgrade(path, monkeypatch)
     connection = sqlite3.connect(path)
     indexed = {
         row[0]
@@ -84,7 +103,7 @@ def test_missing_indexes_are_added_to_old_databases(tmp_path):
     init_db(path).dispose()  # a second start finds them and does nothing
 
 
-def test_json_columns_added_to_old_tables_default_to_empty(tmp_path):
+def test_json_columns_added_by_an_additive_step_default_to_empty(tmp_path, monkeypatch):
     import sqlite3
 
     path = tmp_path / "old.sqlite"
@@ -96,6 +115,7 @@ def test_json_columns_added_to_old_tables_default_to_empty(tmp_path):
     connection.execute("INSERT INTO recommendationbatch VALUES (1, '2026-10-05', '2026-10-05', 3)")
     connection.commit()
     connection.close()
+    additive_upgrade(path, monkeypatch)
     engine = init_db(path)
     with Session(engine) as session:
         batch = session.get(RecommendationBatch, 1)
@@ -105,7 +125,7 @@ def test_json_columns_added_to_old_tables_default_to_empty(tmp_path):
 
 
 def test_models_do_not_use_builtin_default_factories():
-    # pydantic inspects builtin factories at every construction (~8 ms per Paper on a Pi)
+    # pydantic inspects builtin factories at every construction (slow for many papers)
     from sqlmodel import SQLModel
 
     for model in SQLModel.__subclasses__():

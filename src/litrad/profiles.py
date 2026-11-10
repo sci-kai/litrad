@@ -9,9 +9,6 @@ Everything personal is therefore linked to exactly one profile. The global
 ``config.yaml`` provides machine settings (APIs, web server, backups) and the
 defaults that ``settings.yaml`` can override (see ``OVERLAY_KEYS``). Backups go
 to ``backup.dir/<slug>``.
-
-A database from before profiles existed (``paths.database``) is "legacy data";
-``adopt_legacy`` turns it into the first profile without losing anything.
 """
 
 import re
@@ -23,10 +20,10 @@ from pathlib import Path
 import yaml
 from sqlmodel import Session, func, select
 
-from litrad.backup import BackupError, atomic_write_text, check_file, load_profile, snapshot
+from litrad.backup import atomic_write_text
 from litrad.backup import slug as slug_of
 from litrad.config import Config
-from litrad.db import Paper, Profile, Reading, XpEvent, init_db, now
+from litrad.db import Paper, Profile, Reading, XpEvent, init_db
 from litrad.game import Level, level_for
 from litrad.profile import profile_rules, start_profile
 from litrad.rules import GameRules
@@ -36,7 +33,6 @@ PROFILE_DB = "litrad.sqlite"
 PROFILE_BIB = "library.bib"
 PROFILE_SETTINGS = "settings.yaml"
 CURRENT_FILE = ".current"
-LEGACY_MARKER = ".legacy_adopted"
 # settings a profile may override; everything else comes from config.yaml
 OVERLAY_KEYS = ("topics", "excluded_terms", "selection", "sources", "queue", "library", "paths")
 # profile bookkeeping stored in the same file, not part of the configuration
@@ -221,100 +217,6 @@ def create_profile(
                 start_profile(
                     session, profile_config(base, slug), name.strip(), rules or base.game, at=at
                 )
-        finally:
-            engine.dispose()
-    except BaseException:
-        shutil.rmtree(home, ignore_errors=True)
-        raise
-    return slug
-
-
-def legacy_available(base: Config) -> dict | None:
-    """Data from before profiles existed that can become a profile."""
-    database = base.paths.database
-    if not database.exists() or (profiles_dir(base) / LEGACY_MARKER).exists():
-        return None
-    engine = init_db(database)
-    try:
-        with Session(engine) as session:
-            library = session.exec(
-                select(func.count()).select_from(Paper).where(Paper.in_library)
-            ).one()
-            readings = session.exec(select(func.count()).select_from(Reading)).one()
-            profile = session.exec(select(Profile)).first()
-    finally:
-        engine.dispose()
-    if not (library or readings or profile):
-        return None
-    return {
-        "library": library,
-        "readings": readings,
-        "name": profile.name if profile else None,
-        "path": database,
-    }
-
-
-def adopt_legacy(base: Config, name: str, rules: GameRules | None = None) -> str:
-    """Turn the legacy database into a profile (a copy; the original stays)."""
-    info = legacy_available(base)
-    if info is None:
-        raise ProfilesError("There is no existing data to take over")
-    slug, home = _new_folder(base, name or info["name"] or "")
-    try:
-        snapshot(base.paths.database, home / PROFILE_DB)
-        settings = {
-            "topics": [t.model_dump(mode="json") for t in base.topics],
-            "excluded_terms": list(base.excluded_terms),
-        }
-        if base.paths.bibtex.exists():
-            # keep using the same export (e.g. kept up to date by rclone)
-            settings["paths"] = {"bibtex": str(base.paths.bibtex.resolve())}
-        write_overlay(base, slug, settings)
-        engine = init_db(home / PROFILE_DB)
-        try:
-            with Session(engine) as session:
-                if session.exec(select(Profile)).first() is None:
-                    start_profile(
-                        session, profile_config(base, slug), name.strip(), rules or base.game
-                    )
-        finally:
-            engine.dispose()
-        (profiles_dir(base) / LEGACY_MARKER).write_text(
-            f"{now().isoformat()} {base.paths.database} -> {slug}\n"
-        )
-    except BaseException:
-        shutil.rmtree(home, ignore_errors=True)
-        raise
-    return slug
-
-
-def import_profile_file(base: Config, data: dict, name: str | None = None) -> str:
-    """A new profile from a saved profile file (rules, progress, settings)."""
-    if not isinstance(data, dict):
-        raise BackupError("Not a litrad profile file")
-    check_file(data)  # before a folder is created: a refused file leaves nothing behind
-    saved = data.get("profile") or {}
-    slug, home = _new_folder(base, name or saved.get("name") or "Imported profile")
-    try:
-        settings = {k: v for k, v in (data.get("settings") or {}).items() if k in OVERLAY_KEYS}
-        settings.pop("paths", None)  # paths of another machine do not apply here
-        if settings:
-            write_overlay(base, slug, settings)
-        cfg = profile_config(base, slug)
-        engine = init_db(cfg.paths.database)
-        try:
-            with Session(engine) as session:
-                load_profile(session, cfg, data)
-                from litrad import notes
-
-                notes.refresh_quietly(session, cfg)  # the loaded notes become note files
-                profile = session.exec(select(Profile)).first()
-                if profile is None:
-                    start_profile(session, cfg, name or "Imported profile")
-                elif name:
-                    profile.name = name
-                    session.add(profile)
-                    session.commit()
         finally:
             engine.dispose()
     except BaseException:

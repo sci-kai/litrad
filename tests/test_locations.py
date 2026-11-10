@@ -125,10 +125,10 @@ def test_relative_paths_do_not_depend_on_the_current_folder(tmp_path, monkeypatc
 
 
 def test_explicit_base_dir(tmp_path):
-    text = "paths:\n  base_dir: store\n  database: db.sqlite\n  cache_dir: /abs/cache\n"
+    text = "paths:\n  base_dir: store\n  profiles_dir: profiles\n  cache_dir: /abs/cache\n"
     cfg = load_config(write(tmp_path / "config" / "config.yaml", text))
     # relative base_dir: from the config file's folder
-    assert cfg.paths.database == tmp_path / "config" / "store" / "db.sqlite"
+    assert cfg.paths.profiles_dir == tmp_path / "config" / "store" / "profiles"
     assert cfg.paths.cache_dir == Path("/abs/cache")
     text = f"paths:\n  base_dir: {tmp_path / 'abs'}\n"
     cfg = load_config(write(tmp_path / "c.yaml", text))

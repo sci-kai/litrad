@@ -8,17 +8,16 @@ from datetime import datetime, timedelta
 import pytest
 from sqlmodel import Session, func, select
 
-from conftest import FakeApis
-from litrad import export, libraries
+from conftest import FakeApis, archive_data
+from litrad import libraries
 from litrad.backup import (
-    export_progress,
-    import_progress,
+    merge,
     restore,
     rotate,
     run_backup,
     snapshot,
 )
-from litrad.db import Library, LibraryPaper, Paper, Reading, ReadStatus, init_db
+from litrad.db import LibraryPaper, Paper, Reading, ReadStatus, init_db
 from litrad.ingest.formats import read_references
 from litrad.ingest.pipeline import import_into
 from litrad.reading import record_reading
@@ -246,7 +245,7 @@ def progress_source(session, cfg):
     session.commit()
     for number, paper in enumerate(papers):
         record_reading(session, cfg, paper, ReadStatus.read, note=f"n{number}", at=AT)
-    return export_progress(session)
+    return archive_data(session, cfg)
 
 
 def test_progress_round_trip_fresh_and_existing(db, tmp_path):
@@ -258,8 +257,8 @@ def test_progress_round_trip_fresh_and_existing(db, tmp_path):
             if target == "existing":
                 other.add_all([Paper(title="Über Tumore", year=2020), Paper(title="Other")])
                 other.commit()
-            first = import_progress(other, cfg, data)
-            second = import_progress(other, cfg, json.loads(json.dumps(data)))
+            first = merge(other, cfg, data)
+            second = merge(other, cfg, json.loads(json.dumps(data)))
             papers = other.exec(select(Paper)).all()
             expected = 5 if target == "existing" else 4
             assert len(papers) == expected, [p.title for p in papers]
@@ -292,17 +291,17 @@ def test_rotation_by_time_includes_restore_safety_copies(tmp_path):
     """Saved profiles are never rotated; safety copies of restores age like snapshots."""
     for day in range(1, 6):
         (tmp_path / f"litrad_2026010{day}_070000.sqlite").write_text("x")
-        (tmp_path / f"litrad_progress_2026010{day}_070000.json").write_text("{}")
+        (tmp_path / f"litrad_backup_2026010{day}_070000.zip").write_text("x")
     (tmp_path / "litrad_20260101_080000_before_restore.sqlite").write_text("x")
     (tmp_path / "litrad_20260105_080000_before_restore.sqlite").write_text("x")
-    (tmp_path / "litrad_profile_kai_20260101_070000.json").write_text("{}")
+    (tmp_path / "litrad_profile_kai_20260101_070000.zip").write_text("x")
     rotate(tmp_path, 2)
     assert sorted(p.name for p in tmp_path.iterdir()) == [
         "litrad_20260105_070000.sqlite",
         "litrad_20260105_080000_before_restore.sqlite",
-        "litrad_profile_kai_20260101_070000.json",
-        "litrad_progress_20260104_070000.json",
-        "litrad_progress_20260105_070000.json",
+        "litrad_backup_20260104_070000.zip",
+        "litrad_backup_20260105_070000.zip",
+        "litrad_profile_kai_20260101_070000.zip",
     ]
 
 
@@ -312,38 +311,6 @@ def test_failed_snapshot_leaves_no_temporary_file(tmp_path):
     with pytest.raises(sqlite3.DatabaseError):
         snapshot(broken, tmp_path / "backups" / "litrad_20260101_070000.sqlite")
     assert list((tmp_path / "backups").iterdir()) == []
-
-
-def test_restore_an_old_snapshot_after_schema_changes(db, cfg, tmp_path):
-    """A snapshot from before libraries existed is upgraded when it is opened again."""
-    _, session = db
-    cfg.backup.dir = tmp_path / "backups"
-    old = tmp_path / "old.sqlite"
-    connection = sqlite3.connect(old)
-    connection.executescript(
-        "CREATE TABLE paper (id INTEGER PRIMARY KEY, title VARCHAR NOT NULL, doi VARCHAR,"
-        " in_library BOOLEAN DEFAULT 0, bibtex_key VARCHAR, authors JSON);"
-        "CREATE TABLE reading (paper_id INTEGER PRIMARY KEY, status VARCHAR, rating INTEGER,"
-        " notes VARCHAR, updated_at DATETIME);"
-        "CREATE TABLE xpevent (id INTEGER PRIMARY KEY, paper_id INTEGER, points INTEGER,"
-        " kind VARCHAR, reason VARCHAR, at DATETIME);"
-        "INSERT INTO paper (title, doi, in_library, bibtex_key, authors)"
-        " VALUES ('Old', '10.1/o', 1, 'O1', '[\"Doe, J\"]');"
-    )
-    connection.commit()
-    connection.close()
-    restore(cfg, old)
-    engine = init_db(cfg.paths.database)
-    with Session(engine) as restored:
-        paper = restored.exec(select(Paper)).one()
-        assert (
-            paper.title == "Old" and paper.folders == []
-        )  # column added by init_db, empty not NULL
-        library = libraries.migrate(restored, cfg)
-        assert library is not None and libraries.size(restored, library) == 1
-        assert export.to_bibtex(export.library_items(restored, library)).startswith("@article{O1,")
-        assert restored.exec(select(Library)).one().name == "My library"
-    engine.dispose()
 
 
 # --- HTTP cache --------------------------------------------------------------------------
@@ -415,7 +382,9 @@ def test_backups_continue_with_an_invalid_profile_settings_file(tmp_path):
     from litrad.config import load_config
 
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\nbackup:\n  dir: {tmp_path / 'backups'}\n")
+    path.write_text(
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\nbackup:\n  dir: {tmp_path / 'backups'}\n"
+    )
     base = load_config(path)
     profiles.create_profile(base, "Good")
     profiles.create_profile(base, "Broken")
@@ -448,7 +417,7 @@ def test_progress_file_with_one_paper_twice(db, tmp_path):
     data["status_events"].append(dict(data["status_events"][-1], paper="p99"))
     engine = init_db(tmp_path / "other.sqlite")
     with Session(engine) as other:
-        report = import_progress(other, cfg, data, allow_modified=True)
+        report = merge(other, cfg, data)
         assert report.papers_created == 4 and report.papers_matched == 1
         reading = other.exec(select(Reading).join(Paper).where(Paper.doi == "10.1/d")).one()
         assert reading.notes.endswith("twin note") and "n3" in reading.notes

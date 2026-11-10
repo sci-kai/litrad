@@ -181,14 +181,14 @@ def test_ping_and_quit_work_without_profile(desktop_client):
 
 
 def test_quit_button_only_in_desktop_mode(desktop_client, tmp_path):
-    enter_profile(desktop_client, adopt=False)
+    enter_profile(desktop_client)
     page = desktop_client.get("/").text
     assert 'action="/app/quit"' in page and "Dashboard" in page
     server = tmp_path / "server"
     server.mkdir()
     with TestClient(create_app(write_config(server))) as client:
         assert "/app/quit" not in client.get("/welcome").text
-        enter_profile(client, adopt=False)
+        enter_profile(client)
         assert "/app/quit" not in client.get("/").text
         ping = client.get("/app/ping", follow_redirects=False)
         assert ping.status_code == 404, (ping.headers, ping.text[:300])

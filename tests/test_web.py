@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 import litrad.web.app as web
-from conftest import SAMPLE_BIB, FakeApis, enter_profile, make_work, profile_cfg
+from conftest import SAMPLE_BIB, FakeApis, make_profile, make_work, profile_cfg, select_profile
 from litrad.config import load_config
 from litrad.db import (
     Paper,
@@ -24,8 +24,6 @@ from litrad.web.settings import SettingsError, parse_form
 CONFIG = """\
 # my litrad config
 paths:
-  bibtex: {bib}
-  database: {db}
   cache_dir: {cache}
 
 topics:
@@ -46,7 +44,7 @@ def app_env(tmp_path, monkeypatch, make_http):
     shutil.copy(SAMPLE_BIB, bib)
     path = tmp_path / "config.yaml"
     path.write_text(
-        CONFIG.format(bib=bib, db=tmp_path / "db.sqlite", cache=tmp_path / "cache"),
+        CONFIG.format(cache=tmp_path / "cache"),
         encoding="utf-8",
     )
     apis = FakeApis()
@@ -59,13 +57,14 @@ def app_env(tmp_path, monkeypatch, make_http):
         make_work("10.9/b", "Lineage tracing of clones", fresh, abstract="lineage tracing clones"),
     ]
     monkeypatch.setattr(web, "make_http", lambda cfg: make_http(apis))
-    cfg = load_config(path)
+    slug = make_profile(path, bibtex=bib)
+    cfg = profile_cfg(path, slug)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         ingest_library(cfg, session, make_http(apis), use_s2=False)
     engine.dispose()
     client = TestClient(web.create_app(path))
-    enter_profile(client)
+    select_profile(client, slug)
     yield client, path, apis
     client.close()
 

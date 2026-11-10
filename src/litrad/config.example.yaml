@@ -5,8 +5,8 @@
 
 # Machine settings and the DEFAULTS of every profile. Each profile keeps its own
 # data in <profiles_dir>/<profile>/ and may override topics, excluded_terms,
-# selection, sources, queue, library and paths.bibtex in its settings.yaml
-# (written by the web UI).
+# selection, sources, queue, library and its Paperpile export (paths.bibtex) in
+# its settings.yaml (written by the web UI).
 
 paths:
   # relative paths (also backup.dir) start from here; n/a = the folder that
@@ -14,9 +14,6 @@ paths:
   base_dir: n/a
   # one folder per profile: litrad.sqlite, library.bib, settings.yaml
   profiles_dir: data/profiles
-  # data from before profiles existed (can be taken over as a profile)
-  bibtex: data/paperpile/library.bib
-  database: data/litrad.sqlite
   cache_dir: data/cache
   # notes as Markdown files: n/a = <profile folder>/notes; or an Obsidian vault
   obsidian_vault: n/a
@@ -27,7 +24,7 @@ library:
   # Paperpile labels without topical meaning (case-insensitive)
   ignore_labels: ["Import Mendeley"]
 
-# topics of a profile taken over from existing data; a new profile asks for its own
+# the format of topics; each profile keeps its own (asked for on first use)
 topics:
   - name: tumor-evolution
     weight: 1.0
@@ -103,7 +100,7 @@ game: {}
 
 backup:
   # consistent database snapshots + archives of everything (zip, open formats);
-  # point this to a cloud-synced folder, but keep paths.database local
+  # point this to a cloud-synced folder; the profiles (their databases) stay local
   dir: data/backups
   keep: 14
   # `litrad serve` backs up at start and then every N hours (0 = off)

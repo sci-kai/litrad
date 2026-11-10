@@ -43,7 +43,7 @@ body:
     id: system
     attributes:
       label: System and browser
-      placeholder: Raspberry Pi OS (64 bit), Python 3.13, Firefox 140 on the laptop
+      placeholder: Debian 13, Python 3.13, Firefox 140 on the laptop
   - type: dropdown
     id: where
     attributes:

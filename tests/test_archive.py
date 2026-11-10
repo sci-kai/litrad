@@ -40,8 +40,6 @@ AT = datetime(2026, 9, 7, 9, 0, 0)
 
 CONFIG = """\
 paths:
-  bibtex: {tmp}/x.bib
-  database: {tmp}/legacy.sqlite
   cache_dir: {tmp}/cache
   profiles_dir: {tmp}/profiles
 backup:
@@ -848,7 +846,7 @@ def large_profile(base, n_papers=5000, n_read=1500) -> str:
 
 
 def test_large_profile_export_and_import_in_acceptable_time(base, tmp_path):
-    """5000 papers, 1500 readings: on a Raspberry Pi 5 well under a minute each way."""
+    """5000 papers, 1500 readings: on a small ARM board well under a minute each way."""
     slug = large_profile(base)
     # budgets scaled by the machine's current speed (conftest.within)
     with within(120, "export"):

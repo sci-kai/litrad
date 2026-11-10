@@ -12,14 +12,14 @@ from typer.testing import CliRunner
 
 import litrad.cli as cli
 import litrad.web.app as web
-from conftest import SAMPLE_BIB, FakeApis, enter_profile, profile_cfg
+from conftest import SAMPLE_BIB, FakeApis, archive_data, enter_profile, make_profile, profile_cfg
 from litrad import export, libraries
-from litrad.backup import export_progress, import_progress
+from litrad.backup import merge
 from litrad.db import IngestRun, Library, LibraryPaper, Paper, Reading, ReadStatus, init_db
 from litrad.ingest.bibtex import BibEntry
 from litrad.ingest.check import check_entries, check_file
 from litrad.ingest.formats import detect_format, parse_csl_json, parse_ris, read_references
-from litrad.ingest.pipeline import import_into, ingest_library, last_ingest, refresh_libraries
+from litrad.ingest.pipeline import import_into, refresh_libraries
 from litrad.reading import queue_add
 
 runner = CliRunner()
@@ -265,26 +265,6 @@ def test_libraries_for_recommendations(db, make_http):
     assert libraries.recommendation_library(session) == []
 
 
-def test_migration_of_older_databases(cfg, make_http):
-    engine = init_db(cfg.paths.database)
-    with Session(engine) as session:
-        ingest_library(cfg, session, make_http(FakeApis()), use_s2=False)
-        # simulate a database from before libraries existed
-        for model in (LibraryPaper, Library):
-            for row in session.exec(select(model)).all():
-                session.delete(row)
-        session.commit()
-        assert libraries.recommendation_library(session)  # falls back to in_library
-        library = libraries.migrate(session, cfg)
-        assert library.name == "My library" and libraries.size(session, library) == 7
-        assert library.source_path == str(cfg.paths.bibtex.resolve())
-        assert last_ingest(session, library) is not None
-        assert libraries.migrate(session, cfg) is None  # only once
-        member = libraries.members(session, library)[0][1]
-        assert member.citation_key
-    engine.dispose()
-
-
 def test_refresh_from_files(db, make_http, tmp_path):
     cfg, session = db
     http = make_http(FakeApis())
@@ -351,13 +331,12 @@ def test_export_without_keys_and_with_braces(db):
 def site(tmp_path, monkeypatch, make_http):
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  bibtex: x.bib\n  cache_dir: {tmp_path / 'cache'}\n"
-        "sources:\n  semanticscholar: false\n"
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\nsources:\n  semanticscholar: false\n"
     )
     apis = FakeApis()
     monkeypatch.setattr(web, "make_http", lambda cfg: make_http(apis))
     client = TestClient(web.create_app(path))
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     yield client, path
     client.close()
 
@@ -502,24 +481,24 @@ def test_old_addresses(site):
 # --- profile files and the command line -------------------------------------------------
 
 
-def test_profile_files_keep_libraries(db, make_http, tmp_path):
+def test_archive_data_keeps_libraries(db, make_http, tmp_path):
     cfg, session = db
     lib = libraries.create(session, "Paperpile", "mine")
     import_into(cfg, session, make_http(FakeApis()), lib, SAMPLE_BIB, "new", use_s2=False)
     libraries.update(session, lib, use_for_recommendations=False)
     session.commit()
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     assert data["libraries"][0]["name"] == "Paperpile"
     assert len(data["libraries"][0]["papers"]) == 7 and "source_path" not in data["libraries"][0]
     other = init_db(tmp_path / "other.sqlite")
     with Session(other) as fresh:
-        report = import_progress(fresh, cfg, data)
+        report = merge(fresh, cfg, data)
         assert report.libraries_added == 1 and report.papers_created == 7
         copy = fresh.exec(select(Library)).one()
         assert copy.description == "mine" and not copy.use_for_recommendations
         assert libraries.size(fresh, copy) == 7
         assert all(p.in_library for p in fresh.exec(select(Paper)).all())
-        assert import_progress(fresh, cfg, data).libraries_added == 0  # idempotent
+        assert merge(fresh, cfg, data).libraries_added == 0  # idempotent
         assert libraries.size(fresh, copy) == 7
     other.dispose()
 
@@ -542,7 +521,7 @@ def test_cli_libraries(tmp_path, plain_console, monkeypatch, make_http):
     monkeypatch.setattr(cli_library, "make_http", lambda cfg: make_http(apis))
     monkeypatch.setattr(cli, "make_http", lambda cfg: make_http(apis))
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\n  cache_dir: {tmp_path / 'cache'}\n")
+    path.write_text(f"paths:\n  cache_dir: {tmp_path / 'cache'}\n")
     c = ["-c", str(path)]
     runner.invoke(cli.app, ["profile", "create", "Ada", "--yes", *c])
     assert "No libraries yet" in runner.invoke(cli.app, ["library", "list", *c]).stdout
@@ -577,7 +556,8 @@ def test_cli_libraries(tmp_path, plain_console, monkeypatch, make_http):
 
 def test_cli_check_bib(tmp_path, plain_console):
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: {SAMPLE_BIB}\n")
+    path.write_text(f"paths:\n  cache_dir: {tmp_path / 'cache'}\n")
+    make_profile(path, bibtex=SAMPLE_BIB)
     result = runner.invoke(cli.app, ["check-bib", "-c", str(path)])
     assert result.exit_code == 0 and "7 entries (BibTeX)" in result.stdout
     sparse = tmp_path / "sparse.bib"

@@ -24,7 +24,7 @@ holds plain, documented files; ``README.md`` inside describes each one:
 Importing checks everything first (``check``): checksums, JSON Schema,
 consistency between the files. Then it writes in one database transaction,
 all or nothing; ``partial`` imports only the consistent records. Into an
-existing profile, papers are matched like progress files (DOI, PMID,
+existing profile, papers are matched by identifiers (DOI, PMID,
 citation key, title + year) and a second import of the same archive changes
 nothing.
 
@@ -199,12 +199,8 @@ def _ledger_tsv(rows: list[dict], titles: dict[str, str]) -> str:
 def collect(session: Session, cfg: Config, settings_text: str | None = None) -> dict[str, bytes]:
     """Every file of the archive except the manifest, as bytes."""
     from litrad import export, history, notes
-    from litrad import libraries as library_module
     from litrad.rules import GameRules
 
-    # a database of 0.1 keeps its library only as flags: make it "My library" first,
-    # as every other part of litrad does on first use
-    library_module.migrate(session, cfg)
     files: dict[str, bytes] = {}
     libraries = [
         lib
@@ -778,7 +774,7 @@ def check(archive: Archive, base: Config | None = None, partial: bool = False) -
                     items[problem.record[1]] = None
         contents[name] = content
 
-    # merged data in the shape of a progress file (None = record dropped)
+    # all sections merged into one dict for ``backup.merge`` (None = record dropped)
     paper_list = (contents.get("papers.json") or {}).get("papers") or []
     papers, index = {}, {}
     for i, record in enumerate(paper_list):
@@ -1095,7 +1091,7 @@ def _place(moves: list[tuple[Path, Path]], failed: list[Path] | None = None) -> 
 
 
 def _keys(checked: Checked) -> dict:
-    """The data to merge, in the shape of a progress file."""
+    """The data to merge (``backup.merge``)."""
     data = compact(checked.data)
     data["settings"] = checked.settings
     return data
@@ -1264,7 +1260,7 @@ def check_file(path: Path, base: Config | None = None) -> Checked:
 
 
 def is_archive(path: Path) -> bool:
-    """Whether ``path`` is a zip file (an archive) rather than a progress JSON file."""
+    """Whether ``path`` is a zip file (an archive)."""
     try:
         return zipfile.is_zipfile(path)
     except OSError:
@@ -1272,7 +1268,7 @@ def is_archive(path: Path) -> bool:
 
 
 def summarize_file(path: Path, cfg: Config, label: str = "") -> dict:
-    """``backup.summarize`` for an archive: key figures, nothing is changed."""
+    """``backup.summarize_session`` for an archive: key figures, nothing is changed."""
     from litrad.backup import memory_engine, summarize_session
 
     archive = read_archive(path)
@@ -1287,7 +1283,6 @@ def summarize_file(path: Path, cfg: Config, label: str = "") -> dict:
                 moment = datetime.fromisoformat(str(archive.manifest.get("created")))
             except ValueError:
                 pass
-            # the check verified every file against its SHA-256: unmodified
-            return summarize_session(session, cfg, moment, label, checksum_ok=True)
+            return summarize_session(session, cfg, moment, label)
     finally:
         engine.dispose()

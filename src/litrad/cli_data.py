@@ -1,6 +1,5 @@
-"""CLI commands for backups, progress export/import, restore and checks."""
+"""CLI commands for backups, archives (export/import), restore and checks."""
 
-import json
 from datetime import datetime
 from pathlib import Path
 
@@ -10,9 +9,6 @@ from sqlmodel import Session, func, select
 from litrad import notes, profiles
 from litrad.backup import (
     BackupError,
-    atomic_write_text,
-    export_progress,
-    import_progress,
     integrity_ok,
     latest_backup,
     profile_settings,
@@ -20,7 +16,7 @@ from litrad.backup import (
     run_backup,
     save_profile_archive,
     settings_text,
-    summarize,
+    summarize_session,
 )
 from litrad.cli import ConfigOpt, app, console, load_cfg
 from litrad.config import load_config
@@ -55,22 +51,10 @@ def backup(config: Path = ConfigOpt):
 
 @app.command("export-progress")
 def export_progress_cmd(
-    target: Path = typer.Argument(..., help="JSON file to write"), config: Path = ConfigOpt
+    target: Path = typer.Argument(..., help="Zip archive to write"), config: Path = ConfigOpt
 ):
-    """Write your reading progress, notes, queue and XP to a portable JSON file."""
-    cfg = load_cfg(config)
-    engine = init_db(cfg.paths.database)
-    try:
-        with Session(engine) as session:
-            notes.refresh_quietly(session, cfg)
-            data = export_progress(session, settings=profile_settings(cfg))
-    finally:
-        engine.dispose()
-    atomic_write_text(target, json.dumps(data, indent=1))
-    console.print(
-        f"Exported {len(data['readings'])} readings, {len(data['xp_events'])} XP transactions "
-        f"and {len(data['queue'])} queued papers to {target}"
-    )
+    """Write your progress, notes, queue and XP to an archive (the same as export-all)."""
+    export_all_cmd(target, config)
 
 
 def save_profile_archive_to(session, cfg, target: Path, settings: dict) -> Path:
@@ -81,7 +65,7 @@ def save_profile_archive_to(session, cfg, target: Path, settings: dict) -> Path:
 
 @app.command("import-progress")
 def import_progress_cmd(
-    source: Path = typer.Argument(..., help="Archive (.zip) or JSON file from a backup"),
+    source: Path = typer.Argument(..., help="Archive (.zip) from a backup or export"),
     dry_run: bool = typer.Option(False, help="Show what would change, write nothing"),
     config: Path = ConfigOpt,
 ):
@@ -89,35 +73,12 @@ def import_progress_cmd(
     from litrad import archive
 
     cfg = load_cfg(config)
-    if archive.is_archive(source):  # the same as import-all --into this profile
-        try:
-            result = archive.import_into(cfg, source, dry_run=dry_run)
-        except BackupError as error:
-            _fail(str(error))
-        for line in result.lines():
-            console.print(line, markup=False, highlight=False)
-        return
-    try:
-        data = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        _fail(f"Cannot read {source}: {error}")
-    engine = init_db(cfg.paths.database)
-    try:
-        with Session(engine) as session:
-            if not dry_run:
-                run_backup(cfg, session)  # safety net before merging
-            report = import_progress(session, cfg, data)
-            if dry_run:
-                session.rollback()
-            else:
-                notes.refresh_quietly(session, cfg)  # merged notes go into the note files
+    try:  # the same as import-all --into this profile
+        result = archive.import_into(cfg, source, dry_run=dry_run)
     except BackupError as error:
         _fail(str(error))
-    finally:
-        engine.dispose()
-    if dry_run:
-        console.print("[bold]Dry run[/bold]: nothing was written.")
-    console.print("\n".join(report.lines()))
+    for line in result.lines():
+        console.print(line, markup=False, highlight=False)
 
 
 @app.command("export-all")
@@ -313,13 +274,6 @@ def profile_list_cmd(config: Path = ConfigOpt):
         )
     if not infos:
         console.print("No profiles yet. Create one with 'litrad profile create NAME'.")
-    legacy = profiles.legacy_available(base)
-    if legacy:
-        console.print(
-            f"Data from before profiles ({legacy['library']} library papers, "
-            f"{legacy['readings']} readings) can become a profile: "
-            "'litrad profile adopt NAME'."
-        )
 
 
 def _confirm_rules(base, yes: bool) -> None:
@@ -358,24 +312,6 @@ def profile_create_cmd(
         f"Put your Paperpile export at {profiles.profile_config(base, slug).paths.bibtex} "
         "and run 'litrad ingest'."
     )
-
-
-@profile_app.command("adopt")
-def profile_adopt_cmd(
-    name: str = typer.Argument(..., help="Profile name"),
-    yes: bool = typer.Option(False, "--yes", help="Do not ask for confirmation"),
-    config: Path = ConfigOpt,
-):
-    """Turn the data from before profiles existed into a profile (a copy)."""
-    base = load_config(config)
-    if profiles.legacy_available(base) is None:
-        _fail("There is no existing data to take over.")
-    _confirm_rules(base, yes)
-    try:
-        slug = profiles.adopt_legacy(base, name)
-    except (profiles.ProfilesError, ProfileError, BackupError) as error:
-        _fail(str(error))
-    _created(base, slug)
 
 
 @profile_app.command("use")
@@ -427,10 +363,6 @@ def profile_save_cmd(
             notes.refresh_quietly(session, cfg)
             if target is None:
                 path = save_profile_archive(session, cfg, cfg.backup.dir, settings=settings)
-            elif target.suffix.lower() == ".json":  # the progress JSON of earlier versions
-                data = export_progress(session, settings=settings)
-                atomic_write_text(target, json.dumps(data, indent=1))
-                path = target
             else:
                 path = save_profile_archive_to(session, cfg, target, settings)
     finally:
@@ -440,7 +372,7 @@ def profile_save_cmd(
 
 @profile_app.command("load")
 def profile_load_cmd(
-    source: Path = typer.Argument(..., help="A saved profile (.zip archive or JSON)"),
+    source: Path = typer.Argument(..., help="A saved profile (.zip archive)"),
     name: str = typer.Option(None, help="Name of the new profile (default: the saved name)"),
     config: Path = ConfigOpt,
 ):
@@ -449,22 +381,11 @@ def profile_load_cmd(
     from litrad.migrations import SchemaTooNew
 
     base = load_config(config)
-    if archive.is_archive(source):
-        try:
-            result = archive.import_new(base, source, name)
-        except (profiles.ProfilesError, BackupError, ProfileError, SchemaTooNew) as error:
-            _fail(str(error))
-        _created(base, result.slug)
-        return
     try:
-        data = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        _fail(f"Cannot read {source}: {error}")
-    try:
-        slug = profiles.import_profile_file(base, data, name)
-    except (profiles.ProfilesError, BackupError, ProfileError) as error:
+        result = archive.import_new(base, source, name)
+    except (profiles.ProfilesError, BackupError, ProfileError, SchemaTooNew) as error:
         _fail(str(error))
-    _created(base, slug)
+    _created(base, result.slug)
 
 
 @profile_app.command("compare")
@@ -478,28 +399,23 @@ def profile_compare_cmd(
     try:
         with Session(engine) as session:
             notes.refresh_quietly(session, cfg)
-            rows = [summarize(export_progress(session), cfg, "current")]
+            rows = [summarize_session(session, cfg, label="current")]
     finally:
         engine.dispose()
     from litrad import archive
 
     for path in files:
         try:
-            if archive.is_archive(path):
-                rows.append(archive.summarize_file(path, cfg, path.name))
-            else:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                rows.append(summarize(data, cfg, path.name))
+            rows.append(archive.summarize_file(path, cfg, path.name))
         except (OSError, ValueError, BackupError) as error:
             console.print(f"[yellow]{path}: {error}[/yellow]")
     reference = rows[0]["fingerprint"]
     for row in rows:
         same = "same rules" if row["fingerprint"] == reference else "DIFFERENT rules"
-        integrity = {True: "unmodified", False: "EDITED", None: "no checksum"}[row["checksum_ok"]]
         console.print(
             f"[bold]{row['label']}[/bold] ({row['name']}): {row['level'].icon} Lv "
             f"{row['level'].number} {row['level'].title}, {row['xp']} XP, "
             f"{row['papers_read']} papers ({row['thorough']} thorough), "
             f"best streak {row['best_streak']}, {row['badges']} badges, "
-            f"{row['quests']} quests · {same} · {integrity}"
+            f"{row['quests']} quests · {same}"
         )

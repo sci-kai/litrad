@@ -21,8 +21,17 @@ from typer.testing import CliRunner
 import litrad.cli as cli
 import litrad.reading as reading_module
 import litrad.web.app as web
-from conftest import FakeApis, enter_profile, make_work, profile_cfg, within
-from litrad.backup import export_progress, import_progress
+from conftest import (
+    FakeApis,
+    archive_data,
+    enter_profile,
+    make_profile,
+    make_work,
+    profile_cfg,
+    select_profile,
+    within,
+)
+from litrad.backup import merge
 from litrad.config import Config, ConfigError, load_config
 from litrad.db import (
     Paper,
@@ -162,17 +171,14 @@ def test_crash_during_ingest_keeps_previous_library(cfg, make_http, monkeypatch)
 
 def test_crash_inside_a_web_request(cfg, tmp_path, monkeypatch):
     path = tmp_path / "config.yaml"
-    path.write_text(
-        f"paths:\n  bibtex: {cfg.paths.bibtex}\n  database: {cfg.paths.database}\n"
-        f"  cache_dir: {cfg.paths.cache_dir}\n"
-    )
+    path.write_text(f"paths:\n  cache_dir: {cfg.paths.cache_dir}\n")
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         session.add(Paper(title="P", doi="10.1/p", in_library=True))
         session.commit()
     engine.dispose()
     client = TestClient(web.create_app(path), raise_server_exceptions=False)
-    enter_profile(client)  # takes over the existing data
+    select_profile(client, make_profile(path, database=cfg.paths.database))
     engine = init_db(profile_cfg(path).paths.database)
     before = snapshot_counts(engine)
 
@@ -247,12 +253,9 @@ def test_commits_are_durable_and_survive_restarts(db):
 
 def test_progress_survives_a_web_restart(cfg, tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(
-        f"paths:\n  bibtex: {cfg.paths.bibtex}\n  database: {cfg.paths.database}\n"
-        f"  cache_dir: {cfg.paths.cache_dir}\n"
-    )
+    path.write_text(f"paths:\n  cache_dir: {cfg.paths.cache_dir}\n")
     first = TestClient(web.create_app(path))
-    enter_profile(first, adopt=False)
+    enter_profile(first)
     first.post("/queue/add", data={"title": "Survivor"})
     first.post("/papers/1/read", data={"level": "read", "note": "remember me"})
     first.close()
@@ -292,9 +295,8 @@ def test_cli_entry_point_reports_config_problems(tmp_path, monkeypatch, capsys):
 
 def test_ingest_without_bibtex_file(tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(
-        f"paths:\n  bibtex: {tmp_path / 'missing.bib'}\n  database: {tmp_path / 'db.sqlite'}\n"
-    )
+    path.write_text(f"paths:\n  profiles_dir: {tmp_path / 'profiles'}\n")
+    make_profile(path)  # without a Paperpile export
     result = runner.invoke(cli.app, ["ingest", "-c", str(path)])
     assert result.exit_code == 1 and "No library has a file to import yet" in result.stdout
     assert not (tmp_path / "db.sqlite").exists()  # nothing was created
@@ -302,8 +304,9 @@ def test_ingest_without_bibtex_file(tmp_path):
 
 def test_check_reports_a_damaged_database(tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\n  database: {tmp_path / 'db.sqlite'}\n")
-    (tmp_path / "db.sqlite").write_bytes(b"\x00garbage" * 500)
+    path.write_text(f"paths:\n  profiles_dir: {tmp_path / 'profiles'}\n")
+    make_profile(path)
+    (tmp_path / "profiles" / "tester" / "litrad.sqlite").write_bytes(b"\x00garbage" * 500)
     result = runner.invoke(cli.app, ["check", "-c", str(path)])
     assert result.exit_code == 1 and "damaged" in result.stdout
 
@@ -349,12 +352,9 @@ def test_ingest_survives_an_api_returning_html(cfg, make_http):
 
 def test_html_and_unicode_are_shown_safely(cfg, tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text(
-        f"paths:\n  bibtex: {cfg.paths.bibtex}\n  database: {cfg.paths.database}\n"
-        f"  cache_dir: {cfg.paths.cache_dir}\n"
-    )
+    path.write_text(f"paths:\n  cache_dir: {cfg.paths.cache_dir}\n")
     client = TestClient(web.create_app(path))
-    enter_profile(client, adopt=False)
+    enter_profile(client)
     evil = '<script>alert("x")</script> α-β 🧬 Ünïcödé'
     client.post("/queue/add", data={"title": evil})
     client.post("/papers/1/read", data={"level": "read", "note": "<img src=x onerror=alert(1)>"})
@@ -523,7 +523,7 @@ def test_random_reading_sessions_keep_invariants(cfg, tmp_path, seed):
         today = moment.date()
         summary = weekly_summaries(session, cfg, today, weeks=12)
         assert sum(w["xp"] for w in summary) <= total_xp(session) + 1000
-        data = export_progress(session)
+        data = archive_data(session, cfg)
         xp = total_xp(session)
         statuses = {
             p.doi: r.status
@@ -545,7 +545,7 @@ def test_random_reading_sessions_keep_invariants(cfg, tmp_path, seed):
     )
     fresh = init_db(other.paths.database)
     with Session(fresh) as session:
-        import_progress(session, other, data)
+        merge(session, other, data)
         assert total_xp(session) == xp
         moved = {
             p.doi: r.status

@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Generate "golden" compatibility fixtures from released litrad versions.
-
-Versions before 0.3 were called litresearch (Python package ``litresearch``);
-the builder imports either name, and the database fixture keeps its historical
-file name ``litresearch.sqlite`` for every version.
+"""Generate "golden" compatibility fixtures from released litrad versions (1.0 and later).
 
 For every git tag the script checks the tag out into a temporary worktree,
 installs it into a fresh virtual environment and runs a builder snippet inside
@@ -11,10 +7,9 @@ that environment. The snippet uses *that version's own* Python API to build a
 small profile completely offline (BibTeX import, readings with XP and badges,
 queue, recommendations, ...) and writes the files that version produces:
 
-    litresearch.sqlite  consistent snapshot of the profile database
+    litrad.sqlite       consistent snapshot of the profile database
     settings.yaml       the profile's settings file
-    progress.json       progress export (backup.export_progress)
-    profile.json        saved profile file (backup.save_profile_file)
+    export.zip          the "export everything" archive (archive.export_archive)
     expected.json       counts computed with that version, for the tests
 
 They are copied to ``<out>/<version>/`` (default ``tests/data/compat``). Fixtures
@@ -23,9 +18,9 @@ folders. The current app is then tested to still open and upgrade them.
 
 Usage (from the repository root)::
 
-    tools/make_compat_fixtures.py                      # both released tags
-    tools/make_compat_fixtures.py --tags v0.2.0-dev    # one tag
-    tools/make_compat_fixtures.py --source . --name 0.3.0 --out /tmp/compat
+    tools/make_compat_fixtures.py --tags v1.0.0        # one released tag
+    tools/make_compat_fixtures.py --tags v1.0.0 v1.1.0
+    tools/make_compat_fixtures.py --source . --name 1.1.0 --out /tmp/compat
     tools/make_compat_fixtures.py --keep               # keep worktree/venv
 
 Temporary files live under ``$TMPDIR`` (``tempfile.gettempdir()``); the
@@ -44,50 +39,33 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DEFAULT_TAGS = ["v0.1.0-alpha.1", "v0.2.0-dev"]
 BIB_FILE = REPO / "tests" / "data" / "paperpile_sample.bib"
-# the database fixture keeps its historical name for every version
-FIXTURE_DB = "litresearch.sqlite"
-FIXTURE_FILES = [FIXTURE_DB, "settings.yaml", "progress.json", "profile.json"]
-# written by versions that have them (export.zip: "export everything", 0.6 and later)
-OPTIONAL_FILES = ["export.zip"]
+FIXTURE_DB = "litrad.sqlite"
+FIXTURE_FILES = [FIXTURE_DB, "settings.yaml", "export.zip", "expected.json"]
 
 README = """# Compatibility fixtures
 
-Golden files written by released litrad versions (called litresearch before 0.3).
-The current app is tested to still open, read and upgrade them (see `tests/test_compat.py`).
+Golden files written by released litrad versions, from 1.0.0 on. The current app
+is tested to still open, read and upgrade them (see `tests/test_compat.py`).
 
 Each folder `<version>/` was produced by `tools/make_compat_fixtures.py`: the
 script checks out the git tag, installs it into a fresh virtual environment and
 builds a small profile offline with **that version's own code** (BibTeX import of
-`tests/data/paperpile_sample.bib`, readings at several depths with XP and badges,
-ratings, notes, queue, one recommendation batch; from 0.2 a second library).
-Network access is blocked while building.
+`tests/data/paperpile_sample.bib`, a second library, readings at several depths
+with XP and badges, ratings, notes, queue, one recommendation batch, an example
+choice). Network access is blocked while building.
 
 | File | Content |
 | --- | --- |
-| `litresearch.sqlite` | SQLite snapshot of the profile database (`backup.snapshot`) |
+| `litrad.sqlite` | SQLite snapshot of the profile database (`backup.snapshot`) |
 | `settings.yaml` | the profile's settings file |
-| `progress.json` | progress export (`backup.export_progress`) |
-| `profile.json` | saved profile file (`backup.save_profile_file`) |
+| `export.zip` | "export everything" archive (`archive.export_archive`) |
 | `expected.json` | counts computed by that version (papers, readings, XP, ...) |
-| `export.zip` | "export everything" archive (`archive.export_archive`, from 0.6 on) |
-
-`dev-<YYYYMMDD>/` folders hold what the development branch wrote at that date
-(e.g. the first data format version before its release); they were made with
-`--source . --name dev-<YYYYMMDD>`.
 
 **Never regenerate the fixtures of a released version**: they are the proof of
-what that version wrote. Only a new version gets a new folder:
+what that version wrote. Every release adds its own folder (see CONTRIBUTING.md):
 
-    tools/make_compat_fixtures.py --tags v0.3.0
-
-Every release adds its fixtures (see CONTRIBUTING.md).
-
-The `litresearch.sqlite` files of `0.1.0-alpha.1`, `0.2.0-dev` and `dev-20261109`
-were rebuilt on 2026-11-09 with the same script and the same code (tag, or commit
-`a03acaa` for `dev-20261109`), because `*.sqlite` was git-ignored and they had not
-been committed; their content matches the JSON files except for build timestamps.
+    tools/make_compat_fixtures.py --tags v1.0.0
 """
 
 BUILDER = r"""
@@ -123,36 +101,13 @@ socket.getaddrinfo = _blocked
 httpx.Client.send = _blocked
 httpx.HTTPTransport.handle_request = _blocked
 
-# --- package name: litrad, or litresearch before 0.3 ---------------------------------------
-import importlib  # noqa: E402
-import importlib.abc  # noqa: E402
-import importlib.util  # noqa: E402
-
-try:
-    import litrad  # noqa: F401
-except ImportError:
-
-    class _Alias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-        # litrad.x is the module litresearch.x (the same object, no copy)
-
-        def find_spec(self, fullname, path, target=None):
-            if fullname == "litrad" or fullname.startswith("litrad."):
-                return importlib.util.spec_from_loader(fullname, self)
-            return None
-
-        def create_module(self, spec):
-            return importlib.import_module("litresearch" + spec.name[len("litrad") :])
-
-        def exec_module(self, module):
-            pass
-
-    sys.meta_path.insert(0, _Alias())
-
-from litrad import backup, db, profiles, reading  # noqa: E402
+from litrad import archive, backup, db, examples, libraries, notes, profiles, reading  # noqa: E402
 from litrad.config import load_config  # noqa: E402
 from litrad.db import (  # noqa: E402
     Achievement,
     IngestRun,
+    Library,
+    LibraryPaper,
     Paper,
     QueueItem,
     Reading,
@@ -165,25 +120,12 @@ from litrad.db import (  # noqa: E402
 from litrad.ingest import pipeline  # noqa: E402
 from litrad.ingest.bibtex import parse_bibtex  # noqa: E402
 
-try:
-    from litrad import libraries  # noqa: E402
-    from litrad.db import Library, LibraryPaper  # noqa: E402
-except ImportError:  # 0.1: a profile has one library (Paper.in_library)
-    libraries = None
-
-try:
-    from litrad import examples  # noqa: E402
-except ImportError:
-    examples = None
-
 # --- config -------------------------------------------------------------------------------
 example = yaml.safe_load(Path(args["source"], "config", "config.example.yaml").read_text())
 data = work / "data"
 example["paths"].update(
     {
         "profiles_dir": str(data / "profiles"),
-        "bibtex": str(data / "paperpile" / "library.bib"),
-        "database": str(data / "litrad.sqlite"),
         "cache_dir": str(data / "cache"),
         "obsidian_vault": "n/a",
     }
@@ -217,14 +159,11 @@ with Session(engine) as session:
     # --- BibTeX import without any enrichment (sync step only) -------------------------------
     entries = parse_bibtex(Path(args["bib"]), cfg.library.ignore_labels)
     report = pipeline.IngestReport()
-    if libraries is not None:
-        library = libraries.create(session, libraries.DEFAULT_NAME)
-        papers = pipeline.sync_library(session, library, entries, report)
-        library.format = "bibtex"
-        library.updated_at = datetime(2026, 9, 1, 9, 5)
-        session.add(library)
-    else:
-        papers = pipeline.sync_library(session, entries, report)
+    library = libraries.create(session, libraries.DEFAULT_NAME)
+    papers = pipeline.sync_library(session, library, entries, report)
+    library.format = "bibtex"
+    library.updated_at = datetime(2026, 9, 1, 9, 5)
+    session.add(library)
     raw = Path(args["bib"]).read_bytes()
     run = dict(
         at=datetime(2026, 9, 1, 9, 5),
@@ -236,13 +175,14 @@ with Session(engine) as session:
         added=report.added,
         updated=report.updated,
         removed=report.removed,
+        mode="new",
+        format="bibtex",
+        library_id=library.id,
     )
-    if "mode" in IngestRun.model_fields:
-        run.update(mode="new", format="bibtex", library_id=library.id)
     session.add(IngestRun(**run))
     session.commit()
     papers = [session.get(Paper, p.id) for p in papers]
-    p_rec, p_frog, p_skim, p_abs, p_drop, p_q1, p_q2 = papers[:7]
+    p_rec, p_top, p_skim, p_abs, p_drop, p_q1, p_q2 = papers[:7]
 
     # --- one recommendation batch (no network), before reading ------------------------------
     batch = RecommendationBatch(
@@ -275,12 +215,12 @@ with Session(engine) as session:
         at=datetime(2026, 9, 8, 12, 0),
     )  # fmt: skip
 
-    # --- queue: three papers, the top one is read first ("frog") ------------------------------
-    reading.queue_add(session, cfg, p_frog)
+    # --- queue: three papers, the top one is read first -----------------------------------------
+    reading.queue_add(session, cfg, p_top)
     reading.queue_add(session, cfg, p_q1)
     reading.queue_add(session, cfg, p_q2, source="recommendation")
     reading.record_reading(
-        session, cfg, p_frog, ReadStatus.read, rating=4, note="Short note.",
+        session, cfg, p_top, ReadStatus.read, rating=4, note="Short note.",
         at=datetime(2026, 9, 15, 12, 0),
     )  # fmt: skip
     reading.record_reading(
@@ -293,43 +233,36 @@ with Session(engine) as session:
         session, cfg, p_drop, ReadStatus.dismissed, at=datetime(2026, 10, 6, 12, 0)
     )
 
-    # --- second library and example choice (0.2) --------------------------------------------
-    if libraries is not None:
-        from litrad.ingest.formats import read_references
+    # --- second library and example choice ---------------------------------------------------
+    from litrad.ingest.formats import read_references
 
-        overlap = next(p.doi for p in papers if p.doi)
-        ris = work / "second.ris"
-        ris.write_text(
-            "TY  - JOUR\nTI  - Overlapping paper with the BibTeX library\nAU  - Doe, Jane\n"
-            f"PY  - 2020\nDO  - {overlap}\nER  - \n\n"
-            "TY  - JOUR\nTI  - A paper only in the second library\nAU  - Roe, Richard\n"
-            "PY  - 2021\nDO  - 10.1234/compat.second\nT2  - Journal of Fixtures\nER  - \n",
-            encoding="utf-8",
+    overlap = next(p.doi for p in papers if p.doi)
+    ris = work / "second.ris"
+    ris.write_text(
+        "TY  - JOUR\nTI  - Overlapping paper with the BibTeX library\nAU  - Doe, Jane\n"
+        f"PY  - 2020\nDO  - {overlap}\nER  - \n\n"
+        "TY  - JOUR\nTI  - A paper only in the second library\nAU  - Roe, Richard\n"
+        "PY  - 2021\nDO  - 10.1234/compat.second\nT2  - Journal of Fixtures\nER  - \n",
+        encoding="utf-8",
+    )
+    second = libraries.create(session, "Compat second library")
+    dups = []
+    fmt, entries2 = read_references(ris, cfg.library.ignore_labels, dups)
+    report2 = pipeline.IngestReport(library=second.name, format=fmt)
+    pipeline.sync_library(session, second, entries2, report2, replace=False)
+    second.format = fmt
+    session.add(second)
+    session.add(
+        IngestRun(
+            at=datetime(2026, 9, 2, 10, 0), library_id=second.id, mode="new", format=fmt,
+            source="cli", file_name=ris.name, sha256="1" * 64, size=ris.stat().st_size,
+            entries=report2.entries or len(entries2), added=report2.added,
+            updated=report2.updated, removed=report2.removed,
         )
-        second = libraries.create(session, "Compat second library")
-        dups = []
-        fmt, entries2 = read_references(ris, cfg.library.ignore_labels, dups)
-        report2 = pipeline.IngestReport(library=second.name, format=fmt)
-        pipeline.sync_library(session, second, entries2, report2, replace=False)
-        second.format = fmt
-        session.add(second)
-        session.add(
-            IngestRun(
-                at=datetime(2026, 9, 2, 10, 0), library_id=second.id, mode="new", format=fmt,
-                source="cli", file_name=ris.name, sha256="1" * 64, size=ris.stat().st_size,
-                entries=report2.entries or len(entries2), added=report2.added,
-                updated=report2.updated, removed=report2.removed,
-            )
-        )  # fmt: skip
-        session.commit()
-    if examples is not None and hasattr(examples, "include"):  # 0.3 and later
-        examples.include(session, papers[0], "positive")
-        session.commit()
-    elif examples is not None:
-        for fn in ("choose", "set_choice", "record_choice"):
-            if hasattr(examples, fn):
-                getattr(examples, fn)(session, cfg, papers[0], "include")
-                break
+    )  # fmt: skip
+    session.commit()
+    examples.include(session, papers[0], "positive")
+    session.commit()
 
     # --- expected counts (computed by this version) ------------------------------------------
     def count(model, *where):
@@ -357,33 +290,20 @@ with Session(engine) as session:
         "queue": [session.get(Paper, q.paper_id).title for q in queue_rows],
         "batches": count(RecommendationBatch),
         "recommendations": count(Recommendation),
+        "libraries": count(Library),
+        "library_memberships": count(LibraryPaper),
+        "example_choices": count(db.ExampleChoice),
     }  # fmt: skip
-    if libraries is not None:
-        expected["libraries"] = count(Library)
-        expected["library_memberships"] = count(LibraryPaper)
-        expected["example_choices"] = (
-            count(examples.ExampleChoice) if examples and hasattr(examples, "ExampleChoice") else 0
-        )
 
     # --- outputs written by this version's own functions ----------------------------------------
     moment = datetime(2026, 11, 1, 8, 0)
-    settings = backup.profile_settings(cfg)
-    progress = backup.export_progress(session, moment, settings)
-    (out / "progress.json").write_text(json.dumps(progress, indent=1), encoding="utf-8")
-    saved = backup.save_profile_file(session, work / "saved", moment, settings)
-    shutil.copyfile(saved, out / "profile.json")
-    try:  # the "export everything" archive exists from 0.6 on
-        from litrad import archive, notes
-    except ImportError:
-        archive = None
-    if archive is not None:
-        notes.refresh_quietly(session, cfg)
-        settings_text = (cfg.paths.database.parent / "settings.yaml").read_text("utf-8")
-        archive.export_archive(session, cfg, out / "export.zip", settings_text, moment)
-        expected["note_files"] = len(notes.scan(notes.notes_dir(cfg)))
+    notes.refresh_quietly(session, cfg)
+    settings_text = (cfg.paths.database.parent / "settings.yaml").read_text("utf-8")
+    archive.export_archive(session, cfg, out / "export.zip", settings_text, moment)
+    expected["note_files"] = len(notes.scan(notes.notes_dir(cfg)))
 
 engine.dispose()
-backup.snapshot(cfg.paths.database, out / "litresearch.sqlite")
+backup.snapshot(cfg.paths.database, out / "litrad.sqlite")
 shutil.copyfile(cfg.paths.database.parent / "settings.yaml", out / "settings.yaml")
 expected["network_attempts"] = len(attempts)
 assert not attempts, attempts
@@ -441,9 +361,7 @@ def build(source: Path, name: str, tag: str, out_dir: Path, keep: bool, python: 
         run([venv / "bin" / "python", "-c", BUILDER, json.dumps(arguments)], cwd=sandbox, env=env)
         target = out_dir / name
         target.mkdir(parents=True, exist_ok=True)
-        for fixture in [*FIXTURE_FILES, "expected.json", *OPTIONAL_FILES]:
-            if fixture in OPTIONAL_FILES and not (out / fixture).exists():
-                continue
+        for fixture in FIXTURE_FILES:
             shutil.copyfile(out / fixture, target / fixture)
         print(f"fixtures written to {target}")
     finally:
@@ -461,7 +379,7 @@ def build(source: Path, name: str, tag: str, out_dir: Path, keep: bool, python: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--tags", nargs="+", default=DEFAULT_TAGS, help="git tags to build")
+    parser.add_argument("--tags", nargs="+", default=[], help="git tags to build (v1.0.0 or later)")
     parser.add_argument("--out", type=Path, default=REPO / "tests" / "data" / "compat")
     parser.add_argument("--source", type=Path, help="build from this checkout instead of tags")
     parser.add_argument("--name", help="folder name for --source (e.g. 0.3.0)")
@@ -475,6 +393,8 @@ def main() -> int:
         if not args.name:
             parser.error("--source needs --name")
         build(args.source.resolve(), args.name, "", out_dir, args.keep, args.python)
+    elif not args.tags:
+        parser.error("name the release tags to build (--tags v1.0.0 ...) or use --source")
     else:
         for tag in args.tags:
             build(REPO, tag.removeprefix("v"), tag, out_dir, args.keep, args.python)

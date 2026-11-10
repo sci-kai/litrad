@@ -57,8 +57,6 @@ BASE_RULES = {
 USER_PATHS = {
     "paths": {
         "profiles_dir": "profiles",
-        "bibtex": "paperpile/library.bib",
-        "database": f"{APP}.sqlite",
         "cache_dir": "cache",
     },
     "backup": {"dir": "backups"},

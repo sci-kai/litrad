@@ -1,8 +1,6 @@
 """Example papers for Semantic Scholar: rules, your choices, lists, engine, backups, CLI."""
 
 import json
-import sqlite3
-from contextlib import closing
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -10,9 +8,9 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from conftest import SAMPLE_BIB, FakeApis
+from conftest import SAMPLE_BIB, FakeApis, archive_data
 from litrad import examples, libraries
-from litrad.backup import export_progress, import_progress, load_profile
+from litrad.backup import merge
 from litrad.config import Config, Selection
 from litrad.db import (
     ExampleChoice,
@@ -355,10 +353,8 @@ def test_example_libraries_never_count_as_your_library(db):
     libraries.set_used(session, {positive.id})
     assert not positive.use_for_recommendations
     assert [lib.kind for lib in libraries.all_libraries(session)] == ["positive", "negative"]
-    # a database from before libraries existed is still migrated
-    session.add(Paper(title="old library paper", in_library=True))
-    session.flush()
-    assert libraries.migrate(session, cfg).name == libraries.DEFAULT_NAME
+    # an imported library is listed before the example libraries
+    libraries.create(session, "Imported papers")
     order = [lib.kind for lib in libraries.all_libraries(session)]
     assert order == ["imported", "positive", "negative"]
 
@@ -368,21 +364,6 @@ def test_an_existing_name_is_kept(db):
     libraries.create(session, "Positive examples")
     lists = examples.refresh(session, cfg)
     assert lists.positive.library.name == "Positive examples 2"
-
-
-def test_old_database_gets_the_new_table(cfg):
-    init_db(cfg.paths.database).dispose()
-    with closing(sqlite3.connect(cfg.paths.database)) as connection:
-        connection.execute("DROP TABLE examplechoice")
-        connection.execute("PRAGMA user_version = 0")  # as written before schema versions
-        connection.commit()
-    engine = init_db(cfg.paths.database)
-    with Session(engine) as session:
-        item = paper(session, "a")
-        examples.include(session, item, "positive")
-        session.commit()
-        assert session.exec(select(ExampleChoice)).one().action == "include"
-    engine.dispose()
 
 
 # --- engine ------------------------------------------------------------------------------
@@ -459,7 +440,7 @@ def test_engine_warns_when_no_library_is_used(cfg, make_http):
 # --- backups -----------------------------------------------------------------------------
 
 
-def test_progress_files_keep_choices(db, tmp_path):
+def test_archive_data_keeps_choices(db, tmp_path):
     cfg, session = db
     a, b, c = paper(session, "a"), paper(session, "b"), paper(session, "c")
     library_of(session, a, b, c)
@@ -467,7 +448,7 @@ def test_progress_files_keep_choices(db, tmp_path):
     examples.remove(session, cfg, b.id, "positive")
     examples.refresh(session, cfg)
     session.commit()
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     assert {lib["kind"] for lib in data["libraries"]} == {"imported"}
     assert sorted((c["kind"], c["action"]) for c in data["example_choices"]) == [
         ("negative", "include"),
@@ -482,17 +463,17 @@ def test_progress_files_keep_choices(db, tmp_path):
     # a fresh profile, twice
     other = init_db(tmp_path / "fresh.sqlite")
     with Session(other) as fresh:
-        report = import_progress(fresh, cfg, data)
+        report = merge(fresh, cfg, data)
         assert report.example_choices == 2
-        assert import_progress(fresh, cfg, data).example_choices == 0
+        assert merge(fresh, cfg, data).example_choices == 0
         assert len(fresh.exec(select(ExampleChoice)).all()) == 2
         assert lists_of(fresh) == expected
         kinds = [lib.kind for lib in fresh.exec(select(Library)).all()]
         assert sorted(kinds) == ["imported", "negative", "positive"]
     other.dispose()
-    # loading replaces the choices
+    # merging the data back restores a reset choice
     examples.reset(session, "negative")
-    load_profile(session, cfg, data)
+    merge(session, cfg, data)
     assert len(session.exec(select(ExampleChoice)).all()) == 2
 
 
@@ -502,21 +483,18 @@ def test_merging_choices_newer_wins(db, tmp_path):
     examples.include(session, a, "positive")
     session.get(ExampleChoice, (a.id, "positive")).at = T0
     session.commit()
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     other = init_db(tmp_path / "other.sqlite")
     with Session(other) as existing:
         local = paper(existing, "a")
         examples.include(existing, local, "negative")  # newer than the file's choice
         existing.commit()
-        import_progress(existing, cfg, data)
+        merge(existing, cfg, data)
         choices = {c.kind: c.action for c in existing.exec(select(ExampleChoice)).all()}
         assert choices == {"negative": "include"}
-        import_progress(existing, cfg, data)
+        merge(existing, cfg, data)
         assert len(existing.exec(select(ExampleChoice)).all()) == 1
     other.dispose()
-    bad = dict(data, example_choices=[{"paper": "p1", "kind": "maybe", "action": "include"}])
-    with pytest.raises(Exception, match="Invalid progress file"):
-        import_progress(session, cfg, bad, allow_modified=True)
 
 
 # --- command line --------------------------------------------------------------------------
@@ -539,7 +517,7 @@ def test_cli_examples(tmp_path, plain_console, monkeypatch, make_http):
     apis = FakeApis()
     monkeypatch.setattr(cli_library, "make_http", lambda cfg: make_http(apis))
     path = tmp_path / "config.yaml"
-    path.write_text(f"paths:\n  bibtex: x.bib\n  cache_dir: {tmp_path / 'cache'}\n")
+    path.write_text(f"paths:\n  cache_dir: {tmp_path / 'cache'}\n")
     c = ["-c", str(path)]
 
     def run(*args, code=0):

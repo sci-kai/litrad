@@ -62,7 +62,7 @@ def env(tmp_path, monkeypatch, make_http, apis):
     """A fresh installation: config.yaml only, no profile yet."""
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  database: {tmp_path / 'db.sqlite'}\n  cache_dir: {tmp_path / 'cache'}\n",
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(web, "make_http", lambda cfg: make_http(apis))
@@ -91,7 +91,7 @@ def assert_pages_render(client, urls=MENU):
 def test_brand_new_profile_pages(env):
     client, _ = env
     assert client.get("/", follow_redirects=False).headers["location"] == "/welcome"
-    enter_profile(client, "Newbie", adopt=False)
+    enter_profile(client, "Newbie")
     assert_pages_render(client)
     assert "No recommendations yet" in client.get("/recommendations").text or (
         "topics" in client.get("/recommendations").text
@@ -101,7 +101,7 @@ def test_brand_new_profile_pages(env):
 
 def test_weeks_of_use(env, apis):
     client, path = env
-    enter_profile(client, "Kai", adopt=False)
+    enter_profile(client, "Kai")
 
     # import the library
     with open(SAMPLE_BIB, "rb") as handle:
@@ -164,12 +164,13 @@ def test_weeks_of_use(env, apis):
     bib = client.get(f"/library/{library_id}/export?format=bibtex&status=true")
     assert bib.status_code == 200 and "@" in bib.text
     assert client.get("/library/queue/export?format=ris").status_code == 200
-    assert client.get("/profile/download").json()["profile"]["name"] == "Kai"
+    everything = client.get("/profile/export-all")
+    assert everything.status_code == 200 and everything.content.startswith(b"PK")
     saved = celebration(post(client, "/profile/save"))["message"].removeprefix("Profile saved as ")
 
     # a second profile, then back and compare
     assert celebration(post(client, "/welcome/leave")) is None
-    enter_profile(client, "Colleague", adopt=False)
+    enter_profile(client, "Colleague")
     assert "Colleague" in client.get("/").text
     assert_pages_render(client)
     kai = client.post("/welcome/select", data={"slug": "kai"}, follow_redirects=True)
@@ -180,18 +181,18 @@ def test_weeks_of_use(env, apis):
 
 
 def test_current_profile_figures_match_saved_file(env):
-    """The compare page reads the open profile directly; it must agree with summarize()."""
-    from litrad.backup import export_progress, summarize
+    """The compare page reads the open profile directly; it must agree with summarize_session()."""
+    from litrad.backup import summarize_session
 
     client, path = env
-    enter_profile(client, "Kai", adopt=False)
+    enter_profile(client, "Kai")
     post(client, "/queue/add", {"title": "Manual paper"})
     pid = 1
     post(client, f"/papers/{pid}/read", {"level": "thorough", "note": "n" * 200})
     page = client.get("/profile/compare").text
     engine = database(path)
     with Session(engine) as session:
-        expected = summarize(export_progress(session), profile_cfg(path), "current")
+        expected = summarize_session(session, profile_cfg(path), label="current")
     engine.dispose()
     labels = {
         "XP": "xp",
@@ -214,7 +215,7 @@ def test_current_profile_figures_match_saved_file(env):
 @pytest.fixture
 def big(env):
     client, path = env
-    enter_profile(client, "Veteran", adopt=False)
+    enter_profile(client, "Veteran")
     ids = populate(
         profile_cfg(path).paths.database,
         n_papers=2500,
@@ -226,10 +227,8 @@ def big(env):
     return client, path, ids
 
 
-def test_large_profile_pages_are_bounded(big, monkeypatch):
+def test_large_profile_pages_are_bounded(big):
     client, path, ids = big
-    # the open profile is never exported and re-imported for the comparison
-    monkeypatch.setattr(web, "summarize", lambda *a, **k: pytest.fail("summarize() called"))
     library = ids["libraries"][0]
     urls = MENU + [
         f"/library/{library}",
@@ -291,7 +290,7 @@ def test_large_ledger_is_paginated(big):
 @pytest.fixture
 def user(env):
     client, path = env
-    enter_profile(client, "Kai", adopt=False)
+    enter_profile(client, "Kai")
     post(client, "/queue/add", {"title": "Manual paper"})
     return client, path
 
@@ -378,12 +377,12 @@ def test_huge_requests_are_refused_early(user):
     assert response.status_code == 413
 
 
-def test_profile_files_must_be_objects(user):
+def test_profile_files_must_be_zip_archives(user):
     client, _ = user
     for url in ("/welcome/load", "/profile/compare"):
         response = client.post(url, files={"file": ("p.json", b"[1, 2]")}, follow_redirects=True)
         assert response.status_code == 200
-        assert "is not a litrad profile file" in (
+        assert "is not a zip archive" in (
             (celebration(response) or {}).get("message", "") + response.text
         )
 

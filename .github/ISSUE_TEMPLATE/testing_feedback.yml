@@ -21,7 +21,7 @@ body:
     id: setup
     attributes:
       label: Version, system and library size
-      placeholder: 0.2.0-dev · Raspberry Pi OS · Paperpile · 450 papers
+      placeholder: 1.0.0-rc.1 · Ubuntu 24.04 · Paperpile · 450 papers
     validations:
       required: true
   - type: dropdown

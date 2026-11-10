@@ -31,7 +31,6 @@ def _open(config: Path):
     cfg = load_cfg(config)
     engine = init_db(cfg.paths.database)
     session = Session(engine)
-    libraries.migrate(session, cfg)
     return cfg, engine, session
 
 

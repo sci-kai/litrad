@@ -292,6 +292,24 @@ def make_work(
     }
 
 
+# --- archives ------------------------------------------------------------------------
+
+
+def archive_data(session, cfg) -> dict:
+    """The profile in ``session`` as ``backup.merge`` takes it, via a checked archive.
+
+    The same data as writing an archive and reading it back, without the file.
+    """
+    from litrad import archive
+    from litrad.db import now
+
+    files = archive.collect(session, cfg)
+    info = archive.manifest(files, None, now())
+    checked = archive.check(archive.Archive(Path("memory.zip"), info, files), cfg)
+    assert checked.report.ok, checked.report.lines()
+    return archive._keys(checked)
+
+
 # --- profiles ------------------------------------------------------------------------
 
 
@@ -309,6 +327,33 @@ def format1_rules():
     return rules
 
 
+def make_profile(config_path, name: str = "Tester", database=None, bibtex=None) -> str:
+    """A profile for the config at ``config_path``; it becomes the current one.
+
+    ``database``: a prepared database that becomes the profile's (a copy);
+    ``bibtex``: its Paperpile export. The profile gets the topics of the config.
+    """
+    import shutil
+
+    from litrad import profiles
+    from litrad.backup import snapshot
+    from litrad.config import load_config
+
+    base = load_config(config_path)
+    settings = {
+        "topics": [t.model_dump(mode="json") for t in base.topics],
+        "excluded_terms": list(base.excluded_terms),
+    }
+    slug = profiles.create_profile(base, name, settings=settings)
+    home = profiles.folder(base, slug)
+    if database is not None:
+        snapshot(Path(database), home / profiles.PROFILE_DB)
+    if bibtex is not None:
+        shutil.copy(bibtex, home / profiles.PROFILE_BIB)
+    profiles.set_current(base, slug)
+    return slug
+
+
 def rules_form(rules=None) -> dict:
     """The fields of the rules form, filled with ``rules`` (default rules)."""
     from litrad.rules import GameRules
@@ -320,15 +365,22 @@ def rules_form(rules=None) -> dict:
     return data
 
 
-def enter_profile(client, name: str = "Tester", adopt: bool = True, **fields):
-    """Create a profile in the web UI (adopting existing data) and select it."""
+def enter_profile(client, name: str = "Tester", **fields):
+    """Create a profile in the web UI and select it."""
     response = client.post(
-        "/welcome/adopt" if adopt else "/welcome/create",
+        "/welcome/create",
         data={"name": name, **rules_form(), **fields},
         follow_redirects=False,
     )
     assert response.status_code == 303, response.text
     assert response.headers["location"] != "/welcome", "profile not created"
+    return response
+
+
+def select_profile(client, slug: str):
+    """Choose an existing profile in the web UI."""
+    response = client.post("/welcome/select", data={"slug": slug}, follow_redirects=False)
+    assert response.status_code == 303, response.text
     return response
 
 

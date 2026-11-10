@@ -255,7 +255,7 @@ def site(tmp_path, monkeypatch, make_http):
     apis = FakeApis()
     monkeypatch.setattr(web, "make_http", lambda cfg: make_http(apis))
     client = TestClient(web.create_app(path))
-    enter_profile(client, "Ada", adopt=False)
+    enter_profile(client, "Ada")
     yield client, path, apis
     client.close()
 

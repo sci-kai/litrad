@@ -57,7 +57,7 @@ def db(cfg):
                 batch_id=batch.id,
                 paper_id=papers[1].id,
                 rank=1,
-                category=Category.detail,
+                category=Category.open,
                 score=0.9,
             )
         )

@@ -12,9 +12,9 @@ from bibtexparser import middlewares as mw
 from sqlalchemy import event
 from sqlmodel import Session, func, select
 
-from conftest import FakeApis
+from conftest import FakeApis, archive_data
 from litrad import export, libraries
-from litrad.backup import export_progress, import_progress
+from litrad.backup import merge
 from litrad.db import LibraryPaper, Paper, init_db
 from litrad.ingest.formats import read_references
 from litrad.ingest.pipeline import import_into
@@ -147,22 +147,22 @@ def test_large_exports_round_trip(db, make_http, tmp_path):
         assert len(back) == N and {e.doi for e in back} == {f"10.1000/x{n}" for n in range(N)}
 
 
-def test_large_progress_files_merge_without_a_query_per_paper(db, make_http, tmp_path):
+def test_large_archives_merge_without_a_query_per_paper(db, make_http, tmp_path):
     cfg, session, _ = db
     lib = libraries.create(session, "Big")
     path = write_bib(tmp_path / "big.bib", range(N))
     import_into(cfg, session, make_http(FakeApis()), lib, path, "new", use_s2=False)
-    data = export_progress(session)
+    data = archive_data(session, cfg)
     other = init_db(tmp_path / "other.sqlite")
     statements = Statements(other)
     with Session(other) as fresh:
-        report = import_progress(fresh, cfg, data)
+        report = merge(fresh, cfg, data)
         assert (
             report.papers_created == N
             and libraries.size(fresh, fresh.exec(select(libraries.Library)).one()) == N
         )
         statements.take()
-        report = import_progress(fresh, cfg, data)  # idempotent
+        report = merge(fresh, cfg, data)  # idempotent
         assert report.papers_created == 0 and report.papers_matched == N
         assert count(fresh, Paper) == N and count(fresh, LibraryPaper) == N
     assert statements.take() < 2 * N

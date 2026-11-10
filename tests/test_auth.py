@@ -115,7 +115,7 @@ def test_login_and_logout(protected):
     assert "HttpOnly" in cookie and "samesite=lax" in cookie.lower()
     # logged in, but no profile chosen yet: the welcome screen comes first
     assert protected.get("/queue", follow_redirects=False).headers["location"] == "/welcome"
-    enter_profile(protected, "Ada", adopt=False)
+    enter_profile(protected, "Ada")
     page = protected.get("/queue")
     assert page.status_code == 200 and "Reading queue" in page.text and "Log out" in page.text
     protected.post("/logout")
@@ -140,9 +140,9 @@ def test_no_password_means_no_login(tmp_path):
 
 def test_without_password_only_trusted_host_names_are_answered(tmp_path):
     """DNS rebinding: evil.example resolving to 127.0.0.1 must not reach the data."""
-    names = frozenset({"localhost", "pi", "pi.local"})
+    names = frozenset({"localhost", "nas", "nas.local"})
     client = TestClient(create_app(write_config(tmp_path), trusted_names=names))
-    for host in ("127.0.0.1:8080", "192.168.1.5", "[::1]:8080", "localhost:8080", "PI.local"):
+    for host in ("127.0.0.1:8080", "192.168.1.5", "[::1]:8080", "localhost:8080", "NAS.local"):
         assert client.get("/welcome", headers={"host": host}).status_code == 200, host
     for host in ("evil.example", "evil.example:8080", "localhost.evil.example"):
         assert client.get("/welcome", headers={"host": host}).status_code == 421, host
@@ -152,7 +152,7 @@ def test_without_password_only_trusted_host_names_are_answered(tmp_path):
 def test_with_password_any_host_name_reaches_the_login(tmp_path):
     path = write_config(tmp_path, password_hash=hash_password("lab-meeting-42"))
     client = TestClient(create_app(path, trusted_names=frozenset({"localhost"})))
-    response = client.get("/", headers={"host": "pi.fritz.box"}, follow_redirects=False)
+    response = client.get("/", headers={"host": "nas.fritz.box"}, follow_redirects=False)
     assert response.status_code == 303 and "/login" in response.headers["location"]
     client.close()
 

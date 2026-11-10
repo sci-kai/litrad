@@ -35,19 +35,6 @@
   </section>
   {% endif %}
 
-  {% if legacy %}
-  <section class="card up-next" style="margin-top:1rem">
-    <span class="badge-next">EXISTING DATA FOUND</span>
-    <h2>📦 Use your existing library for a profile</h2>
-    <p>{{ legacy.library }} library papers and {{ legacy.readings }} reading entries from before profiles (<code>{{ legacy.path }}</code>). The original file stays unchanged.</p>
-    <form method="post" action="/welcome/adopt" class="grid" style="gap:.6rem" data-confirm="Create the profile? Its game rules are locked afterwards.">
-      <div class="field" style="margin:0"><label for="adopt-name">Profile name</label><input type="text" id="adopt-name" name="name" value="{{ legacy.name or '' }}" placeholder="e.g. Kai" maxlength="80" required></div>
-      {{ rules_fields(rule_groups, form_rules, levels_text, "adopt") }}
-      <div><button class="primary">📦 Create profile from existing data</button></div>
-    </form>
-  </section>
-  {% endif %}
-
   <div class="grid two" style="margin-top:1rem; align-items:start">
     <section class="card">
       <h2>✨ Create a new profile</h2>
@@ -68,8 +55,8 @@
           {% for path, shown in saves %}<option value="{{ path.name }}">{{ shown }}</option>{% endfor %}
         </select></div>
         {% endif %}
-        <div class="field" style="margin:0"><label for="load-file">{{ "…or upload a file" if saves else "Profile file (.json)" }}</label>
-        <input type="file" id="load-file" name="file" accept=".zip,.json,application/zip,application/json"></div>
+        <div class="field" style="margin:0"><label for="load-file">{{ "…or upload an archive" if saves else "Saved profile (.zip)" }}</label>
+        <input type="file" id="load-file" name="file" accept=".zip,application/zip"></div>
         <div class="field" style="margin:0"><label for="load-name">Name <small class="muted">(optional; default: the saved name)</small></label>
         <input type="text" id="load-name" name="name" maxlength="80"></div>
         <div><button>📂 Load profile</button></div>

@@ -14,8 +14,8 @@
       </div>
     </fieldset>
     {% endif %}
-    <div class="field" style="margin:0"><label for="compare-file">{{ "…or upload files" if saves else "Profile files (.json)" }}</label>
-    <input type="file" id="compare-file" name="file" accept=".zip,.json,application/zip,application/json" multiple></div>
+    <div class="field" style="margin:0"><label for="compare-file">{{ "…or upload archives" if saves else "Saved profiles (.zip)" }}</label>
+    <input type="file" id="compare-file" name="file" accept=".zip,application/zip" multiple></div>
     <div><button class="primary">⚖️ Compare</button></div>
   </form>
 </div>
@@ -45,7 +45,6 @@
       {% endfor %}</tr>
     {% endfor %}
     <tr><td>Rules</td>{% for row in rows %}<td class="num">{% if row.fingerprint == reference %}<span class="chip queued">same rules</span>{% else %}<span class="chip penalty">different rules</span>{% endif %}<br><small><code>{{ row.fingerprint or "none" }}</code></small></td>{% endfor %}</tr>
-    <tr><td>File integrity</td>{% for row in rows %}<td class="num">{% if row.checksum_ok is none %}<small class="muted">no checksum (old file)</small>{% elif row.checksum_ok %}✅ unmodified{% else %}<span class="neg">⚠️ edited outside litrad</span>{% endif %}</td>{% endfor %}</tr>
   </table>
   <p class="muted" style="margin-top:.6rem"><small>Green: best per row · XP compares fairly only with the same rules</small></p>
 </div>

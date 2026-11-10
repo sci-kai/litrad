@@ -1,8 +1,9 @@
 """Versioned SQLite schema: numbered, tested upgrade steps.
 
 Every profile database carries its schema version in SQLite's
-``PRAGMA user_version`` (0 = written before versions existed, 0.1 to 0.5).
-``init_db`` calls ``migrate`` before it opens a database:
+``PRAGMA user_version``; version 1 is the schema of litrad 1.0 (the
+baseline, created from the models). ``init_db`` calls ``migrate`` before it
+opens a database:
 
 - a new, empty file gets the current tables and ``SCHEMA_VERSION``;
 - an older database is first copied (``backup.snapshot``) to
@@ -11,11 +12,13 @@ Every profile database carries its schema version in SQLite's
   not had yet, one transaction per step; the version is raised with the step,
   so an interrupted upgrade resumes at the step that failed;
 - a database with a *newer* version than this app knows is refused
-  (``SchemaTooNew``): an older litrad never changes a newer database.
+  (``SchemaTooNew``): an older litrad never changes a newer database;
+- a database with tables but without a version (0) was not written by
+  litrad 1.x and is refused (``MigrationError``).
 
-Rules for new steps (the 1.0 compatibility promise): append a ``Step`` with
-the next number and raise ``SCHEMA_VERSION``; never change or remove a
-released step. Additive model changes (new tables, nullable columns or
+Rules for new steps (the 1.x compatibility promise): append a ``Step`` with
+the next number (the first one is 2: it upgrades version 1 to 2) and raise
+``SCHEMA_VERSION``; never change or remove a released step. Additive model changes (new tables, nullable columns or
 columns with a default, new indexes) need a step that only calls
 ``sync_schema``; a test fails when the models change without a new version
 (``tests/data/compat/schema.json``).
@@ -31,7 +34,8 @@ from sqlalchemy import JSON, create_engine, event, inspect, text
 from sqlalchemy.engine import Connection
 from sqlmodel import SQLModel
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 1
+BASELINE = 1  # the schema of litrad 1.0: new databases are created from the models
 BACKUP_FOLDER = "upgrade-backups"
 # copies from before an upgrade that are kept per profile (the newest; older ones
 # are deleted after an upgrade succeeded, so a failed series keeps all of them)
@@ -94,25 +98,9 @@ def sync_schema(connection: Connection) -> list[str]:
     return added
 
 
-def _baseline(connection: Connection) -> None:
-    sync_schema(connection)
-
-
-# Never change or remove a step once released; append new ones.
-STEPS: tuple[Step, ...] = (
-    Step(
-        1,
-        "Versioned schema: databases of 0.1.0-alpha.1 to 0.5 get every table, column and "
-        "index of 0.6 (additive only, nothing is removed)",
-        _baseline,
-    ),
-    Step(
-        2,
-        "Read earlier: status events get 'earlier' (read before using litrad) and "
-        "'read_on' (when, if known); existing events are not earlier",
-        sync_schema,
-    ),
-)
+# Upgrades from the baseline: step N brings version N - 1 to N. Never change or
+# remove a step once released; append new ones (e.g. Step(2, "...", sync_schema)).
+STEPS: tuple[Step, ...] = ()
 
 
 @dataclass
@@ -211,6 +199,11 @@ def migrate(path: Path, steps: tuple[Step, ...] | None = None) -> MigrationResul
                     _set_version(connection, SCHEMA_VERSION)
                     result.created, result.to_version = True, SCHEMA_VERSION
                     return result
+        if version < BASELINE:
+            raise MigrationError(
+                f"{path} has no litrad schema version: it was not written by litrad 1.x. "
+                "It was not changed."
+            )
         # an existing database: keep a copy of it as it was before the upgrade
         result.snapshot = snapshot(path, snapshot_path(path, version))
         for step in sorted(steps, key=lambda s: s.version):
@@ -233,6 +226,8 @@ def migrate(path: Path, steps: tuple[Step, ...] | None = None) -> MigrationResul
                 _set_version(connection, step.version)
                 result.applied.append(f"{step.version}: {step.description}")
                 result.to_version = step.version
+        if result.to_version != SCHEMA_VERSION:
+            raise MigrationError(f"Migration step {result.to_version + 1} is missing")
     finally:
         engine.dispose()
     rotate_upgrade_backups(path.parent / BACKUP_FOLDER)

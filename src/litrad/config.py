@@ -34,7 +34,8 @@ class Paths(_Base):
     # relative paths below (and backup.dir) are resolved against this folder;
     # not set: see locations.base_dir (set by load_config to the folder in use)
     base_dir: Path | None = None
-    # used when no profile is selected (and as the source of "existing data")
+    # set per profile (profiles.profile_config), not in config.yaml: the profile's
+    # Paperpile export (settings.yaml may name another file) and its database
     bibtex: Path = Path("data/paperpile/library.bib")
     database: Path = Path("data/litrad.sqlite")
     # one folder per profile: database, Paperpile export, settings
@@ -160,16 +161,6 @@ class Selection(_Base):
                 names.append(name)
         return names
 
-    @model_validator(mode="before")
-    @classmethod
-    def _old_split_keys(cls, data):
-        """Configs before v0.1.0 had n_detail + n_skim instead of n_recommendations."""
-        if isinstance(data, dict) and ("n_detail" in data or "n_skim" in data):
-            data = dict(data)
-            old = (data.pop("n_detail", None) or 0) + (data.pop("n_skim", None) or 0)
-            data.setdefault("n_recommendations", min(max(old, 1), 5))
-        return data
-
 
 class Queue(_Base):
     # deliberately small: finish or drop papers before adding new ones
@@ -241,6 +232,10 @@ class ConfigError(ValueError):
     """A missing or invalid config file, with a message for humans."""
 
 
+# paths that belong to a profile (profiles.profile_config sets them), never to config.yaml
+PROFILE_PATHS = {"database": "database", "bibtex": "Paperpile export (library.bib)"}
+
+
 def config_base_dir(path: Path, raw_paths: dict | None = None) -> tuple[Path, str]:
     """Base folder of relative paths for the config file at ``path`` and the rule used.
 
@@ -274,6 +269,12 @@ def load_config(path: Path) -> Config:
     if not isinstance(raw, dict):
         raise ConfigError(f"{path} must contain settings (key: value), not {type(raw).__name__}")
     if isinstance(raw.get("paths"), dict):
+        for key in PROFILE_PATHS:
+            if key in raw["paths"]:
+                raise ConfigError(
+                    f"{path}: paths.{key} is not a setting of config.yaml (each profile keeps "
+                    f"its {PROFILE_PATHS[key]} in its own folder); delete that line"
+                )
         raw["paths"] = dict(raw["paths"], base_dir=str(config_base_dir(path, raw["paths"])[0]))
     try:
         return Config.model_validate(raw)

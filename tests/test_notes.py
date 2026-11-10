@@ -1,6 +1,5 @@
 """Notes as Markdown files (notes.py): naming, front matter, sync, conflicts, preview."""
 
-import json
 import re
 import zipfile
 from datetime import datetime
@@ -11,9 +10,9 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from conftest import profile_cfg
-from litrad import history, notes, profiles
-from litrad.backup import export_progress, restore, run_backup
+from conftest import make_profile, profile_cfg
+from litrad import archive, history, notes, profiles
+from litrad.backup import restore, run_backup
 from litrad.config import Config, load_config
 from litrad.db import (
     Library,
@@ -457,15 +456,15 @@ def test_vault_per_profile(app_env, tmp_path):  # noqa: F811
 def write_config(tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text(
-        f"paths:\n  database: {tmp_path / 'db.sqlite'}\n  cache_dir: {tmp_path / 'cache'}\n"
-        f"  profiles_dir: {tmp_path / 'profiles'}\n"
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\n  profiles_dir: {tmp_path / 'profiles'}\n"
     )
     return config
 
 
 def test_cli_sync_check_path(tmp_path):
     config = write_config(tmp_path)
-    cfg = load_config(config)
+    make_profile(config)
+    cfg = profile_cfg(config)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         paper = Paper(title="CLI paper", doi="10.5/x", bibtex_key="Cli2024")
@@ -475,11 +474,11 @@ def test_cli_sync_check_path(tmp_path):
         session.commit()
         pid = paper.id
     engine.dispose()
-    notes_folder = tmp_path / "notes"
+    notes_folder = notes.notes_dir(cfg)
 
     result = runner.invoke(cli.app, ["notes", "check", "-c", str(config)])
     assert result.exit_code == 0, result.output
-    assert "files created: 1" in result.output and not notes_folder.exists()
+    assert "files created: 1" in result.output and not list(notes_folder.glob("*.md"))
 
     result = runner.invoke(cli.app, ["notes", "path", f"#{pid}", "-c", str(config)])
     assert result.stdout.strip() == str(notes_folder / "Cli2024.md")
@@ -537,7 +536,7 @@ def test_restore_takes_note_files_from_a_backup_made_before_1_0(env):
     assert path_a.read_text().endswith("note a\n")
 
 
-def test_progress_and_profile_load_write_note_files(app_env, tmp_path):  # noqa: F811
+def test_archive_import_writes_note_files(app_env, tmp_path):  # noqa: F811
     client, path, _ = app_env
     pid = web_paper(path)
     post(client, f"/papers/{pid}/read", {"level": "read", "note": "travels along"})
@@ -547,11 +546,10 @@ def test_progress_and_profile_load_write_note_files(app_env, tmp_path):  # noqa:
         note_path = notes.path_for(session, cfg, session.get(Paper, pid))
         note_path.write_text(note_path.read_text() + "\nedited before saving\n")
         notes.refresh_quietly(session, cfg)
-        data = export_progress(session)
+        archive.export_archive(session, cfg, tmp_path / "x.zip")
     engine.dispose()
-    assert any("edited before saving" in r["notes"] for r in data["readings"])
     base = load_config(path)
-    slug = profiles.import_profile_file(base, json.loads(json.dumps(data)), "Copy")
+    slug = archive.import_new(base, tmp_path / "x.zip", "Copy").slug
     copy_cfg = profiles.profile_config(base, slug)
     files = list(notes.notes_dir(copy_cfg).glob("*.md"))
     assert len(files) == 1 and "edited before saving" in files[0].read_text()

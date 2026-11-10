@@ -1,4 +1,4 @@
-"""Backups, portable progress export/import and restore.
+"""Backups, restore, merging data from archives, and comparing profiles.
 
 Recommended setup: keep the live database (``paths.database``) on local disk
 and point ``backup.dir`` to a cloud-synced folder. Syncing the live SQLite
@@ -15,15 +15,8 @@ Two complementary files are written into ``backup.dir`` per backup:
   files, loadable as a new profile or mergeable into another installation.
   Papers are matched by DOI, PMID, citation key or title, because internal
   ids differ between machines.
-
-Before 1.0 the second file was the progress JSON (``litrad_progress_*.json``,
-format ``litrad-progress`` 2) plus ``litrad_notes_*.zip``; both are
-still read and rotated.
 """
 
-import hashlib
-import hmac
-import json
 import os
 import re
 import shutil
@@ -35,7 +28,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 import yaml
-from sqlmodel import Session, delete, insert, select
+from sqlmodel import Session, insert, select
 
 from litrad import __version__
 from litrad.config import Config
@@ -45,7 +38,6 @@ from litrad.db import (
     ExampleChoice,
     Library,
     LibraryPaper,
-    NoteFile,
     Paper,
     Profile,
     QueueItem,
@@ -59,11 +51,7 @@ from litrad.db import (
 )
 from litrad.rules import GameRules
 
-FORMAT = "litrad-progress"
-FORMAT_VERSION = 2  # 2: profile with locked rules, recommendations, checksum
 SNAPSHOT_PREFIX = "litrad_"
-PROGRESS_PREFIX = "litrad_progress_"
-NOTES_PREFIX = "litrad_notes_"
 BACKUP_ARCHIVE_PREFIX = "litrad_backup_"
 _STAMP = re.compile(r"(\d{8}_\d{6})")
 
@@ -175,21 +163,10 @@ def snapshot(database: Path, destination: Path) -> Path:
     return destination
 
 
-def _export_files(directory: Path) -> list[Path]:
-    """Backup archives and the legacy progress JSON and notes zip of earlier backups."""
-    return [
-        *files_with(directory, BACKUP_ARCHIVE_PREFIX, ".zip"),
-        *files_with(directory, PROGRESS_PREFIX, ".json"),
-        *files_with(directory, NOTES_PREFIX, ".zip"),
-    ]
-
-
 def rotate(directory: Path, keep: int) -> list[Path]:
-    """Delete the oldest snapshots and exports beyond ``keep`` each.
+    """Delete the oldest snapshots and backup archives beyond ``keep`` each.
 
-    Exports are counted per backup (time stamp): an archive, or the legacy
-    progress JSON with its notes zip, so old-style backups age out together with
-    new ones. Saved profiles and "export everything" files are never deleted.
+    Saved profiles and "export everything" files are never deleted.
     """
     removed = []
     snapshots = sorted(files_with(directory, SNAPSHOT_PREFIX, ".sqlite"), key=stamp_order)
@@ -197,7 +174,7 @@ def rotate(directory: Path, keep: int) -> list[Path]:
         old.unlink()
         removed.append(old)
     by_stamp: dict[str, list[Path]] = {}
-    for path in _export_files(directory):
+    for path in files_with(directory, BACKUP_ARCHIVE_PREFIX, ".zip"):
         found = _STAMP.search(path.name)
         if found:  # a file without a time stamp is not one of ours
             by_stamp.setdefault(found.group(1), []).append(path)
@@ -214,10 +191,6 @@ class BackupResult:
     snapshot: Path
     archive: Path
     removed: list[Path]
-
-    @property
-    def progress(self) -> Path:  # the name before 1.0
-        return self.archive
 
 
 def settings_text(cfg: Config, settings: dict | None = None) -> str | None:
@@ -251,15 +224,12 @@ def run_backup(
 
 
 def latest_backup(cfg: Config) -> datetime | None:
-    """The time of the newest backup (archive, or progress JSON before 1.0)."""
+    """The time of the newest backup archive."""
     directory = cfg.backup.dir
     if not directory.exists():
         return None
     times = []
-    for path in [
-        *files_with(directory, BACKUP_ARCHIVE_PREFIX, ".zip"),
-        *files_with(directory, PROGRESS_PREFIX, ".json"),
-    ]:
+    for path in files_with(directory, BACKUP_ARCHIVE_PREFIX, ".zip"):
         found = _STAMP.fullmatch(path.stem.split("_", 2)[-1])
         if found:
             try:
@@ -301,7 +271,7 @@ def restore(cfg: Config, source: Path, moment: datetime | None = None) -> Path:
 
 
 def restore_notes(cfg: Config, source: Path) -> None:
-    """After a restore: write back missing note files from the snapshot's notes archive.
+    """After a restore: write back missing note files from the backup archive.
 
     The sync state is forgotten, so a note whose file and restored copy differ
     becomes a conflict (both kept) instead of one side overwriting the other.
@@ -310,22 +280,15 @@ def restore_notes(cfg: Config, source: Path) -> None:
     from litrad.db import init_db
 
     name = source.name.removesuffix(".sqlite")
-    moment = name.removeprefix(SNAPSHOT_PREFIX)
-    # the archive of the same backup, else the notes zip from before 1.0
-    candidates = [
-        (source.with_name(f"{prefix}{moment}.zip"), inside)
-        for prefix, inside in ((BACKUP_ARCHIVE_PREFIX, "notes/"), (NOTES_PREFIX, ""))
-    ]
-    archive, prefix = next(
-        ((path, inside) for path, inside in candidates if path.is_file()), candidates[0]
-    )
+    # the archive of the same backup
+    archive = source.with_name(f"{BACKUP_ARCHIVE_PREFIX}{name.removeprefix(SNAPSHOT_PREFIX)}.zip")
     engine = init_db(cfg.paths.database)
     try:
         with Session(engine) as session:
             notes.forget_sync_state(session)
             try:
                 if archive.is_file():
-                    notes.restore_archive(cfg, archive, prefix)
+                    notes.restore_archive(cfg, archive, "notes/")
             except (notes.NotesError, OSError, ValueError, zipfile.BadZipFile):
                 pass  # the copies in the database stay; `notes sync` writes the files
             notes.refresh_quietly(session, cfg)
@@ -333,7 +296,7 @@ def restore_notes(cfg: Config, source: Path) -> None:
         engine.dispose()
 
 
-# --- portable progress export ---------------------------------------------------------
+# --- merging data from an archive -------------------------------------------------------
 
 
 def earlier_fields(event) -> dict:
@@ -345,204 +308,6 @@ def earlier_fields(event) -> dict:
 
 def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
-
-
-def _canonical(data: dict) -> str:
-    return json.dumps({k: v for k, v in data.items() if k != "checksum"}, sort_keys=True)
-
-
-def checksum(data: dict) -> str:
-    """SHA-256 over the file content; detects edits made outside the tool."""
-    return hashlib.sha256(_canonical(data).encode()).hexdigest()
-
-
-def verify_checksum(data: dict) -> bool | None:
-    """True/False, or None for files without a checksum (format version 1)."""
-    if "checksum" not in data:
-        return None
-    return hmac.compare_digest(str(data["checksum"]), checksum(data))
-
-
-PAPER_FIELDS = (
-    "doi",
-    "pmid",
-    "bibtex_key",
-    "title",
-    "authors",
-    "year",
-    "venue",
-    "url",
-    "citation_percentile",
-    "topics",
-    "folders",
-    "in_library",
-)
-
-
-def export_progress(
-    session: Session, moment: datetime | None = None, settings: dict | None = None
-) -> dict:
-    """The whole profile: rules, progress and recommendations, independent of ids."""
-    readings = session.exec(select(Reading)).all()
-    events = session.exec(select(StatusEvent).order_by(StatusEvent.at, StatusEvent.id)).all()
-    queue = session.exec(select(QueueItem).order_by(QueueItem.position)).all()
-    xp = session.exec(select(XpEvent).order_by(XpEvent.at, XpEvent.id)).all()
-    achievements = session.exec(select(Achievement)).all()
-    batches = session.exec(select(RecommendationBatch).order_by(RecommendationBatch.id)).all()
-    recommendations = session.exec(
-        select(Recommendation).order_by(Recommendation.batch_id, Recommendation.rank)
-    ).all()
-    profile = session.exec(select(Profile).order_by(Profile.id)).first()
-    # the example lists are regenerated from rules and your choices, not saved
-    library_rows = [
-        lib
-        for lib in session.exec(select(Library).order_by(Library.id)).all()
-        if lib.kind not in ("positive", "negative")
-    ]
-    kept = {lib.id for lib in library_rows}
-    memberships = [m for m in session.exec(select(LibraryPaper)).all() if m.library_id in kept]
-    example_choices = session.exec(
-        select(ExampleChoice).order_by(ExampleChoice.at, ExampleChoice.paper_id)
-    ).all()
-
-    ids = (
-        {m.paper_id for m in memberships}
-        | {r.paper_id for r in readings}
-        | {e.paper_id for e in events}
-        | {q.paper_id for q in queue}
-        | {e.paper_id for e in xp if e.paper_id is not None}
-        | {r.paper_id for r in recommendations}
-        | {c.paper_id for c in example_choices}
-    )
-    columns = [getattr(Paper, name) for name in PAPER_FIELDS]
-    rows = session.exec(select(Paper.id, Paper.pub_date, *columns).order_by(Paper.id)).all()
-    papers = {}
-    for paper_id, pub_date, *values in rows:  # one query, not one per paper
-        if paper_id in ids:
-            info = dict(zip(PAPER_FIELDS, values, strict=True))
-            info["pub_date"] = _iso(pub_date)
-            papers[f"p{paper_id}"] = info
-
-    def ref(paper_id):
-        return f"p{paper_id}" if paper_id is not None and f"p{paper_id}" in papers else None
-
-    items_by_batch: dict[int, list] = {}
-    for rec in recommendations:
-        if ref(rec.paper_id):
-            items_by_batch.setdefault(rec.batch_id, []).append(
-                {
-                    "paper": ref(rec.paper_id),
-                    "rank": rec.rank,
-                    "category": rec.category.value,
-                    "score": rec.score,
-                    "breakdown": rec.breakdown,
-                    "reason": rec.reason,
-                }
-            )
-
-    data = {
-        "format": FORMAT,
-        "format_version": FORMAT_VERSION,
-        "app_version": __version__,
-        "exported_at": _iso(moment or now()),
-        "profile": {
-            "name": profile.name,
-            "created_at": _iso(profile.created_at),
-            "rules": profile.rules,
-            "fingerprint": profile.fingerprint,
-        }
-        if profile
-        else None,
-        "papers": papers,
-        # libraries and who is in them; their files are machine-specific and not included
-        "libraries": [
-            {
-                "name": lib.name,
-                "description": lib.description,
-                "kind": lib.kind,
-                "format": lib.format,
-                "use_for_recommendations": lib.use_for_recommendations,
-                "created_at": _iso(lib.created_at),
-                "papers": [
-                    {
-                        "paper": ref(m.paper_id),
-                        "key": m.citation_key,
-                        "folders": m.folders,
-                        "tags": m.tags,
-                    }
-                    for m in memberships
-                    if m.library_id == lib.id and ref(m.paper_id)
-                ],
-            }
-            for lib in library_rows
-        ],
-        "readings": [
-            {
-                "paper": ref(r.paper_id),
-                "status": r.status.value,
-                "rating": r.rating,
-                "notes": r.notes,
-                "updated_at": _iso(r.updated_at),
-            }
-            for r in readings
-            if ref(r.paper_id)
-        ],
-        "status_events": [
-            {
-                "paper": ref(e.paper_id),
-                "status": e.status.value,
-                "was_queue_top": e.was_queue_top,
-                "at": _iso(e.at),
-                **earlier_fields(e),
-            }
-            for e in events
-            if ref(e.paper_id)
-        ],
-        "queue": [
-            {
-                "paper": ref(q.paper_id),
-                "position": q.position,
-                "source": q.source,
-                "added_at": _iso(q.added_at),
-            }
-            for q in queue
-            if ref(q.paper_id)
-        ],
-        "xp_events": [
-            {
-                "paper": ref(e.paper_id),
-                "points": e.points,
-                "kind": e.kind,
-                "reason": e.reason,
-                "at": _iso(e.at),
-            }
-            for e in xp
-        ],
-        "settings": settings or {},
-        # papers you added to or removed from the example lists for Semantic Scholar
-        "example_choices": [
-            {"paper": ref(c.paper_id), "kind": c.kind, "action": c.action, "at": _iso(c.at)}
-            for c in example_choices
-            if ref(c.paper_id)
-        ],
-        "achievements": [
-            {"code": a.code, "unlocked_at": _iso(a.unlocked_at)} for a in achievements
-        ],
-        "recommendations": [
-            {
-                "week_start": _iso(b.week_start),
-                "created_at": _iso(b.created_at),
-                "n_candidates": b.n_candidates,
-                "warnings": b.warnings,
-                "funnel": b.funnel,
-                "params": b.params,
-                "items": items_by_batch.get(b.id, []),
-            }
-            for b in batches
-        ],
-    }
-    data["checksum"] = checksum(data)
-    return data
 
 
 @dataclass
@@ -591,7 +356,7 @@ def _title(text: str | None) -> str:
 
 
 class _PaperIndex:
-    """Finds the local paper of a paper in a progress file: by DOI, PMID, citation
+    """Finds the local paper of an imported paper: by DOI, PMID, citation
     key, then title (+ year when both have one), never one with another DOI/PMID.
     Papers created during the import are kept as objects until they have an id.
 
@@ -648,64 +413,6 @@ def _merge_notes(local: str, incoming: str) -> str:
         if entry.strip() and entry not in entries:
             entries.append(entry)
     return "\n\n".join(entries)
-
-
-class ConsistencyError(BackupError):
-    """The file failed the schema or consistency check; ``report`` lists why."""
-
-    def __init__(self, report, what: str = "Invalid progress file"):
-        self.report = report
-        lines = [str(p) for p in report.errors[:20]]
-        more = len(report.errors) - len(lines)
-        super().__init__(
-            f"{what} (nothing was changed):\n  "
-            + "\n  ".join(lines)
-            + (f"\n  ... and {more} more" if more > 0 else "")
-        )
-
-
-def check_file(data: dict, allow_modified: bool = False):
-    """Format, version, checksum, JSON Schema and consistency of a progress file.
-
-    Returns the check report (notes); raises ``BackupError`` before anything
-    is changed. Files of format version 1 (no checksum) are still accepted.
-    """
-    from litrad.dataformat import check_progress
-
-    if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise BackupError("Not a litrad progress export")
-    version = data.get("format_version", 0)
-    if not isinstance(version, int) or version > FORMAT_VERSION:
-        raise BackupError("This export was made by a newer litrad version")
-    if verify_checksum(data) is False and not allow_modified:
-        raise BackupError(
-            "The file was modified outside litrad (checksum mismatch); refusing to load it"
-        )
-    report = check_progress(data)
-    if report.errors:
-        raise ConsistencyError(report)
-    return report
-
-
-def import_progress(
-    session: Session,
-    cfg: Config,
-    data: dict,
-    allow_different_rules: bool = False,
-    allow_modified: bool = False,
-    commit: bool = True,
-) -> ImportReport:
-    """Merge an export into this database. Importing the same file twice is a no-op.
-
-    - readings: the newer ``updated_at`` wins; notes from both sides are kept;
-    - history, XP, badges and recommendation batches: added when not present;
-    - queue: entries are appended while there is room;
-    - profile: adopted if this database has none. XP earned under different
-      locked rules is not mixed unless ``allow_different_rules``.
-    Nothing is written if the file is invalid.
-    """
-    check_file(data, allow_modified)
-    return merge(session, cfg, data, allow_different_rules, commit)
 
 
 def _value(name: str, value):
@@ -960,7 +667,7 @@ def merge(
             session.flush()
     except (KeyError, ValueError, TypeError) as error:
         session.rollback()
-        raise BackupError(f"Invalid progress file: {error}") from error
+        raise BackupError(f"Invalid data: {error}") from error
     except BaseException:
         session.rollback()
         raise
@@ -1064,41 +771,6 @@ def _merge_libraries(session: Session, incoming: list[dict], ids: dict[str, int]
     return created
 
 
-PERSONAL_TABLES = (
-    NoteFile,
-    ExampleChoice,
-    Recommendation,
-    RecommendationBatch,
-    QueueItem,
-    StatusEvent,
-    XpEvent,
-    Achievement,
-    Reading,
-    Profile,
-)
-
-
-def reset_progress(session: Session, commit: bool = True) -> None:
-    """Delete the profile and all personal data (the library stays)."""
-    for model in PERSONAL_TABLES:
-        session.exec(delete(model))
-    if commit:
-        session.commit()
-
-
-def load_profile(session: Session, cfg: Config, data: dict, allow_modified: bool = False):
-    """Replace the current profile and progress with a saved one (one transaction)."""
-    check_file(data, allow_modified)
-    try:
-        reset_progress(session, commit=False)
-        report = merge(session, cfg, data, commit=False)
-        session.commit()
-    except BaseException:
-        session.rollback()
-        raise
-    return report
-
-
 # --- saved profiles and comparison ---------------------------------------------------------
 
 PROFILE_PREFIX = "litrad_profile_"
@@ -1108,20 +780,6 @@ def slug(text: str) -> str:
     """File-name-safe version of a profile name (a-z, 0-9 and -)."""
     cleaned = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return cleaned[:40].strip("-") or "profile"
-
-
-def save_profile_file(
-    session: Session,
-    directory: Path,
-    moment: datetime | None = None,
-    settings: dict | None = None,
-) -> Path:
-    moment = moment or now()
-    data = export_progress(session, moment, settings)
-    name = (data["profile"] or {}).get("name", "no-profile")
-    path = directory / f"{PROFILE_PREFIX}{slug(name)}_{stamp(moment)}.json"
-    atomic_write_text(path, json.dumps(data, indent=1))
-    return path
 
 
 def save_profile_archive(
@@ -1148,14 +806,12 @@ SAVED_PATTERNS = tuple(
         (PROFILE_PREFIX, ".zip"),
         (BACKUP_ARCHIVE_PREFIX, ".zip"),
         (EXPORT_PREFIX, ".zip"),
-        (PROFILE_PREFIX, ".json"),
-        (PROGRESS_PREFIX, ".json"),
     )
 )
 
 
 def saved_files(directory: Path) -> list[Path]:
-    """Saved profiles, backup archives and progress exports in a folder, newest first."""
+    """Saved profiles, backup archives and exports in a folder, newest first."""
     if not directory.exists():
         return []
     files = [path for pattern in SAVED_PATTERNS for path in directory.glob(pattern)]
@@ -1174,25 +830,11 @@ def memory_engine():
     return engine
 
 
-def summarize(data: dict, cfg: Config, label: str = "") -> dict:
-    """Key figures of a saved profile, computed in a throw-away database."""
-    check_file(data, allow_modified=True)
-    engine = memory_engine()
-    try:
-        with Session(engine) as session:
-            merge(session, cfg, data)
-            moment = _dt(data.get("exported_at")) or now()
-            return summarize_session(session, cfg, moment, label, verify_checksum(data))
-    finally:
-        engine.dispose()
-
-
 def summarize_session(
     session: Session,
     cfg: Config,
     moment: datetime | None = None,
     label: str = "",
-    checksum_ok: bool | None = None,
 ) -> dict:
     """Key figures of the profile in ``session`` at ``moment`` (default: now)."""
     from litrad.game import level_for, reading_impact_factor, stats
@@ -1210,7 +852,6 @@ def summarize_session(
         "started": profile.created_at if profile else None,
         "exported_at": moment,
         "fingerprint": rules.fingerprint() if profile else None,
-        "checksum_ok": checksum_ok,
         "xp": figures["xp"],
         "level": level,
         "papers_read": read,
@@ -1232,7 +873,7 @@ def summarize_session(
 
 
 def backup_targets(base: Config) -> list[tuple[str, Config]]:
-    """Every profile, plus the data from before profiles existed (until adopted)."""
+    """Every profile."""
     from litrad import profiles
 
     def target(slug: str) -> Config:
@@ -1244,13 +885,7 @@ def backup_targets(base: Config) -> list[tuple[str, Config]]:
             data["backup"]["dir"] = str(Path(base.backup.dir) / slug)
             return Config.model_validate(data)
 
-    targets = [(info.slug, target(info.slug)) for info in profiles.list_profiles(base)]
-    if (
-        base.paths.database.exists()
-        and not (base.paths.profiles_dir / profiles.LEGACY_MARKER).exists()
-    ):
-        targets.append(("(no profile)", base))
-    return targets
+    return [(info.slug, target(info.slug)) for info in profiles.list_profiles(base)]
 
 
 def backup_all(base: Config, log=print) -> int:
@@ -1263,12 +898,11 @@ def backup_all(base: Config, log=print) -> int:
         try:
             with Session(engine) as session:
                 settings = None
-                if label != "(no profile)":
-                    try:
-                        settings = profile_settings(cfg)
-                    except yaml.YAMLError as error:
-                        log(f"WARNING: {label}: settings.yaml is not valid YAML, not included")
-                        log(f"  {error}")
+                try:
+                    settings = profile_settings(cfg)
+                except yaml.YAMLError as error:
+                    log(f"WARNING: {label}: settings.yaml is not valid YAML, not included")
+                    log(f"  {error}")
                 result = run_backup(cfg, session, settings=settings)
             log(f"backup written: {label}: {result.snapshot.name}")
         except Exception as error:  # a failed backup must never stop the server

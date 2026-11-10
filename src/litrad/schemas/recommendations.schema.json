@@ -69,8 +69,6 @@
               },
               "category": {
                 "enum": [
-                  "detail",
-                  "skim",
                   "open"
                 ]
               },

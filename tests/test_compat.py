@@ -1,18 +1,22 @@
-"""Files and databases written by every earlier version still load (tests/data/compat).
+"""Files and databases written by every release since 1.0 still load (tests/data/compat).
 
 Each folder was produced by ``tools/make_compat_fixtures.py`` with that
 version's own code; ``expected.json`` holds the counts that version computed.
+Every release adds its folder; until the first one exists, the same checks run
+on fixtures that the builder writes with the current code (``current``).
 """
 
 import json
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from sqlmodel import Session, func, select
 
 from litrad import archive, notes, profiles
-from litrad.backup import check_file, export_progress, import_progress, summarize
 from litrad.config import load_config
 from litrad.db import (
     Achievement,
@@ -29,16 +33,60 @@ from litrad.db import (
 )
 from litrad.migrations import BACKUP_FOLDER, SCHEMA_VERSION, read_version
 
+REPO = Path(__file__).resolve().parent.parent
 COMPAT = Path(__file__).parent / "data" / "compat"
+FILES = ("litrad.sqlite", "settings.yaml", "export.zip", "expected.json")
 VERSIONS = sorted(p.name for p in COMPAT.iterdir() if (p / "expected.json").is_file())
-RELEASED = [v for v in VERSIONS if not v.startswith("dev-")]
 
 
-def test_every_released_version_has_fixtures():
-    assert {"0.1.0-alpha.1", "0.2.0-dev"} <= set(RELEASED)
-    assert any(v.startswith("dev-") for v in VERSIONS)
+@pytest.fixture(scope="module")
+def current(tmp_path_factory) -> Path:
+    """Fixtures of the current code, written by the builder of make_compat_fixtures.py."""
+    sys.path.insert(0, str(REPO / "tools"))
+    try:
+        import make_compat_fixtures as tool
+    finally:
+        sys.path.remove(str(REPO / "tools"))
+    root = tmp_path_factory.mktemp("compat-current")
+    sandbox, out = root / "run", root / "current"
+    for folder in (sandbox, sandbox / "home", sandbox / "config", sandbox / "share"):
+        folder.mkdir(parents=True)
+    arguments = {
+        "work": str(sandbox),
+        "out": str(out),
+        "name": "current",
+        "tag": "",
+        "source": str(REPO),
+        "bib": str(tool.BIB_FILE),
+    }
+    env = {
+        **os.environ,
+        "HOME": str(sandbox / "home"),
+        "XDG_CONFIG_HOME": str(sandbox / "config"),
+        "XDG_DATA_HOME": str(sandbox / "share"),
+    }
+    done = subprocess.run(
+        [sys.executable, "-c", tool.BUILDER, json.dumps(arguments)],
+        cwd=sandbox,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+    assert sorted(p.name for p in out.iterdir()) == sorted(tool.FIXTURE_FILES)
+    return out
+
+
+@pytest.fixture(params=[*VERSIONS, "current"])
+def fixture(request) -> Path:
+    if request.param == "current":
+        return request.getfixturevalue("current")
+    return COMPAT / request.param
+
+
+def test_released_fixtures_are_complete():
     for version in VERSIONS:  # *.sqlite is git-ignored elsewhere: these must be committed
-        for name in ("litresearch.sqlite", "settings.yaml", "progress.json", "profile.json"):
+        for name in FILES:
             assert (COMPAT / version / name).is_file(), f"{version}/{name} missing"
 
 
@@ -46,19 +94,17 @@ def test_every_released_version_has_fixtures():
 def base(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  bibtex: {tmp_path}/x.bib\n  database: {tmp_path}/legacy.sqlite\n"
-        f"  profiles_dir: {tmp_path}/profiles\nbackup:\n  dir: {tmp_path}/backups\n"
+        f"paths:\n  profiles_dir: {tmp_path}/profiles\nbackup:\n  dir: {tmp_path}/backups\n"
     )
     return load_config(path)
 
 
-def install(base, version: str) -> str:
+def install(base, folder: Path) -> str:
     """The fixture database as a profile, exactly as that version left it."""
     home = base.paths.profiles_dir / "old"
     home.mkdir(parents=True)
-    # under its name before the rename: opening the profile renames it to litrad.sqlite
-    shutil.copy(COMPAT / version / "litresearch.sqlite", home / profiles.LEGACY_PROFILE_DB)
-    shutil.copy(COMPAT / version / "settings.yaml", home / profiles.PROFILE_SETTINGS)
+    shutil.copy(folder / "litrad.sqlite", home / profiles.PROFILE_DB)
+    shutil.copy(folder / "settings.yaml", home / profiles.PROFILE_SETTINGS)
     return "old"
 
 
@@ -84,8 +130,8 @@ def state(session) -> dict:
     }
 
 
-def expected(version: str) -> dict:
-    return json.loads((COMPAT / version / "expected.json").read_text())
+def expected(folder: Path) -> dict:
+    return json.loads((folder / "expected.json").read_text())
 
 
 def check_state(found: dict, wanted: dict, keys=None) -> None:
@@ -94,8 +140,8 @@ def check_state(found: dict, wanted: dict, keys=None) -> None:
             assert found[key] == wanted[key], key
 
 
-@pytest.mark.parametrize("version", VERSIONS)
-def test_database_opens_upgrades_and_keeps_everything(base, version):
+def test_database_opens_upgrades_and_keeps_everything(base, fixture):
+    version = fixture
     slug = install(base, version)
     cfg = profiles.profile_config(base, slug)
     old_version = read_version(cfg.paths.database)[0]
@@ -107,15 +153,14 @@ def test_database_opens_upgrades_and_keeps_everything(base, version):
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         check_state(state(session), expected(version))
-        report = notes.refresh_all(session, cfg)  # notes of 0.1-0.4 become files
+        report = notes.refresh_all(session, cfg)
         assert report.problem is None
         assert len(notes.scan(notes.notes_dir(cfg))) == expected(version)["readings_with_notes"]
     engine.dispose()
 
 
-@pytest.mark.parametrize("version", VERSIONS)
-def test_database_exports_and_imports_again(base, version, tmp_path):
-    slug = install(base, version)
+def test_database_exports_and_imports_again(base, fixture, tmp_path):
+    slug = install(base, fixture)
     cfg = profiles.profile_config(base, slug)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
@@ -140,35 +185,11 @@ def test_database_exports_and_imports_again(base, version, tmp_path):
     assert again.merge.readings_added == again.merge.xp_added == 0
 
 
-@pytest.mark.parametrize("version", VERSIONS)
-@pytest.mark.parametrize("name", ["progress.json", "profile.json"])
-def test_progress_and_profile_files_load(base, version, name, tmp_path):
-    data = json.loads((COMPAT / version / name).read_text())
-    check_file(data)  # checksum, schema and consistency
-    engine = init_db(tmp_path / "fresh.sqlite")
-    cfg = profiles.profile_config(base, profiles.create_profile(base, "Fresh"))
-    with Session(engine) as session:
-        report = import_progress(session, cfg, data)
-        assert report.readings_added == expected(version)["readings"]
-        check_state(
-            state(session),
-            expected(version),
-            ["readings", "status_events", "xp_events", "xp_total", "achievements", "queue"],
-        )
-        again = import_progress(session, cfg, export_progress(session))
-        assert again.readings_added == again.xp_added == again.events_added == 0
-    engine.dispose()
-    figures = summarize(data, cfg, name)
-    assert figures["xp"] == expected(version)["xp_total"]
-    loaded = profiles.import_profile_file(base, data, f"Loaded {version}")
-    assert profiles.describe(base, loaded).xp == expected(version)["xp_total"]
-
-
-@pytest.mark.parametrize("version", [v for v in VERSIONS if (COMPAT / v / "export.zip").exists()])
-def test_archives_of_earlier_versions_import(base, version):
-    checked = archive.check(archive.read_archive(COMPAT / version / "export.zip"), base)
+def test_archives_of_earlier_versions_import(base, fixture):
+    version = fixture
+    checked = archive.check(archive.read_archive(version / "export.zip"), base)
     assert checked.report.ok, checked.report.lines()
-    result = archive.import_new(base, COMPAT / version / "export.zip", "From archive")
+    result = archive.import_new(base, version / "export.zip", "From archive")
     cfg = profiles.profile_config(base, result.slug)
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:

@@ -41,12 +41,12 @@ def at(day: str) -> datetime:
 def env(tmp_path, monkeypatch):
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  database: {tmp_path / 'db.sqlite'}\n  cache_dir: {tmp_path / 'cache'}\n",
+        f"paths:\n  cache_dir: {tmp_path / 'cache'}\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(web, "make_http", lambda cfg: pytest.fail("no network"))
     client = TestClient(web.create_app(path))
-    enter_profile(client, "Kai", adopt=False)
+    enter_profile(client, "Kai")
     yield client, path
     client.close()
 

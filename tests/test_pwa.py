@@ -74,7 +74,7 @@ def test_service_worker(locked):
 
 def test_open_without_login_and_profile(locked):
     for path in ("/manifest.webmanifest", "/sw.js", "/offline", "/static/icon-192.png"):
-        response = locked.get(path, headers={"host": "pi.example.ts.net"}, follow_redirects=False)
+        response = locked.get(path, headers={"host": "nas.example.ts.net"}, follow_redirects=False)
         assert response.status_code == 200, path
     assert locked.get("/queue", follow_redirects=False).status_code == 303
 

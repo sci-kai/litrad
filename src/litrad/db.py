@@ -45,10 +45,7 @@ def depth(status: ReadStatus | None) -> int:
 
 
 class Category(StrEnum):
-    # "detail" and "skim" were used by batches built before v0.1.0; new
-    # recommendations leave the reading depth to the reader ("open")
-    detail = "detail"
-    skim = "skim"
+    # recommendations leave the reading depth to the reader
     open = "open"
 
 
@@ -304,19 +301,6 @@ def get_engine(path: Path):
         connection.execute("PRAGMA synchronous=FULL")
 
     return engine
-
-
-def add_missing_columns(engine) -> list[str]:
-    """Create missing tables, columns and indexes (see ``migrations.sync_schema``)."""
-    from litrad.migrations import sync_schema
-
-    with engine.begin() as connection:
-        return sync_schema(connection)
-
-
-def add_missing_indexes(engine) -> None:
-    """Create indexes added to the model after a database was created."""
-    add_missing_columns(engine)
 
 
 def init_db(path: Path):
