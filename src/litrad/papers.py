@@ -3,6 +3,7 @@
 from sqlmodel import Session, select
 
 from litrad.db import Paper, now
+from litrad.ingest.bibtex import web_url
 from litrad.sources.hits import Hit
 from litrad.sources.openalex import Work
 
@@ -71,11 +72,14 @@ def upsert_hit(session: Session, hit: Hit) -> Paper:
 
 
 def paper_link(paper: Paper) -> str:
-    """The best link to a paper: DOI, else PubMed, else PubMed Central, else its URL."""
+    """The best link to a paper: DOI, else PubMed, else PubMed Central, else its URL.
+
+    Only an http(s) URL is ever returned: the link goes into ``href``.
+    """
     if paper.doi:
         return f"https://doi.org/{paper.doi}"
     if paper.pmid:
         return f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}"
     if paper.pmcid:
         return f"https://europepmc.org/article/PMC/{paper.pmcid}"
-    return paper.url or ""
+    return web_url(paper.url) or ""

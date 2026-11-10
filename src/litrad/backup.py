@@ -462,6 +462,10 @@ def _value(name: str, value):
         return date.fromisoformat(value)
     if name in ("enriched_at", "created_at", "updated_at"):
         return datetime.fromisoformat(value)
+    if name == "url":
+        from litrad.ingest.bibtex import web_url
+
+        return web_url(value)
     return value
 
 

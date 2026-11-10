@@ -103,6 +103,7 @@ from litrad.game import (
     weekly_summaries,
     weeks_of_history,
 )
+from litrad.ingest.bibtex import web_url
 from litrad.ingest.check import FIELDS as BIB_FIELDS
 from litrad.ingest.check import Finding, check_file
 from litrad.ingest.formats import FORMATS as INPUT_FORMATS
@@ -2321,7 +2322,7 @@ def create_app(
             with Session(engine) as session:
                 try:
                     if title.strip():
-                        paper = Paper(title=title.strip(), url=url.strip() or None)
+                        paper = Paper(title=title.strip(), url=web_url(url))
                         session.add(paper)
                         session.flush()
                     elif ref.strip():

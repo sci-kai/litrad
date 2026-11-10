@@ -167,3 +167,16 @@ def test_icon_links_have_accessible_names(app_env):  # noqa: F811
     assert 'aria-label="Open the queue"' in dashboard
     assert 'aria-label="Open the recommendations"' in dashboard
     assert 'aria-label="Change in the settings"' in client.get("/recommendations").text
+
+
+def test_a_title_with_an_unsafe_url_gets_no_link(app_env):  # noqa: F811
+    client, path, _ = app_env
+    post(client, "/queue/add", {"title": "Scripted", "url": "javascript:alert(1)"})
+    post(client, "/queue/add", {"title": "Linked", "url": "https://example.org/linked"})
+    engine = db(path)
+    with Session(engine) as session:
+        urls = dict(session.exec(select(Paper.title, Paper.url)).all())
+    engine.dispose()
+    assert urls["Scripted"] is None and urls["Linked"] == "https://example.org/linked"
+    page = client.get("/queue").text
+    assert "javascript:" not in page and 'href="https://example.org/linked"' in page

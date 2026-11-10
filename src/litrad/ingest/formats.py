@@ -25,6 +25,7 @@ from litrad.ingest.bibtex import (
     parse_bibtex,
     parse_year,
     split_keywords,
+    web_url,
 )
 
 FORMATS = {"bibtex": "BibTeX", "ris": "RIS", "csl-json": "CSL-JSON"}
@@ -165,7 +166,7 @@ def parse_ris(text: str, ignore: set[str] = frozenset(), duplicate_keys=None) ->
                 abstract=_first(record, "AB", "N2"),
                 doi=doi or normalize_doi(url),
                 pmid=pmid,
-                url=url,
+                url=web_url(url),
                 folders=folders,
                 tags=tags,
                 generated_key=not given,
@@ -218,7 +219,7 @@ def parse_csl_json(
                 abstract=clean_text(item.get("abstract")),
                 doi=normalize_doi(item.get("DOI")) or normalize_doi(item.get("URL")),
                 pmid=pmid if pmid.isdigit() else None,
-                url=clean_text(item.get("URL")),
+                url=web_url(clean_text(item.get("URL"))),
                 folders=folders,
                 tags=tags,
                 generated_key=not given,

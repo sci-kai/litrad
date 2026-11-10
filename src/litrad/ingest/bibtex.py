@@ -71,6 +71,22 @@ def clean_text(value: str | None) -> str | None:
     return value or None
 
 
+def web_url(value: str | None) -> str | None:
+    """``value`` if it is an absolute http(s) URL, else None (never ``javascript:`` etc.)."""
+    from urllib.parse import urlsplit
+
+    value = (value or "").strip()
+    if not value or any(c.isspace() or ord(c) < 32 or c == "\\" for c in value):
+        return None
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return None
+    if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
+        return None
+    return value
+
+
 def normalize_doi(value: str | None) -> str | None:
     """Return a bare, lower-case DOI (DOIs are case-insensitive)."""
     value = clean_text(value)
@@ -196,7 +212,7 @@ def parse_bibtex(
                 abstract=clean_text(_field(entry, "abstract")),
                 doi=normalize_doi(_field(entry, "doi")) or normalize_doi(url),
                 pmid=pmid if pmid and pmid.isdigit() else None,
-                url=url,
+                url=web_url(url),
                 folders=folders,
                 tags=tags,
             )
