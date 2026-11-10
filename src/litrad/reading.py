@@ -416,7 +416,10 @@ def record_reading(
     rated = rating is not None and (reading is None or reading.rating is None)
     if reading is None:
         reading = Reading(paper_id=paper.id, status=status)
-    reading.status = status
+    # a shallower level (e.g. --earlier skimmed) never lowers the depth reached;
+    # dismissing (not relevant) is your explicit choice and is kept
+    if status == ReadStatus.dismissed or depth(status) >= depth(reading.status):
+        reading.status = status
     if rating is not None:
         reading.rating = rating
     session.add(reading)

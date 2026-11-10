@@ -267,3 +267,19 @@ def test_penalty_can_be_disabled(db):
     queue_add(session, cfg, papers[1], source="recommendation")
     assert drop_would_cost(session, cfg, papers[1]) == 0
     assert drop_from_queue(session, cfg, papers[1], at=AT) is None
+
+
+def test_a_shallower_reading_never_lowers_the_status(db):
+    cfg, session, (paper, other, *_) = db
+    record_reading(session, cfg, paper, ReadStatus.thorough, at=AT)
+    xp = total_xp(session)
+    record_reading(session, cfg, paper, ReadStatus.skimmed, earlier=True, at=AT)
+    record_reading(session, cfg, paper, ReadStatus.abstract, at=AT)
+    assert session.get(Reading, paper.id).status == ReadStatus.thorough
+    assert total_xp(session) == xp  # and earns nothing
+    # deeper still raises it; dismissing stays your explicit choice
+    record_reading(session, cfg, other, ReadStatus.skimmed, at=AT)
+    record_reading(session, cfg, other, ReadStatus.read, at=AT)
+    assert session.get(Reading, other.id).status == ReadStatus.read
+    record_reading(session, cfg, other, ReadStatus.dismissed, at=AT)
+    assert session.get(Reading, other.id).status == ReadStatus.dismissed
