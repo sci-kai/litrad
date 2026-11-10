@@ -410,7 +410,7 @@ RULE_GROUPS = (
         "Bonuses",
         "",
         (
-            ("frog_bonus", "🐸 top paper first: share of base points", "float", 0, 5, 0.05),
+            ("cheese_bonus", "🧀 top paper first: share of base points", "float", 0, 5, 0.05),
             ("streak_step", "🔥 streak: extra share per consecutive week", "float", 0, 1, 0.01),
             ("streak_max_steps", "🔥 streak: maximum number of steps", "int", 0, 100, 1),
             ("classic_percentile", "🏛️ landmark: minimum citation percentile", "float", 0, 100, 0.5),
@@ -550,7 +550,7 @@ def describe_problem(error: dict) -> str:
 def friendly_error(error: Exception) -> str:
     """A short sentence for a toast; pydantic's reports name the form's labels instead.
 
-    ``'🐸 top paper first: share of base points' must be at most 10`` instead of
+    ``'🧀 top paper first: share of base points' must be at most 10`` instead of
     "1 validation error for GameRules … errors.pydantic.dev …".
     """
     cause: BaseException | None = error

@@ -459,12 +459,12 @@ def check_invariants(session, cfg):
     for kind in ("classic", "hot", "recommended", "rating", "reflection"):
         paid = session.exec(select(XpEvent.paper_id).where(XpEvent.kind == kind)).all()
         assert len(paid) == len(set(paid)), f"{kind} paid twice"
-    # the frog bonus is half of newly earned base points, so per paper it is
+    # the cheese bonus is half of newly earned base points, so per paper it is
     # bounded by half of the maximum base points, however often a paper returns
-    frog: dict[int, int] = {}
-    for event in session.exec(select(XpEvent).where(XpEvent.kind == "frog")).all():
-        frog[event.paper_id] = frog.get(event.paper_id, 0) + event.points
-    assert all(points <= maximum * GameRules().frog_bonus + 1 for points in frog.values())
+    cheese: dict[int, int] = {}
+    for event in session.exec(select(XpEvent).where(XpEvent.kind == "cheese")).all():
+        cheese[event.paper_id] = cheese.get(event.paper_id, 0) + event.points
+    assert all(points <= maximum * GameRules().cheese_bonus + 1 for points in cheese.values())
     level_for(total_xp(session))
 
 

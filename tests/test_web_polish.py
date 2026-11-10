@@ -191,10 +191,10 @@ def test_error_page_without_a_profile(env):
 def test_profile_creation_names_the_field(env):
     client, _ = env
     response = client.post(
-        "/welcome/create", data={**rules_form(), "name": "X", "frog_bonus": "20"}
+        "/welcome/create", data={**rules_form(), "name": "X", "cheese_bonus": "20"}
     )
     message = celebration(response)["message"]
-    assert "'🐸 top paper first: share of base points' must be at most 10" in message
+    assert "'🧀 top paper first: share of base points' must be at most 10" in message
     assert "pydantic" not in message and "validation error" not in message
 
 

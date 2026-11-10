@@ -31,6 +31,7 @@ from litrad.db import (
     Reading,
     ReadStatus,
     Recommendation,
+    RecommendationBatch,
     StatusEvent,
     XpEvent,
     depth,
@@ -265,7 +266,14 @@ def stats(session: Session, today: date, rules=None) -> dict:
     }
     readings = session.exec(select(Reading.notes, Reading.rating, Reading.status)).all()
     events = _events_in_order(session)
-    recommended = set(session.exec(select(Recommendation.paper_id).distinct()).all())
+    # when each paper was first recommended: only a read after that counts as one
+    recommended = dict(
+        session.exec(
+            select(Recommendation.paper_id, func.min(RecommendationBatch.created_at))
+            .join(RecommendationBatch, RecommendationBatch.id == Recommendation.batch_id)
+            .group_by(Recommendation.paper_id)
+        ).all()
+    )
 
     deepest: dict[int, int] = {}
     first_read: dict[int, StatusEvent] = {}
@@ -322,7 +330,9 @@ def stats(session: Session, today: date, rules=None) -> dict:
             old += 1
         if paper.in_library:
             from_library += 1
-        elif pid in recommended and not first.earlier:
+        elif (
+            pid in recommended and not first.earlier and (recommended[pid] or first.at) <= first.at
+        ):
             from_recs += 1
         else:
             manual += 1
@@ -337,7 +347,7 @@ def stats(session: Session, today: date, rules=None) -> dict:
     grades = Counter(
         grade(quest_progress(week_depths[monday].values(), rules), True)[0] for monday in weeks
     )
-    frogs = len(
+    cheeses = len(
         {
             e.paper_id
             for e, level in deeper_reads(events)
@@ -350,7 +360,7 @@ def stats(session: Session, today: date, rules=None) -> dict:
         "papers_seen": len(deepest),
         "deep_reads": sum(d >= 3 for d in deepest.values()),
         "thorough": sum(d >= 4 for d in deepest.values()),
-        "frogs": frogs,
+        "cheeses": cheeses,
         "classics": _count_kind(session, "classic"),
         "hot": _count_kind(session, "hot"),
         "scoops": scoops,
@@ -446,7 +456,7 @@ def award_reading(
     ``previous_depth`` is the deepest level this paper had reached before.
     ``earlier``: the paper was read before litrad; it earns the base points
     at ``rules.backlog_share`` and none of the bonuses for when and how you read
-    (streak, frog, fresh paper, recommendation, inbox zero). ``unlock=False``
+    (streak, cheese, fresh paper, recommendation, inbox zero). ``unlock=False``
     leaves the badges to the caller (one ``unlock_badges`` after many readings).
     """
     rules = as_rules(rules)
@@ -480,7 +490,11 @@ def award_reading(
             f"{current_streak}-week streak x{multiplier:.2f}",
         )
         if was_queue_top and new_depth >= 2:
-            add(round(base * rules.frog_bonus), "frog", "Ate the frog: read your top paper first")
+            add(
+                round(base * rules.cheese_bonus),
+                "cheese",
+                "Got the cheese: read your top paper first",
+            )
 
     if deeper and new_depth >= 3 and (paper.citation_percentile or 0) >= rules.classic_percentile:
         if not _already(session, "classic", paper.id):
@@ -583,7 +597,7 @@ KIND_LABELS = {
     "read": "Reading",
     EARLIER_KIND: "Read earlier",
     "streak": "Streak bonus",
-    "frog": "Ate the frog",
+    "cheese": "Got the cheese",
     "classic": "Classic paper",
     "hot": "Hot off the press",
     "recommended": "Followed a recommendation",

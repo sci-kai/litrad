@@ -1,4 +1,3 @@
-import shutil
 import stat
 
 import pytest
@@ -7,7 +6,7 @@ from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from conftest import SAMPLE_BIB, enter_profile
+from conftest import enter_profile
 from litrad.config import load_config
 from litrad.web.app import create_app
 from litrad.web.auth import (
@@ -62,18 +61,12 @@ def test_sessions(tmp_path):
 
 
 def write_config(tmp_path, **web):
-    bib = tmp_path / "library.bib"
-    shutil.copy(SAMPLE_BIB, bib)
     path = tmp_path / "config.yaml"
     path.write_text(
         "# my settings\n"
         + yaml.safe_dump(
             {
-                "paths": {
-                    "bibtex": str(bib),
-                    "database": str(tmp_path / "db.sqlite"),
-                    "cache_dir": str(tmp_path / "cache"),
-                },
+                "paths": {"cache_dir": str(tmp_path / "cache")},
                 "web": {"host": "0.0.0.0", "port": 8080, **web},
             }
         ),

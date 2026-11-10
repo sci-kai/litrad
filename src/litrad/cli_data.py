@@ -245,7 +245,7 @@ def _rules_lines(rules) -> list[str]:
     return [
         f"  reading: abstract +{xp['abstract']}, skimmed +{xp['skimmed']}, read +{xp['read']}, "
         f"thorough +{xp['thorough']}; read earlier {rules.backlog_share:.0%} of that",
-        f"  bonuses: frog +{rules.frog_bonus:.0%} of base, streak +{rules.streak_step:.0%}/week "
+        f"  bonuses: cheese (top paper first) +{rules.cheese_bonus:.0%} of base, streak +{rules.streak_step:.0%}/week "
         f"(max {rules.streak_max_steps} steps), landmark +{rules.classic_xp}, fresh "
         f"+{rules.hot_xp} ({rules.hot_days} d), recommendation +{rules.recommendation_xp}, "
         f"rating +{rules.rating_xp}, notes +{rules.reflection_xp} ({rules.reflection_chars} "

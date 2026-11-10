@@ -313,20 +313,6 @@ def archive_data(session, cfg) -> dict:
 # --- profiles ------------------------------------------------------------------------
 
 
-def format1_rules():
-    """The default rules of rules format 1 (litrad 0.1 to 1.0), as old profiles locked them.
-
-    Tests of the game mechanics written for those numbers use them; they also
-    show that a profile locked by an older version keeps playing by its rules.
-    """
-    from litrad.rules import GameRules
-
-    data = json.loads((DATA / "compat" / "dev-20261109" / "profile.json").read_text("utf-8"))
-    rules = GameRules.model_validate(data["profile"]["rules"])
-    assert rules.rules_format == 1
-    return rules
-
-
 def make_profile(config_path, name: str = "Tester", database=None, bibtex=None) -> str:
     """A profile for the config at ``config_path``; it becomes the current one.
 

@@ -108,7 +108,7 @@ def write_config(tmp_path, **web):
         "# my settings\n"
         + yaml.safe_dump(
             {
-                "paths": {"bibtex": "x.bib", "database": str(tmp_path / "db.sqlite")},
+                "paths": {"profiles_dir": str(tmp_path / "profiles")},
                 "web": {"port": 8080, **web},
             }
         )

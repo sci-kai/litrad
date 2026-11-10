@@ -22,10 +22,9 @@ class LevelDef(BaseModel):
     icon: str = Field("⭐", max_length=8)
 
 
-# The ladder of new profiles (rules format 2): 60 steps that get wider slowly,
-# so a level-up comes every week or two for regular readers; fitted with
-# tools/simulate_game.py (see docs, Gamification). The 20-level ladder of format 1
-# stays in the profiles that locked it.
+# The default ladder: 60 steps that get wider slowly, so a level-up comes every
+# week or two for regular readers; fitted with tools/simulate_game.py (see docs,
+# Gamification).
 DEFAULT_LEVELS = [
     (0, "Curious Undergrad", "🎓"),
     (15, "First-Year Student", "✏️"),
@@ -96,16 +95,9 @@ class BadgeDef:
     name: str
     description: str  # may contain {target}
     stat: str
-    target: int  # the default of rules format 1 (and of the format the badge came with)
+    target: int  # the default target
     icon: str
     group: str
-    # the rules format that added the badge: older profiles do not have it
-    since: int = 1
-    # the default target from rules format 2 on, if it differs from ``target``
-    target2: int | None = None
-
-    def default_target(self, rules_format: int) -> int:
-        return self.target2 if rules_format >= 2 and self.target2 is not None else self.target
 
 
 # The statistics behind ``stat`` are computed in ``game.stats``.
@@ -174,21 +166,21 @@ BADGE_CATALOG = [
     ),
     # discipline
     BadgeDef(
-        "frog_eater",
-        "Frog Eater",
-        "Read your top paper first, {target} times",
-        "frogs",
+        "cheese_taster",
+        "Cheese Taster",
+        "Get the cheese: read your top paper first, {target} times",
+        "cheeses",
         10,
-        "🐸",
+        "🧀",
         "Discipline",
     ),
     BadgeDef(
-        "frog_prince",
-        "Frog Prince",
-        "Read your top paper first, {target} times",
-        "frogs",
+        "big_cheese",
+        "Big Cheese",
+        "Get the cheese: read your top paper first, {target} times",
+        "cheeses",
         50,
-        "🤴",
+        "🐀",
         "Discipline",
     ),
     BadgeDef(
@@ -434,14 +426,9 @@ BADGE_CATALOG = [
 ]
 
 
-def _v2(code, name, description, stat, target, icon, group) -> BadgeDef:
-    return BadgeDef(code, name, description, stat, target, icon, group, since=2)
-
-
-# Added by rules format 2: more tiers, so a badge or a level comes every week or two
-# (profiles locked earlier do not have them).
-BADGES_V2 = [
-    _v2(
+# more tiers, so a badge or a level comes every week or two
+MORE_TIERS = [
+    BadgeDef(
         "first_glance",
         "First Glance",
         "Look at {target} paper (abstract or deeper)",
@@ -450,7 +437,7 @@ BADGES_V2 = [
         "👁️",
         "Reading",
     ),
-    _v2(
+    BadgeDef(
         "browser",
         "Browser",
         "Look at {target} papers (abstract or deeper)",
@@ -459,7 +446,7 @@ BADGES_V2 = [
         "🛍️",
         "Reading",
     ),
-    _v2(
+    BadgeDef(
         "abstract_thinker",
         "Abstract Thinker",
         "Look at {target} papers (abstract or deeper)",
@@ -468,13 +455,17 @@ BADGES_V2 = [
         "💡",
         "Reading",
     ),
-    _v2("warm_up", "Warm-Up", "Read {target} papers", "papers_read", 3, "🔆", "Reading"),
-    _v2("reading_list", "Reading List", "Read {target} papers", "papers_read", 5, "🔖", "Reading"),
-    _v2("regular", "Regular Reader", "Read {target} papers", "papers_read", 15, "📑", "Reading"),
-    _v2(
+    BadgeDef("warm_up", "Warm-Up", "Read {target} papers", "papers_read", 3, "🔆", "Reading"),
+    BadgeDef(
+        "reading_list", "Reading List", "Read {target} papers", "papers_read", 5, "🔖", "Reading"
+    ),
+    BadgeDef(
+        "regular", "Regular Reader", "Read {target} papers", "papers_read", 15, "📑", "Reading"
+    ),
+    BadgeDef(
         "lit_review", "Literature Review", "Read {target} papers", "papers_read", 75, "🗃️", "Reading"
     ),
-    _v2(
+    BadgeDef(
         "systematic",
         "Systematic Review",
         "Read {target} papers",
@@ -483,15 +474,15 @@ BADGES_V2 = [
         "🔎",
         "Reading",
     ),
-    _v2("well_read", "Well-Read", "Read {target} papers", "papers_read", 200, "🧾", "Reading"),
-    _v2("erudite", "Erudite", "Read {target} papers", "papers_read", 300, "🎩", "Reading"),
-    _v2(
+    BadgeDef("well_read", "Well-Read", "Read {target} papers", "papers_read", 200, "🧾", "Reading"),
+    BadgeDef("erudite", "Erudite", "Read {target} papers", "papers_read", 300, "🎩", "Reading"),
+    BadgeDef(
         "meta_analyst", "Meta-Analyst", "Read {target} papers", "papers_read", 350, "📊", "Reading"
     ),
-    _v2(
+    BadgeDef(
         "encyclopedia", "Encyclopedia", "Read {target} papers", "papers_read", 500, "🌍", "Reading"
     ),
-    _v2(
+    BadgeDef(
         "close_reader",
         "Close Reader",
         "Read {target} paper at least fully",
@@ -500,7 +491,7 @@ BADGES_V2 = [
         "🔍",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "careful",
         "Careful Reader",
         "Read {target} papers at least fully",
@@ -509,7 +500,7 @@ BADGES_V2 = [
         "🧐",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "journal_club",
         "Journal Club",
         "Read {target} papers at least fully",
@@ -518,7 +509,7 @@ BADGES_V2 = [
         "🫖",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "deep_thinker",
         "Deep Thinker",
         "Read {target} papers at least fully",
@@ -527,7 +518,7 @@ BADGES_V2 = [
         "💭",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "critical_mind",
         "Critical Mind",
         "Read {target} papers at least fully",
@@ -536,7 +527,7 @@ BADGES_V2 = [
         "⚗️",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "scholar",
         "Scholar",
         "Read {target} papers at least fully",
@@ -545,12 +536,16 @@ BADGES_V2 = [
         "🧠",
         "Depth",
     ),
-    _v2("sage", "Sage", "Read {target} papers at least fully", "deep_reads", 250, "🧙", "Depth"),
-    _v2("first_dive", "First Dive", "Read {target} paper thoroughly", "thorough", 1, "🏊", "Depth"),
-    _v2(
+    BadgeDef(
+        "sage", "Sage", "Read {target} papers at least fully", "deep_reads", 250, "🧙", "Depth"
+    ),
+    BadgeDef(
+        "first_dive", "First Dive", "Read {target} paper thoroughly", "thorough", 1, "🏊", "Depth"
+    ),
+    BadgeDef(
         "free_diver", "Free Diver", "Read {target} papers thoroughly", "thorough", 10, "🐬", "Depth"
     ),
-    _v2(
+    BadgeDef(
         "pearl_diver",
         "Pearl Diver",
         "Read {target} papers thoroughly",
@@ -559,7 +554,7 @@ BADGES_V2 = [
         "🦪",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "trench",
         "Mariana Trench",
         "Read {target} papers thoroughly",
@@ -568,7 +563,7 @@ BADGES_V2 = [
         "🌊",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "note_taker",
         "Note Taker",
         "Write substantial notes on {target} paper",
@@ -577,7 +572,7 @@ BADGES_V2 = [
         "🗒️",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "annotator",
         "Annotator",
         "Write substantial notes on {target} papers",
@@ -586,7 +581,7 @@ BADGES_V2 = [
         "🖍️",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "chronicler",
         "Chronicler",
         "Write substantial notes on {target} papers",
@@ -595,7 +590,7 @@ BADGES_V2 = [
         "🪶",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "essayist",
         "Essayist",
         "Write {target} characters of notes in total",
@@ -604,7 +599,7 @@ BADGES_V2 = [
         "🖊️",
         "Depth",
     ),
-    _v2(
+    BadgeDef(
         "monograph",
         "Monograph",
         "Write {target} characters of notes in total",
@@ -613,36 +608,36 @@ BADGES_V2 = [
         "📕",
         "Depth",
     ),
-    _v2("referee", "Referee", "Rate {target} papers", "ratings", 5, "⚖️", "Depth"),
-    _v2("connoisseur", "Connoisseur", "Rate {target} papers", "ratings", 50, "🍷", "Depth"),
-    _v2(
-        "tadpole",
-        "Tadpole",
-        "Read your top paper first, {target} time",
-        "frogs",
+    BadgeDef("referee", "Referee", "Rate {target} papers", "ratings", 5, "⚖️", "Depth"),
+    BadgeDef("connoisseur", "Connoisseur", "Rate {target} papers", "ratings", 50, "🍷", "Depth"),
+    BadgeDef(
+        "first_bite",
+        "First Bite",
+        "Get the cheese: read your top paper first, {target} time",
+        "cheeses",
         1,
-        "🥚",
+        "🐭",
         "Discipline",
     ),
-    _v2(
-        "bullfrog",
-        "Bullfrog",
-        "Read your top paper first, {target} times",
-        "frogs",
+    BadgeDef(
+        "cheese_scholar",
+        "Cheese Scholar",
+        "Get the cheese: read your top paper first, {target} times",
+        "cheeses",
         25,
-        "🐊",
+        "📜",
         "Discipline",
     ),
-    _v2(
-        "frog_king",
-        "Frog King",
-        "Read your top paper first, {target} times",
-        "frogs",
+    BadgeDef(
+        "chair_of_cheese",
+        "Chair of Cheese Studies",
+        "Get the cheese: read your top paper first, {target} times",
+        "cheeses",
         100,
         "👑",
         "Discipline",
     ),
-    _v2(
+    BadgeDef(
         "zen",
         "Zen Master",
         "Empty your reading queue {target} times",
@@ -651,7 +646,7 @@ BADGES_V2 = [
         "☯️",
         "Discipline",
     ),
-    _v2(
+    BadgeDef(
         "gatekeeper",
         "Gatekeeper",
         "Mark {target} papers as not relevant",
@@ -660,7 +655,7 @@ BADGES_V2 = [
         "🚧",
         "Discipline",
     ),
-    _v2(
+    BadgeDef(
         "streak_2",
         "Back to Back",
         "Read something {target} weeks in a row",
@@ -669,7 +664,7 @@ BADGES_V2 = [
         "✌️",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "streak_8",
         "Two-Month Run",
         "Read something {target} weeks in a row",
@@ -678,7 +673,7 @@ BADGES_V2 = [
         "🚴",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "streak_78",
         "Unstoppable",
         "Read something {target} weeks in a row",
@@ -687,7 +682,7 @@ BADGES_V2 = [
         "🚂",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "streak_104",
         "Two Years Strong",
         "Read something {target} weeks in a row",
@@ -696,7 +691,7 @@ BADGES_V2 = [
         "🏔️",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "habit",
         "Habit Former",
         "Read something in {target} different weeks",
@@ -705,7 +700,7 @@ BADGES_V2 = [
         "🌀",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "semester",
         "Semester",
         "Read something in {target} different weeks",
@@ -714,7 +709,7 @@ BADGES_V2 = [
         "🏫",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "two_semesters",
         "Two Semesters",
         "Read something in {target} different weeks",
@@ -723,7 +718,7 @@ BADGES_V2 = [
         "🌗",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "academic_year",
         "Academic Year",
         "Read something in {target} different weeks",
@@ -732,7 +727,7 @@ BADGES_V2 = [
         "📆",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "full_year",
         "Full Year",
         "Read something in {target} different weeks",
@@ -741,7 +736,7 @@ BADGES_V2 = [
         "🎆",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "seasoned",
         "Seasoned",
         "Read something in {target} different weeks",
@@ -750,7 +745,7 @@ BADGES_V2 = [
         "🍂",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "veteran",
         "Veteran",
         "Read something in {target} different weeks",
@@ -759,7 +754,7 @@ BADGES_V2 = [
         "🎗️",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "adventurer",
         "Adventurer",
         "Complete {target} weekly quests",
@@ -768,7 +763,7 @@ BADGES_V2 = [
         "🎒",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "pathfinder",
         "Pathfinder",
         "Complete {target} weekly quests",
@@ -777,10 +772,12 @@ BADGES_V2 = [
         "🥾",
         "Consistency",
     ),
-    _v2("odyssey", "Odyssey", "Complete {target} weekly quests", "quests", 50, "⛵", "Consistency"),
-    _v2("saga", "Saga", "Complete {target} weekly quests", "quests", 75, "📯", "Consistency"),
-    _v2("epic", "Epic", "Complete {target} weekly quests", "quests", 100, "🏰", "Consistency"),
-    _v2(
+    BadgeDef(
+        "odyssey", "Odyssey", "Complete {target} weekly quests", "quests", 50, "⛵", "Consistency"
+    ),
+    BadgeDef("saga", "Saga", "Complete {target} weekly quests", "quests", 75, "📯", "Consistency"),
+    BadgeDef("epic", "Epic", "Complete {target} weekly quests", "quests", 100, "🏰", "Consistency"),
+    BadgeDef(
         "top_marks",
         "Top Marks",
         "Get grade A or S in {target} week",
@@ -789,7 +786,7 @@ BADGES_V2 = [
         "✅",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "honor_roll",
         "Honor Roll",
         "Get grade A or S in {target} weeks",
@@ -798,7 +795,7 @@ BADGES_V2 = [
         "🎖️",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "deans_list",
         "Dean's List",
         "Get grade A or S in {target} weeks",
@@ -807,7 +804,7 @@ BADGES_V2 = [
         "📋",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "valedictorian",
         "Valedictorian",
         "Get grade A or S in {target} weeks",
@@ -816,7 +813,7 @@ BADGES_V2 = [
         "🎤",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "distinction",
         "Distinction",
         "Get grade S in {target} week",
@@ -825,7 +822,7 @@ BADGES_V2 = [
         "✨",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "summa",
         "Summa cum Laude",
         "Get grade S in {target} weeks",
@@ -834,7 +831,7 @@ BADGES_V2 = [
         "🏵️",
         "Consistency",
     ),
-    _v2(
+    BadgeDef(
         "dawn_patrol",
         "Dawn Patrol",
         "Read {target} different papers between 05:00 and 08:00",
@@ -843,7 +840,7 @@ BADGES_V2 = [
         "🐓",
         "Pace",
     ),
-    _v2(
+    BadgeDef(
         "night_shift",
         "Night Shift",
         "Read {target} different papers between 22:00 and 04:00",
@@ -852,7 +849,7 @@ BADGES_V2 = [
         "🌙",
         "Pace",
     ),
-    _v2(
+    BadgeDef(
         "weekend_scholar",
         "Weekend Scholar",
         "Read {target} different papers on weekends",
@@ -861,7 +858,7 @@ BADGES_V2 = [
         "⛱️",
         "Pace",
     ),
-    _v2(
+    BadgeDef(
         "landmark",
         "Landmark",
         "Read {target} landmark paper (top 1 % cited)",
@@ -870,7 +867,7 @@ BADGES_V2 = [
         "🗿",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "canon_scholar",
         "Canon Scholar",
         "Read {target} landmark papers",
@@ -879,7 +876,7 @@ BADGES_V2 = [
         "🏯",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "trend_spotter",
         "Trend Spotter",
         "Read {target} papers within 30 days of publication",
@@ -888,7 +885,7 @@ BADGES_V2 = [
         "📈",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "cutting_edge",
         "Cutting Edge",
         "Read {target} papers within 30 days of publication",
@@ -897,7 +894,7 @@ BADGES_V2 = [
         "🔪",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "breaking_news",
         "Breaking News",
         "Read {target} papers within 7 days of publication",
@@ -906,7 +903,7 @@ BADGES_V2 = [
         "🗞️",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "historian",
         "Historian",
         "Read {target} papers that are 25+ years old",
@@ -915,7 +912,7 @@ BADGES_V2 = [
         "⏳",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "curious",
         "Curious Mind",
         "Read papers from {target} different topics",
@@ -924,7 +921,7 @@ BADGES_V2 = [
         "🌿",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "wanderer",
         "Wanderer",
         "Read papers from {target} different topics",
@@ -933,7 +930,7 @@ BADGES_V2 = [
         "🚶",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "bridge_builder",
         "Bridge Builder",
         "Read papers from {target} different topics",
@@ -942,7 +939,7 @@ BADGES_V2 = [
         "🌉",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "universal",
         "Universal Scholar",
         "Read papers from {target} different topics",
@@ -951,7 +948,7 @@ BADGES_V2 = [
         "🌌",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "scout",
         "Scout",
         "Read {target} papers from your recommendations",
@@ -960,7 +957,7 @@ BADGES_V2 = [
         "🔭",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "pioneer",
         "Pioneer",
         "Read {target} papers from your recommendations",
@@ -969,7 +966,7 @@ BADGES_V2 = [
         "🚀",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "expedition",
         "Expedition Leader",
         "Read {target} papers from your recommendations",
@@ -978,7 +975,7 @@ BADGES_V2 = [
         "🗻",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "cartographer",
         "Cartographer",
         "Read {target} papers from your recommendations",
@@ -987,7 +984,7 @@ BADGES_V2 = [
         "🗺",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "archivist",
         "Archivist",
         "Read {target} papers from your libraries",
@@ -996,7 +993,7 @@ BADGES_V2 = [
         "🗄️",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "librarian",
         "Librarian",
         "Read {target} papers from your libraries",
@@ -1005,7 +1002,7 @@ BADGES_V2 = [
         "🏷️",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "head_librarian",
         "Head Librarian",
         "Read {target} papers from your libraries",
@@ -1014,7 +1011,7 @@ BADGES_V2 = [
         "🗝️",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "bibliographer",
         "Bibliographer",
         "Read {target} papers from your libraries",
@@ -1023,7 +1020,7 @@ BADGES_V2 = [
         "📇",
         "Breadth",
     ),
-    _v2(
+    BadgeDef(
         "maverick",
         "Maverick",
         "Read {target} papers you added yourself",
@@ -1032,12 +1029,12 @@ BADGES_V2 = [
         "🦄",
         "Breadth",
     ),
-    _v2("rising_star", "Rising Star", "Earn {target} XP", "xp", 500, "🌠", "Experience"),
-    _v2("silver_club", "Silver Club", "Earn {target} XP", "xp", 2500, "🥈", "Experience"),
-    _v2("ten_thousand", "Ten Thousand", "Earn {target} XP", "xp", 10000, "🔟", "Experience"),
-    _v2("gold_club", "Gold Club", "Earn {target} XP", "xp", 15000, "🥇", "Experience"),
-    _v2("platinum_club", "Platinum Club", "Earn {target} XP", "xp", 20000, "💠", "Experience"),
-    _v2("hall_of_fame", "Hall of Fame", "Earn {target} XP", "xp", 25000, "🏆", "Experience"),
+    BadgeDef("rising_star", "Rising Star", "Earn {target} XP", "xp", 500, "🌠", "Experience"),
+    BadgeDef("silver_club", "Silver Club", "Earn {target} XP", "xp", 2500, "🥈", "Experience"),
+    BadgeDef("ten_thousand", "Ten Thousand", "Earn {target} XP", "xp", 10000, "🔟", "Experience"),
+    BadgeDef("gold_club", "Gold Club", "Earn {target} XP", "xp", 15000, "🥇", "Experience"),
+    BadgeDef("platinum_club", "Platinum Club", "Earn {target} XP", "xp", 20000, "💠", "Experience"),
+    BadgeDef("hall_of_fame", "Hall of Fame", "Earn {target} XP", "xp", 25000, "🏆", "Experience"),
 ]
 
 
@@ -1050,7 +1047,7 @@ def _display_order(badges: list[BadgeDef]) -> list[BadgeDef]:
     return sorted(badges, key=lambda b: (groups[b.group], stats[b.stat], b.target))
 
 
-BADGE_CATALOG = _display_order(BADGE_CATALOG + BADGES_V2)
+BADGE_CATALOG = _display_order(BADGE_CATALOG + MORE_TIERS)
 BADGE_CODES = {b.code for b in BADGE_CATALOG}
 _CATALOG = {b.code: b for b in BADGE_CATALOG}
 
@@ -1067,7 +1064,7 @@ class Badge:
 
 
 # the newest rules format (see ``GameRules.rules_format``)
-RULES_FORMAT = 2
+RULES_FORMAT = 1
 
 
 class GameRules(BaseModel):
@@ -1075,9 +1072,8 @@ class GameRules(BaseModel):
 
     model_config = {"extra": "forbid", "allow_inf_nan": False}
 
-    # rules format: 1 = the rules of litrad 0.1 to 1.0 (20 levels, 44 badges);
-    # 2 = the rebalanced defaults with more badges. Rules stored without this key
-    # are format 1 (see ``_legacy_format``); new profiles get format 2.
+    # rules format: 1 = the rules of litrad 1.0; a later release that changes what
+    # the stored rules mean raises it (and reads every earlier format)
     rules_format: int = Field(RULES_FORMAT, ge=1, le=RULES_FORMAT)
     # share of the base points for a paper read before litrad ("read earlier")
     backlog_share: float = Field(1.0, ge=0, le=1)
@@ -1086,8 +1082,8 @@ class GameRules(BaseModel):
     xp_skimmed: int = Field(15, ge=0, le=10000)
     xp_read: int = Field(40, ge=0, le=10000)
     xp_thorough: int = Field(80, ge=0, le=10000)
-    # bonus: share of the base points for reading the top paper of the queue
-    frog_bonus: float = Field(0.5, ge=0, le=10)
+    # bonus ("got the cheese"): share of the base points for reading the top paper of the queue
+    cheese_bonus: float = Field(0.5, ge=0, le=10)
     # bonus: +step per consecutive reading week, up to max_steps steps
     streak_step: float = Field(0.05, ge=0, le=1)
     streak_max_steps: int = Field(10, ge=0, le=100)
@@ -1119,23 +1115,6 @@ class GameRules(BaseModel):
     )
     # badge code -> target; missing codes use the catalog default
     badge_targets: dict[str, int] = Field(default_factory=dict)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _legacy_format(cls, data):
-        """Rules stored before rules formats existed are format 1.
-
-        Every profile stores the complete rule set; one without ``rules_format``
-        that holds every rule of format 1 was locked by litrad 1.0 or
-        earlier, and keeps the badges and default targets of that time.
-        """
-        if (
-            isinstance(data, dict)
-            and "rules_format" not in data
-            and FINGERPRINT_FIELDS[GameRules] <= data.keys()
-        ):
-            data = {**data, "rules_format": 1}
-        return data
 
     @field_validator("levels")
     @classmethod
@@ -1175,14 +1154,10 @@ class GameRules(BaseModel):
         }
 
     def badges(self) -> list[Badge]:
-        """The badges of this profile's rules format with this profile's targets."""
+        """The badges with this profile's targets."""
         result = []
         for definition in BADGE_CATALOG:
-            if definition.since > self.rules_format:
-                continue
-            target = self.badge_targets.get(
-                definition.code, definition.default_target(self.rules_format)
-            )
+            target = self.badge_targets.get(definition.code, definition.target)
             result.append(
                 Badge(
                     definition.code,
@@ -1204,19 +1179,20 @@ class GameRules(BaseModel):
         return rules_fingerprint(self)
 
 
-# Rules format 1: the fields every fingerprint covers, as of litrad 1.0 (and
-# unchanged since 0.1). A rule added later (with a default) enters the hash only
-# when a profile sets it to a value other than its default, so rules locked by
-# an older version keep their fingerprint in every newer one. Never remove or
-# rename a name here (that would change all fingerprints: 2.0 only).
+# The fields every fingerprint covers: the rules of litrad 1.0. A rule added
+# later (with a default) enters the hash only when a profile sets it to a value
+# other than its default, so rules locked by an older 1.x keep their fingerprint
+# in every newer one. Never remove or rename a name here (2.0 only).
 FINGERPRINT_FIELDS = {
     GameRules: frozenset(
         {
+            "rules_format",
+            "backlog_share",
             "xp_abstract",
             "xp_skimmed",
             "xp_read",
             "xp_thorough",
-            "frog_bonus",
+            "cheese_bonus",
             "streak_step",
             "streak_max_steps",
             "classic_percentile",
@@ -1239,25 +1215,29 @@ FINGERPRINT_FIELDS = {
     ),
     LevelDef: frozenset({"xp", "title", "icon"}),
 }
-# the badge catalogue of rules format 1: a badge added later counts only with a
-# target other than its catalogue default
-BADGE_CODES_V1 = frozenset(
-    """first_read page_turner bookworm bibliophile centurion living_library deep_diver
-    abyss_explorer scribe novelist critic fan_club frog_eater frog_prince inbox_zero
-    minimalist curator streak_4 streak_12 streak_26 streak_52 questing quest_master
-    quest_legend straight_a perfectionist comeback marathon binge_week night_owl
-    early_riser weekend_warrior classicist canon_keeper early_bird scoop archaeologist
-    polymath renaissance trailblazer library_diver free_spirit thousand_club
-    high_five""".split()
+
+# the badges of litrad 1.0: a badge added later counts only with a target other
+# than its catalogue default (its presence follows from the release)
+BASELINE_BADGES = frozenset(
+    """abstract_thinker abyss_explorer academic_year adventurer annotator archaeologist
+    archivist bibliographer bibliophile big_cheese binge_week bookworm breaking_news
+    bridge_builder browser canon_keeper canon_scholar careful cartographer centurion
+    chair_of_cheese cheese_scholar cheese_taster chronicler classicist close_reader
+    comeback connoisseur critic critical_mind curator curious cutting_edge dawn_patrol
+    deans_list deep_diver deep_thinker distinction early_bird early_riser encyclopedia
+    epic erudite essayist expedition fan_club first_bite first_dive first_glance
+    first_read free_diver free_spirit full_year gatekeeper gold_club habit hall_of_fame
+    head_librarian high_five historian honor_roll inbox_zero journal_club landmark
+    librarian library_diver lit_review living_library marathon maverick meta_analyst
+    minimalist monograph night_owl night_shift note_taker novelist odyssey page_turner
+    pathfinder pearl_diver perfectionist pioneer platinum_club polymath quest_legend
+    quest_master questing reading_list referee regular renaissance rising_star saga sage
+    scholar scoop scout scribe seasoned semester silver_club straight_a streak_104
+    streak_12 streak_2 streak_26 streak_4 streak_52 streak_78 streak_8 summa systematic
+    ten_thousand thousand_club top_marks trailblazer trench trend_spotter two_semesters
+    universal valedictorian veteran wanderer warm_up weekend_scholar weekend_warrior
+    well_read zen""".split()
 )
-
-
-# Rules format 2 (litrad 0.2): its rules always enter the fingerprint of a
-# format-2 profile; for a format-1 profile only with a value other than the one
-# below (rules_format) or than their default. Same rule as above: never remove
-# or rename a name, never change a default here once released.
-FORMAT2_FIELDS = frozenset({"rules_format", "backlog_share"})
-FORMAT1_VALUES = {"rules_format": 1}
 
 
 def _canonical(model: BaseModel):
@@ -1266,16 +1246,11 @@ def _canonical(model: BaseModel):
         (fields for cls, fields in FINGERPRINT_FIELDS.items() if isinstance(model, cls)),
         None,
     )
-    if isinstance(model, GameRules) and model.rules_format >= 2:
-        baseline = baseline | FORMAT2_FIELDS
     data = {}
     for name, info in type(model).model_fields.items():
         value = getattr(model, name)
         if baseline is not None and name not in baseline:
-            if name in FORMAT1_VALUES:
-                if value == FORMAT1_VALUES[name]:
-                    continue
-            elif value == info.get_default(call_default_factory=True):
+            if value == info.get_default(call_default_factory=True):
                 continue
         if isinstance(value, BaseModel):
             value = _canonical(value)
@@ -1290,12 +1265,11 @@ def rules_fingerprint(rules: "GameRules") -> str:
     data = _canonical(rules)
     # resolved targets: writing a default explicitly must not change the fingerprint;
     # a badge added to the catalogue later enters only with a non-default target
-    # (its presence follows from the rules format)
     resolved = {badge.code: badge.target for badge in rules.badges()}
     data["badge_targets"] = {
         code: target
         for code, target in resolved.items()
-        if code in BADGE_CODES_V1 or target != _CATALOG[code].default_target(rules.rules_format)
+        if code in BASELINE_BADGES or target != _CATALOG[code].target
     }
     canonical = json.dumps(data, sort_keys=True, ensure_ascii=True)
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]

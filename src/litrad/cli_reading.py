@@ -488,7 +488,7 @@ def score(config: Path = ConfigOpt):
             f"\nReading Impact Factor (avg XP/week, last 4 weeks): [bold]{rif:.1f}[/bold]"
         )
         if s["papers_read"]:
-            discipline = s["frogs"] / s["papers_read"]
+            discipline = s["cheeses"] / s["papers_read"]
             depth_share = s["deep_reads"] / s["papers_read"]
             console.print(
                 f"Discipline (top paper read first): {discipline:.0%} · "

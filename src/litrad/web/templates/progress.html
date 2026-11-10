@@ -21,7 +21,7 @@
   <div class="grid two stat-grid">
     <div class="card stat"><div class="emoji"><span class="flame {{ 'on' if stats.streak }}">🔥</span></div><div class="value">{{ stats.streak }}</div><div class="label">week streak (best {{ stats.best_streak }}) · ×{{ "%.2f" | format(multiplier) }}</div></div>
     <div class="card stat"><div class="emoji">📈</div><div class="value">{{ "%.1f" | format(rif) }}</div><div class="label">Reading Impact Factor<br><small>avg XP / week, last 4 weeks</small></div></div>
-    <div class="card stat"><div class="emoji">🐸</div><div class="value">{{ (stats.frogs / stats.papers_read * 100) | round | int if stats.papers_read else 0 }}%</div><div class="label">discipline: top paper read first</div></div>
+    <div class="card stat"><div class="emoji">🧀</div><div class="value">{{ (stats.cheeses / stats.papers_read * 100) | round | int if stats.papers_read else 0 }}%</div><div class="label">discipline: top paper read first</div></div>
     <div class="card stat"><div class="emoji">🔬</div><div class="value">{{ (stats.deep_reads / stats.papers_read * 100) | round | int if stats.papers_read else 0 }}%</div><div class="label">depth: read or thorough</div></div>
   </div>
 </div>

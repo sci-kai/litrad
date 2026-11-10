@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from typer.testing import CliRunner
 
 import litrad.cli as cli
-from conftest import format1_rules
+from conftest import make_profile
 from litrad.db import (
     Achievement,
     Category,
@@ -38,12 +38,12 @@ from litrad.recommend.engine import exclusion_sets
 from litrad.rules import GameRules
 
 # checked with the numbers of rules format 1 (see test_game.py)
-V1 = format1_rules()
+RULES = GameRules()
 
 
 @pytest.fixture
 def db(cfg):
-    cfg.game = V1
+    cfg.game = RULES
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         yield cfg, session
@@ -163,11 +163,13 @@ def test_badges_are_unlocked_and_paid_once(db):
     cfg, session = db
     start_profile(session, cfg, at=datetime(2026, 1, 5))
     record_reading(session, cfg, add(session, "A"), ReadStatus.skimmed, at=datetime(2026, 1, 5, 9))
+    unlocked = len(session.exec(select(Achievement)).all())
+    assert unlocked >= 1
     at = datetime(2026, 1, 6, 9)
     for _ in range(3):
-        assert unlock_badges(session, V1, at.date(), at, []) == []
-    assert len(session.exec(select(Achievement)).all()) == 1
-    assert len(xp_of(session, "badge")) == 1
+        assert unlock_badges(session, RULES, at.date(), at, []) == []
+    assert len(session.exec(select(Achievement)).all()) == unlocked
+    assert len(xp_of(session, "badge")) == unlocked
 
 
 def test_relogging_one_paper_at_night_is_one_night_read(db):
@@ -290,7 +292,7 @@ def test_a_read_paper_marked_abstract_later_is_not_recommended_again(db):
 
 def test_history_shows_penalties_as_negative(tmp_path, cfg):
     config = tmp_path / "config.yaml"
-    config.write_text(yaml.safe_dump({"paths": {"database": str(cfg.paths.database)}}), "utf-8")
+    config.write_text(yaml.safe_dump({"paths": {"profiles_dir": str(tmp_path / "p")}}), "utf-8")
     engine = init_db(cfg.paths.database)
     with Session(engine) as session:
         start_profile(session, cfg)
@@ -298,6 +300,7 @@ def test_history_shows_penalties_as_negative(tmp_path, cfg):
         queue_add(session, cfg, paper)
         record_reading(session, cfg, paper, ReadStatus.dismissed)
     engine.dispose()
+    make_profile(config, database=cfg.paths.database)
     result = CliRunner().invoke(cli.app, ["history", "-c", str(config)])
     assert result.exit_code == 0, result.stdout
     assert "-15" in result.stdout and "+-" not in result.stdout

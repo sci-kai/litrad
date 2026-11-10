@@ -256,15 +256,15 @@ def test_move_and_read_with_celebration(app_env):
     )
     payload = celebration(response)
     kinds = [e["kind"] for e in payload["events"]]
-    assert "frog" in kinds and payload["badges"][0]["name"] == "First Steps"
+    assert "cheese" in kinds and payload["badges"][0]["name"] == "First Steps"
     assert payload["points"] > 40
     # the token is used once: a reload shows no celebration
     assert celebration(client.get("/")) is None
     assert "Marked as read" in payload["message"]
     page = client.get(f"/papers/{barkley}").text
     assert "great" in page and "★★★★★" in page
-    # "XP from this paper": base points and the frog bonus (half of 40)
-    assert "Ate the frog" in page and "+40" in page and "+20" in page
+    # "XP from this paper": base points and the cheese bonus (half of 40)
+    assert "Got the cheese" in page and "+40" in page and "+20" in page
 
 
 def test_invalid_read_and_note(app_env):

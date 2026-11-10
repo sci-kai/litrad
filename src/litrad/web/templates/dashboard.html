@@ -35,7 +35,7 @@
       {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
     </div>
     <div class="actions">
-      <button class="primary" type="button" data-toggle="dash-read" title="Top paper first: +{{ (rules.frog_bonus * 100) | round | int }} % XP">🐸 Log reading</button>
+      <button class="primary" type="button" data-toggle="dash-read" title="Top paper first: +{{ (rules.cheese_bonus * 100) | round | int }} % XP">🧀 Log reading</button>
       <a class="button" href="/papers/{{ paper.id }}">📄 Abstract</a>
     </div>
     {{ read_form(paper, "/", "dash-read") }}

@@ -22,7 +22,7 @@ from litrad.db import (
     init_db,
 )
 
-KINDS = ["read", "streak", "frog", "classic", "hot", "rating", "reflection", "penalty"]
+KINDS = ["read", "streak", "cheese", "classic", "hot", "rating", "reflection", "penalty"]
 LEVELS = [ReadStatus.abstract, ReadStatus.skimmed, ReadStatus.read, ReadStatus.thorough]
 
 

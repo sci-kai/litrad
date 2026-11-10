@@ -37,7 +37,13 @@ from litrad.game import (
 )
 from litrad.profile import start_profile
 from litrad.reading import ReadingError, mark_read_earlier, queue_add, record_reading
-from litrad.rules import BADGE_CODES_V1, FINGERPRINT_FIELDS, GameRules
+from litrad.rules import (
+    BADGE_CODES,
+    BASELINE_BADGES,
+    FINGERPRINT_FIELDS,
+    RULES_FORMAT,
+    GameRules,
+)
 
 REPO = Path(__file__).resolve().parent.parent
 # a Saturday night: every time-based badge would notice it
@@ -83,8 +89,8 @@ def test_read_earlier_earns_the_share_of_the_base_points_and_no_bonus(db):
     assert outcome.left_queue
     got = kinds(session)
     assert got["earlier"] == round(rules.xp_thorough * rules.backlog_share)
-    # no reading bonus for when or how: frog, streak, fresh, recommendation, inbox zero
-    for kind in ("read", "frog", "streak", "hot", "recommended", "inbox_zero", "quest"):
+    # no reading bonus for when or how: cheese, streak, fresh, recommendation, inbox zero
+    for kind in ("read", "cheese", "streak", "hot", "recommended", "inbox_zero", "quest"):
         assert kind not in got, kind
     assert got["classic"] == rules.classic_xp  # landmark: what you read, not when
     event = session.exec(select(StatusEvent)).one()
@@ -103,14 +109,14 @@ def test_read_earlier_counts_for_papers_depth_and_levels_but_not_for_time(db):
     assert current["thorough"] == 10 and current["topics"] == 6
     for stat in ("max_day", "max_week", "night_reads", "weekend_reads", "best_streak"):
         assert current[stat] == 0, stat
-    assert current["quests"] == current["a_weeks"] == current["frogs"] == 0
+    assert current["quests"] == current["a_weeks"] == current["cheeses"] == 0
     assert reading_weeks(session) == []
     assert week_progress(session, GameRules(), NIGHT.date())["total"] == 0
     owned = set(session.exec(select(Achievement.code)).all())
     assert {"first_read", "page_turner", "bookworm", "deep_diver", "free_diver"} <= owned
     for code in ("marathon", "binge_week", "night_owl", "weekend_warrior", "streak_2"):
         assert code not in owned, code
-    for code in ("questing", "top_marks", "tadpole", "comeback", "early_bird", "scoop"):
+    for code in ("questing", "top_marks", "first_bite", "comeback", "early_bird", "scoop"):
         assert code not in owned, code
     assert level_for(total_xp(session)).number > 1
     # nothing on the calendar, in the weekly report or in the pace
@@ -298,25 +304,16 @@ def test_archive_round_trip_keeps_the_flag(tmp_path):
     engine.dispose()
 
 
-# --- rules formats -----------------------------------------------------------------------
+# --- rules format ---------------------------------------------------------------------
 
 
-def test_new_profiles_get_format_2_and_stored_rules_keep_format_1():
+def test_rules_have_one_format_and_every_field_in_the_fingerprint():
     rules = GameRules()
-    assert rules.rules_format == 2 and len(rules.badges()) > len(BADGE_CODES_V1)
-    stored = json.loads((REPO / "tests/data/compat/dev-20261109/profile.json").read_text())
-    stored_rules = stored["profile"]["rules"] if "profile" in stored else stored["rules"]
-    old = GameRules.model_validate(stored_rules)
-    assert old.rules_format == 1
-    assert {b.code for b in old.badges()} == BADGE_CODES_V1
-    assert old.levels == GameRules.model_validate(stored_rules).levels
-    # a config with only a few rules is the new format
-    assert GameRules.model_validate({"quest_xp": 60}).rules_format == 2
-    # the full set of format-1 rules without a format: format 1
-    full = {name: getattr(rules, name) for name in FINGERPRINT_FIELDS[GameRules]}
-    assert GameRules.model_validate(full).rules_format == 1
-    assert GameRules.model_validate(rules.model_dump()).rules_format == 2
-    assert GameRules.model_validate(full).fingerprint() != rules.fingerprint()
+    assert rules.rules_format == RULES_FORMAT == 1
+    assert FINGERPRINT_FIELDS[GameRules] == set(GameRules.model_fields)
+    assert {b.code for b in rules.badges()} == BASELINE_BADGES == BADGE_CODES
+    # a config with only a few rules gets the defaults for the rest
+    assert GameRules.model_validate({"quest_xp": 60}).backlog_share == rules.backlog_share
 
 
 # --- the simulator ----------------------------------------------------------------------

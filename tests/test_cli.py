@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 import litrad.cli as cli
 import litrad.cli_reading as cli_reading
-from conftest import SAMPLE_BIB, FakeApis, make_work
+from conftest import SAMPLE_BIB, FakeApis, make_profile, make_work
 from litrad.rules import GameRules
 
 runner = CliRunner()
@@ -29,13 +29,13 @@ def write_config(tmp_path, **extra):
     path = tmp_path / "config.yaml"
     settings = {
         "paths": {
-            "bibtex": str(bib),
-            "database": str(tmp_path / "db.sqlite"),
+            "profiles_dir": str(tmp_path / "profiles"),
             "cache_dir": str(tmp_path / "cache"),
         },
         **extra,
     }
     path.write_text(yaml.safe_dump(settings), encoding="utf-8")
+    make_profile(path, bibtex=bib)
     return path
 
 
@@ -125,8 +125,7 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert code == 0 and "Paper from a colleague" in out and "litrad read q1" in out
 
     code, out = invoke("read", "q1", "read", "--rating", "4", "--note", "useful", "-c", config)
-    assert code == 0 and "Ate the frog" in out
-    assert "game has started" in out  # first read starts the game with the config rules
+    assert code == 0 and "Got the cheese" in out
     assert re.search(r"LEVEL UP! You are now an? \w", out)
     assert "Badge unlocked: First Steps" in out and "Up next: q1 A collective" in out
 

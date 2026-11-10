@@ -178,7 +178,7 @@ KIND_ICONS = {
     "read": "📖",
     "earlier": "🕰️",
     "streak": "🔥",
-    "frog": "🐸",
+    "cheese": "🧀",
     "classic": "🏛️",
     "hot": "📰",
     "recommended": "🎯",

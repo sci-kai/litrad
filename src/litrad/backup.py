@@ -859,7 +859,7 @@ def summarize_session(
         "best_streak": figures["best_streak"],
         "quests": figures["quests"],
         "badges": badges,
-        "discipline": figures["frogs"] / read if read else 0.0,
+        "discipline": figures["cheeses"] / read if read else 0.0,
         "depth": figures["deep_reads"] / read if read else 0.0,
         "notes_chars": figures["notes_chars"],
         "rif": reading_impact_factor(session, moment.date()),

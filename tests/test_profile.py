@@ -5,7 +5,7 @@ import pytest
 from sqlmodel import Session, select
 from typer.testing import CliRunner
 
-from conftest import archive_data, format1_rules
+from conftest import archive_data
 from litrad.backup import BackupError, merge, summarize_session
 from litrad.config import Config
 from litrad.db import (
@@ -27,7 +27,7 @@ from litrad.profile import (
     start_profile,
 )
 from litrad.reading import drop_from_queue, queue_add, record_reading
-from litrad.rules import BADGE_CATALOG, FORMAT2_FIELDS, GameRules, LevelDef
+from litrad.rules import BADGE_CATALOG, GameRules, LevelDef
 
 MONDAY = datetime(2026, 10, 5, 10, 0, 0)
 runner = CliRunner()
@@ -57,10 +57,8 @@ def with_game(cfg: Config, **rules) -> Config:
 
 def test_default_rules_are_rich():
     rules = GameRules()
-    assert rules.rules_format == 2
+    assert rules.rules_format == 1
     assert len(rules.levels) == 60 and len(rules.badges()) == len(BADGE_CATALOG) >= 120
-    old = format1_rules()  # as profiles locked by 1.0 and earlier keep them
-    assert len(old.levels) == 20 and len(old.badges()) == 44
     assert rules.levels[0].title == "Curious Undergrad"
     assert rules.levels[-1].title == "Hallmarks Author"
     codes = [b.code for b in rules.badges()]
@@ -92,12 +90,14 @@ def test_fingerprint():
     assert GameRules(badge_targets={"bookworm": 26}).fingerprint() != GameRules().fingerprint()
 
 
-def _fingerprint_until_0_6(rules: GameRules) -> str:
-    """The fingerprint algorithm of 0.1 to 0.6 (hash of the complete dump)."""
+def _fingerprint_1_0(rules: GameRules, codes=None) -> str:
+    """The fingerprint as litrad 1.0 defines it: every rule, every badge's target."""
     import hashlib
 
-    data = rules.model_dump(mode="json", exclude=set(FORMAT2_FIELDS))
-    data["badge_targets"] = {badge.code: badge.target for badge in rules.badges()}
+    data = rules.model_dump(mode="json")
+    data["badge_targets"] = {
+        b.code: b.target for b in rules.badges() if codes is None or b.code in codes
+    }
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -105,23 +105,14 @@ def _fingerprint_until_0_6(rules: GameRules) -> str:
     "values",
     [
         {},
-        {"xp_read": 41, "frog_bonus": 0.75},
+        {"xp_read": 41, "cheese_bonus": 0.75},
         {"badge_targets": {"bookworm": 30, "critic": 5}},
         {"levels": [{"xp": 0, "title": "Start"}, {"xp": 10, "title": "Ünïcode 🎓", "icon": "🔬"}]},
     ],
 )
-def test_fingerprint_is_unchanged_for_existing_rules(values):
-    rules = GameRules.model_validate({**_stored_v1(), **values})
-    assert rules.rules_format == 1
-    assert rules.fingerprint() == _fingerprint_until_0_6(rules)
-
-
-def _stored_v1() -> dict:
-    """The default rules as litrad 1.0 and earlier stored them (without later rules)."""
-    data = format1_rules().model_dump(mode="json")
-    for name in FORMAT2_FIELDS:
-        data.pop(name)
-    return data
+def test_fingerprint_follows_the_1_0_definition(values):
+    rules = GameRules.model_validate(values)
+    assert rules.fingerprint() == _fingerprint_1_0(rules)
 
 
 def test_fingerprint_survives_a_rule_added_later():
@@ -129,7 +120,7 @@ def test_fingerprint_survives_a_rule_added_later():
     from pydantic import Field
 
     from litrad import rules as rules_module
-    from litrad.rules import BadgeDef, LevelDef
+    from litrad.rules import BASELINE_BADGES, BadgeDef, LevelDef
 
     class FutureLevel(LevelDef):
         colour: str = "blue"
@@ -140,8 +131,12 @@ def test_fingerprint_survives_a_rule_added_later():
             default_factory=lambda: [FutureLevel(xp=0, title="Start")]
         )
 
-    stored = {**_stored_v1(), "xp_read": 50, "levels": [{"xp": 0, "title": "Start", "icon": "⭐"}]}
-    locked = GameRules.model_validate(stored)  # as an older version locked it
+    stored = {
+        **GameRules().model_dump(mode="json"),
+        "xp_read": 50,
+        "levels": [{"xp": 0, "title": "Start", "icon": "⭐"}],
+    }
+    locked = GameRules.model_validate(stored)  # as an earlier 1.x locked it
     future = FutureRules.model_validate(stored)
     assert future.fingerprint() == locked.fingerprint()
     # setting the new rule to something else is a real difference
@@ -157,41 +152,20 @@ def test_fingerprint_survives_a_rule_added_later():
     try:
         rules_module.BADGE_CATALOG = [*catalogue, extra]
         rules_module._CATALOG = {**targets, "future": extra}
-        assert locked.fingerprint() == _fingerprint_until_0_6_without("future", locked)
+        assert locked.fingerprint() == _fingerprint_1_0(locked, BASELINE_BADGES)
         changed = locked.model_copy(update={"badge_targets": {"future": 8}})
         assert changed.fingerprint() != locked.fingerprint()
     finally:
         rules_module.BADGE_CATALOG, rules_module._CATALOG = catalogue, targets
 
 
-def _fingerprint_until_0_6_without(code: str, rules: GameRules) -> str:
-    import hashlib
-
-    from litrad.rules import BADGE_CODES_V1
-
-    data = rules.model_dump(mode="json", exclude=set(FORMAT2_FIELDS))
-    data["badge_targets"] = {b.code: b.target for b in rules.badges() if b.code in BADGE_CODES_V1}
-    assert code not in data["badge_targets"]
-    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
-
-
 def test_fingerprint_baseline_covers_every_current_rule():
-    """Every rule is in the baseline of format 1 or 2; later rules must not be added to them."""
-    from litrad.rules import BADGE_CATALOG, BADGE_CODES_V1, FINGERPRINT_FIELDS, LevelDef
+    """The baseline holds every rule and badge of 1.0; later ones must not be added to it."""
+    from litrad.rules import BADGE_CATALOG, BASELINE_BADGES, FINGERPRINT_FIELDS, LevelDef
 
-    assert FINGERPRINT_FIELDS[GameRules] | FORMAT2_FIELDS == set(GameRules.model_fields)
+    assert FINGERPRINT_FIELDS[GameRules] == set(GameRules.model_fields)
     assert FINGERPRINT_FIELDS[LevelDef] == set(LevelDef.model_fields)
-    assert BADGE_CODES_V1 == {b.code for b in BADGE_CATALOG if b.since == 1}
-
-
-@pytest.mark.parametrize("version", ["0.1.0-alpha.1", "0.2.0-dev", "dev-20261109"])
-def test_stored_fingerprints_of_older_versions_verify(version):
-    from pathlib import Path
-
-    folder = Path(__file__).parent / "data" / "compat" / version
-    for name in ("profile.json",):
-        profile = json.loads((folder / name).read_text(encoding="utf-8"))["profile"]
-        assert GameRules.model_validate(profile["rules"]).fingerprint() == profile["fingerprint"]
+    assert BASELINE_BADGES == {b.code for b in BADGE_CATALOG}
 
 
 def test_merge_compares_rules_not_stored_fingerprint_strings(db, tmp_path):

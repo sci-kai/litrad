@@ -377,10 +377,10 @@ def test_restore_rejects_foreign_files(source, tmp_path):
 def test_backup_loop_backs_up_and_survives_errors(tmp_path, monkeypatch):
     path = tmp_path / "config.yaml"
     path.write_text(
-        f"paths:\n  bibtex: x.bib\n  database: {tmp_path / 'db.sqlite'}\n"
+        f"paths:\n  profiles_dir: {tmp_path / 'profiles'}\n"
         f"backup:\n  dir: {tmp_path / 'backups'}\n  interval_hours: 24\n"
     )
-    init_db(tmp_path / "db.sqlite").dispose()
+    make_profile(path)
     stop, messages = threading.Event(), []
 
     class OneShot:
@@ -399,13 +399,13 @@ def test_backup_loop_backs_up_and_survives_errors(tmp_path, monkeypatch):
     monkeypatch.setattr("litrad.backup.run_backup", broken)
     messages.clear()
     backup_loop(path, OneShot(), messages.append)
-    assert messages == ["WARNING: backup of (no profile) failed: disk full"]
+    assert messages == ["WARNING: backup of tester failed: disk full"]
     assert not stop.is_set()
 
 
 def test_backup_loop_disabled(tmp_path):
     path = tmp_path / "config.yaml"
-    path.write_text("paths:\n  bibtex: x.bib\nbackup:\n  interval_hours: 0\n")
+    path.write_text("paths: {}\nbackup:\n  interval_hours: 0\n")
     messages = []
     backup_loop(path, threading.Event(), messages.append)  # returns immediately
     assert messages == []

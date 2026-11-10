@@ -9,7 +9,7 @@
   <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
   <a href="/read">✅ Read papers</a>
 </nav>
-<p class="muted"><small>🐸 q1 first: +{{ (rules.frog_bonus * 100) | round | int }} % XP · ⚠️ removed before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
+<p class="muted"><small>🧀 q1 first gets the cheese: +{{ (rules.cheese_bonus * 100) | round | int }} % XP · ⚠️ removed before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
 
 <div class="grid">
   {% for item, paper in queue %}
@@ -26,7 +26,7 @@
         {% if readings[paper.id] %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>{% endif %}
       </div>
       <div class="actions">
-        <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🐸 " if item.position == 1 }}Log reading</button>
+        <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🧀 " if item.position == 1 }}Log reading</button>
         <a class="button small ghost" href="/papers/{{ paper.id }}">📄 Abstract</a>
         <form class="inline" method="post" action="/queue/{{ paper.id }}/drop"
           {% if costs[paper.id] %}data-confirm="Remove this paper unread? This costs {{ costs[paper.id] }} XP."{% endif %}>
