@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form, add_box with context %}
+{% from "macros.html" import paper_meta, read_form, add_box, cheese_title with context %}
 {% set active = "queue" %}
 {% block title %}Reading queue{% endblock %}
 {% block heading %}📚 Reading queue <small class="muted">{{ queue | length }}/{{ cfg.queue.max_size }}</small>{% endblock %}
@@ -9,7 +9,7 @@
   <a href="/recommendations">✨ Recommendations{% if header.reminder %} ⏰{% endif %}</a>
   <a href="/read">✅ Read papers</a>
 </nav>
-<p class="muted"><small>🧀 q1 first gets the cheese: +{{ (rules.cheese_bonus * 100) | round | int }} % XP · ⚠️ removed before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
+<p class="muted"><small>{% if queue and queue[0][0].reordered %}🧀 no cheese: moved (you placed q1){% else %}🧀 q1 first gets the cheese: +{{ (rules.cheese_bonus * 100) | round | int }} % XP{% endif %} · ⚠️ removed before skimmed: <b>−{{ rules.drop_penalty }} XP</b></small></p>
 
 <div class="grid">
   {% for item, paper in queue %}
@@ -26,7 +26,7 @@
         {% if readings[paper.id] %}<span class="chip">{{ status_icons[readings[paper.id].status.value] }} {{ readings[paper.id].status.value }}</span>{% endif %}
       </div>
       <div class="actions">
-        <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}">{{ "🧀 " if item.position == 1 }}Log reading</button>
+        <button class="{{ 'primary' if item.position == 1 }} small" type="button" data-toggle="read-{{ paper.id }}"{% if item.position == 1 %} title="{{ cheese_title(item) }}"{% endif %}>{{ "🧀 " if item.position == 1 and not item.reordered }}Log reading</button>
         <a class="button small ghost" href="/papers/{{ paper.id }}">📄 Abstract</a>
         <form class="inline" method="post" action="/queue/{{ paper.id }}/drop"
           {% if costs[paper.id] %}data-confirm="Remove this paper unread? This costs {{ costs[paper.id] }} XP."{% endif %}>
@@ -58,7 +58,7 @@
     <form method="post" action="/queue/add" class="grid" style="gap:.6rem" data-loading="Looking up the paper…">
       {{ add_box("ref") }}
       <div class="row" style="justify-content:space-between">
-        <label class="row" style="font-weight:400"><input type="checkbox" name="top" value="true" style="width:auto"> Read next (q1)</label>
+        <label class="row" style="font-weight:400" title="A paper you place ahead of others gets no 🧀 cheese bonus"><input type="checkbox" name="top" value="true" style="width:auto"> Read next (q1)</label>
         <button class="primary">➕ Add</button>
       </div>
     </form>

@@ -706,6 +706,7 @@ def merge(
                     position=position,
                     source=item.get("source", "manual"),
                     added_at=_dt(item.get("added_at")) or now(),
+                    reordered=bool(item.get("reordered", False)),
                 )
             )
             present.add(paper_id)

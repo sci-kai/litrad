@@ -321,6 +321,7 @@ def collect(session: Session, cfg: Config, settings_text: str | None = None) -> 
                     "position": q.position,
                     "source": q.source,
                     "added_at": _iso(q.added_at),
+                    "reordered": q.reordered,
                 }
                 for q in session.exec(select(QueueItem).order_by(QueueItem.position)).all()
             ]
@@ -507,12 +508,15 @@ FILE_DOCS = {
     "readings.json": "Per paper: current `status` (abstract, skimmed, read, thorough, "
     "dismissed), `rating` (1-5), `notes` (the note body) and `updated_at`.",
     "status_events.json": "The reading log: every status change with `at` and "
-    "`was_queue_top` (it was the top of the queue); optional, not in older files: "
+    "`was_queue_top` (it was the top of the queue and earned the cheese: not moved there by "
+    "you); optional, not in older files: "
     "`earlier: true` marks a paper read before litrad, `read_on` when it was read.",
     "xp_ledger.json": "Every XP transaction in time order: `points`, `kind`, `reason`, `at`, "
     "the `paper` if any and the running `balance`; `total` is the sum.",
     "badges.json": "Unlocked badges: `code`, `name`, `unlocked_at`.",
-    "queue.json": "The reading queue: `position` (1 = read next), `source` and `added_at`.",
+    "queue.json": "The reading queue: `position` (1 = read next), `source`, `added_at` and, "
+    "optional, `reordered: true` (you moved the paper or added it as read next: no cheese "
+    "bonus for it).",
     "recommendations.json": "Recommendation batches: `week_start`, `created_at`, "
     "`n_candidates`, `warnings`, `funnel` (candidates removed per step), `params` (settings "
     "used) and `items` (paper, rank, category, score, `breakdown` with the evidence, reason).",

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form, icon_link with context %}
+{% from "macros.html" import paper_meta, read_form, icon_link, cheese_title with context %}
 {% set active = "dashboard" %}
 {% block title %}Dashboard{% endblock %}
 {% block heading %}Good to see you, {{ profile.name if profile else "reader" }} 👋{% endblock %}
@@ -35,9 +35,10 @@
       {% if paper.tldr %}<div class="tldr">{{ paper.tldr }}</div>{% endif %}
     </div>
     <div class="actions">
-      <button class="primary" type="button" data-toggle="dash-read" title="Top paper first: +{{ (rules.cheese_bonus * 100) | round | int }} % XP">🧀 Log reading</button>
+      <button class="primary" type="button" data-toggle="dash-read" title="{{ cheese_title(item) }}">{{ "🧀 " if not item.reordered }}Log reading</button>
       <a class="button" href="/papers/{{ paper.id }}">📄 Abstract</a>
     </div>
+    {% if item.reordered %}<p><small class="muted">🧀 no cheese: moved</small></p>{% endif %}
     {{ read_form(paper, "/", "dash-read") }}
     {% else %}
     <div class="empty">

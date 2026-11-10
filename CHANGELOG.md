@@ -60,8 +60,9 @@ but not to sell litrad or a paid product or service based mainly on it.
 
 - XP per reading depth (paid up to the deepest level), bonuses for streaks,
   landmark and fresh papers, recommendations, ratings, reflections and inbox
-  zero, and the 🧀 *cheese* for reading the top paper of your queue first; a
-  penalty for queued papers dropped unread.
+  zero, and the 🧀 *cheese* for reading the top paper of your queue first
+  (only when it got there by the queue's order, not when you moved it or
+  added it as read next); a penalty for queued papers dropped unread.
 - Weekly quests with a report card, 60 levels from *Curious Undergrad* on,
   more than 120 badges (e.g. *First Bite*, *Big Cheese*, *Chair of Cheese
   Studies*), personal bests and hints. Most XP comes from reading itself

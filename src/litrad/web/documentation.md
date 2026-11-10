@@ -311,13 +311,13 @@ litrad recommend --new    # a new list (about a minute), e.g. after changing top
 
 ```bash
 litrad queue add r1              # a recommendation
-litrad queue add r3 --top        # ... straight to position 1
+litrad queue add r3 --top        # ... straight to position 1 (no cheese for it)
 litrad queue add Barkley2022-ri  # a paper from your libraries (citation key)
 litrad queue add 10.1038/s41586-024-07894-z   # any DOI
 litrad queue add pmid:35931863   # any PubMed ID, or a PMC id: PMC5812436
 litrad queue add --title "Preprint from the lab meeting" --url https://...
 litrad queue                     # show it
-litrad queue move q4 1           # reorder
+litrad queue move q4 1           # reorder (the moved paper gets no cheese)
 litrad queue drop q3             # remove (costs XP if not at least skimmed)
 ```
 
@@ -329,6 +329,10 @@ litrad queue drop q3             # remove (costs XP if not at least skimmed)
   add the title **without DOI** (with an optional link).
 - When the queue is full (`queue.max_size`, default 5) nothing can be added
   until you read or drop something.
+- The 🧀 cheese bonus is for reading the top paper the queue gives you. A
+  paper you moved (⤒ ▲ ▼, `queue move`) or added as *Read next (q1)*
+  (`--top`) gets none; the queue shows *🧀 no cheese: moved* when it is at
+  the top ([rule](#rules-you-can-set-defaults)).
 - A paper that leaves the queue before you at least skimmed it (removed or
   marked not relevant) costs the penalty of your profile (default 15 XP),
   wherever it came from. Dismissing a recommendation you never queued is
@@ -968,7 +972,7 @@ planned to read first), not volume.
 |---|---|---|
 | `xp_abstract` / `xp_skimmed` / `xp_read` / `xp_thorough` | 5 / 15 / 40 / 80 | base points for the depth **you** choose; deeper may never pay less |
 | `backlog_share` | 0.8 | 🕰️ share of the base points for a paper you **read earlier**, before litrad ([below](#starting-with-papers-you-already-read)) |
-| `cheese_bonus` | 0.2 | 🧀 *Got the cheese: read your top paper first*: +20 % of the base points when the paper was **q1** (up next) and read at least skimmed (XP kind `cheese`) |
+| `cheese_bonus` | 0.2 | 🧀 *Got the cheese: read your top paper first*: +20 % of the base points when the paper was **q1** (up next) by the queue's own order and read at least skimmed (XP kind `cheese`; not for a paper you moved, see below) |
 | `streak_step` / `streak_max_steps` | 0.05 / 10 | 🔥 +5 % per consecutive reading week, at most +50 % ("next reads earn ×N") |
 | `classic_percentile` / `classic_xp` | 99 / 10 | 🏛️ landmark (top 1 % cited) read at least at "read" depth |
 | `hot_days` / `hot_xp` | 30 / 10 | 📰 read within 30 days of publication |
@@ -992,6 +996,17 @@ Fairness rules that always apply:
 - Paper bonuses (landmark, fresh, recommendation, rating, notes) are paid
   once per paper; the reading bonuses only with a step to a deeper level. The
   cheese bonus is a share of *newly* earned base points.
+- **The cheese: only for the
+  queue's own order.** The cheese bonus is paid only if the paper reached
+  the top of the queue by the queue's own order. It is not paid if you
+  changed this paper's position: moved it (up, down or to the top, in the
+  web UI or with `litrad queue move`) or added it directly as read next
+  (*read next (q1)*, `litrad queue add … --top`, or `--at` ahead of the
+  end). A paper that rises to q1 because the papers above it were read,
+  removed or dismissed keeps the cheese; moving another paper past it does
+  not cost it the cheese either. Such a top paper shows *🧀 no cheese:
+  moved*. The same rule applies to the cheese badges and the *discipline*
+  figure: a reading of a moved top paper is not a cheese.
 - **Rounding.** Shares of points (cheese, streak, `backlog_share`) are
   rounded half up to whole points: 7.5 → 8, 2.5 → 3 (never to the even
   number).
@@ -1663,10 +1678,10 @@ from `papers.json`.
 | `libraries.json` | `libraries`: `name`, `description`, `kind` (imported, recommended), `format`, `use_for_recommendations`, dates, `files`, and `papers` (`paper`, `citation_key`, `folders`, `tags`, `added_at`) |
 | `libraries/<name>.bib`, `.json` | each library as BibTeX and CSL-JSON for reference managers (views of `libraries.json`, checked on import but not read) |
 | `readings.json` | `readings`: `paper`, `status` (abstract, skimmed, read, thorough, dismissed), `rating`, `notes`, `updated_at` |
-| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top`, `at`; optional: `earlier: true` (read before litrad) and `read_on` (`YYYY-MM-DD` or null) |
+| `status_events.json` | `status_events`: the reading log: `paper`, `status`, `was_queue_top` (q1 by the queue's own order: a cheese), `at`; optional: `earlier: true` (read before litrad) and `read_on` (`YYYY-MM-DD` or null) |
 | `xp_ledger.json` | `total` and `events`: `points`, `kind`, `reason`, `at`, `paper`, running `balance` |
 | `badges.json` | `badges`: `code`, `name`, `unlocked_at` |
-| `queue.json` | `queue`: `paper`, `position` (1 = next), `source`, `added_at` |
+| `queue.json` | `queue`: `paper`, `position` (1 = next), `source`, `added_at`; optional: `reordered: true` (you moved the paper or added it as read next: [no cheese](#rules-you-can-set-defaults)) |
 | `recommendations.json` | `batches`: `week_start`, `created_at`, `n_candidates`, `warnings`, `funnel`, `params`, `items` (`paper`, `rank`, `category`, `score`, `breakdown` with the evidence, `reason`) |
 | `example_choices.json` | `example_choices`: `paper`, `kind` (positive, negative), `action` (include, exclude), `at` |
 | `profile.json` | `profile` (`name`, `created_at`, locked `rules`, `fingerprint`, `app_version`) and `xp_total` |

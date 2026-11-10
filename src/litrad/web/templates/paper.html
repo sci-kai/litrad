@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree, icon_link with context %}
+{% from "macros.html" import paper_meta, read_form, score_bars, evidence_tree, icon_link, cheese_chip with context %}
 {% block title %}{{ paper.title | truncate(40) }}{% endblock %}
 {% block heading %}📄 Paper{% endblock %}
 {% block content %}
@@ -89,7 +89,7 @@
         {% if reading.rating %}<br><span style="color: var(--gold)">{{ "★" * reading.rating }}</span>{% endif %}</p>
       <small class="muted">updated {{ reading.updated_at.isoformat() }}</small>
       {% else %}<p>Not read yet.</p>{% endif %}
-      {% if queue_item %}<p><span class="chip queued">📚 queue position q{{ queue_item.position }}</span></p>{% endif %}
+      {% if queue_item %}<p><span class="chip queued">📚 queue position q{{ queue_item.position }}</span>{% if queue_item.position == 1 %} {{ cheese_chip(queue_item) }}{% endif %}</p>{% endif %}
       {% if not reading or reading.status.value != "thorough" %}
       <button class="primary" type="button" data-toggle="paper-read">📖 Log reading</button>
       {{ read_form(paper, "/papers/" ~ paper.id, "paper-read", note.base if note.available else "") }}

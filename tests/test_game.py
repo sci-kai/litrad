@@ -13,6 +13,7 @@ from litrad.db import (
     ReadStatus,
     Recommendation,
     RecommendationBatch,
+    StatusEvent,
     XpEvent,
     init_db,
 )
@@ -33,7 +34,7 @@ from litrad.game import (
     weekly_summaries,
     weeks_of_history,
 )
-from litrad.reading import queue_add, record_reading
+from litrad.reading import drop_from_queue, queue_add, queue_items, queue_move, record_reading
 from litrad.rules import GameRules
 
 MONDAY = datetime(2026, 10, 5, 9, 0, 0)
@@ -487,3 +488,112 @@ def test_cheese_share_rounds_half_up(cfg):
         award = record_reading(session, cfg, top, ReadStatus.skimmed, at=MONDAY).award
         assert kinds(award)["cheese"] == 3  # 5 x 0.5 = 2.5 -> 3 (round() would give 2)
     engine.dispose()
+
+
+# --- the cheese: only for the queue's own order -----------------------------------
+
+
+def cheese_of(session, cfg, paper, status=ReadStatus.read) -> int | None:
+    return kinds(record_reading(session, cfg, paper, status, at=MONDAY).award).get("cheese")
+
+
+def flags(session) -> dict[str, bool]:
+    return {
+        session.get(Paper, item.paper_id).title: item.reordered
+        for item in session.exec(select(QueueItem)).all()
+    }
+
+
+def queued(session, cfg, *titles) -> list[Paper]:
+    papers = [add_paper(session, title) for title in titles]
+    for paper in papers:
+        queue_add(session, cfg, paper)
+    return papers
+
+
+def test_cheese_not_for_a_paper_moved_to_the_top(db):
+    cfg, session = db
+    a, b = queued(session, cfg, "A", "B")
+    queue_move(session, b, 1)
+    assert flags(session) == {"A": False, "B": True}  # only the moved paper
+    assert cheese_of(session, cfg, b) is None
+    assert cheese_of(session, cfg, a) == 8  # risen to q1 by reading B: 20 % of 40
+
+
+def test_cheese_not_for_a_paper_moved_up_or_down(db):
+    cfg, session = db
+    a, b, c = queued(session, cfg, "A", "B", "C")
+    queue_move(session, c, 2)  # up, not to the top
+    queue_move(session, a, 3)  # down
+    assert [p.title for p in (i[1] for i in queue_items(session))] == ["C", "B", "A"]
+    assert flags(session) == {"A": True, "B": False, "C": True}
+    assert cheese_of(session, cfg, c) is None
+    assert cheese_of(session, cfg, b) == 8
+    assert cheese_of(session, cfg, a) is None
+
+
+def test_a_move_to_the_same_place_keeps_the_cheese(db):
+    cfg, session = db
+    a, _ = queued(session, cfg, "A", "B")
+    queue_move(session, a, 1)
+    assert not flags(session)["A"]
+    assert cheese_of(session, cfg, a) == 8
+
+
+def test_cheese_not_for_a_paper_added_as_read_next(db):
+    cfg, session = db
+    first = add_paper(session, "First")
+    queue_add(session, cfg, first, position=1)  # empty queue: q1 by the queue's order
+    later = add_paper(session, "Later")
+    queue_add(session, cfg, later, position=2)  # the end: also the queue's order
+    top = add_paper(session, "Top")
+    queue_add(session, cfg, top, position=1)  # ahead of the others: your choice
+    middle = add_paper(session, "Middle")
+    queue_add(session, cfg, middle, position=3)
+    assert flags(session) == {"First": False, "Later": False, "Top": True, "Middle": True}
+    assert cheese_of(session, cfg, top) is None
+    assert cheese_of(session, cfg, first) == 8
+
+
+def test_cheese_kept_when_rising_because_others_leave(db):
+    cfg, session = db
+    a, b, c, d = queued(session, cfg, "A", "B", "C", "D")
+    drop_from_queue(session, cfg, a, at=MONDAY)  # removed
+    assert cheese_of(session, cfg, b, ReadStatus.dismissed) is None  # dismissed: no reading
+    assert cheese_of(session, cfg, c) == 8  # rose to q1: still the queue's order
+    assert cheese_of(session, cfg, d, ReadStatus.skimmed) == 3  # 20 % of 15
+
+
+def test_reordered_flag_survives_a_restart(cfg):
+    cfg.game = RULES
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        _, b = queued(session, cfg, "A", "B")
+        queue_move(session, b, 1)
+    engine.dispose()
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        assert flags(session) == {"A": False, "B": True}
+        b = session.exec(select(Paper).where(Paper.title == "B")).one()
+        assert cheese_of(session, cfg, b) is None
+    engine.dispose()
+
+
+def test_reordered_top_reads_are_no_cheese_for_badges_and_stats(db):
+    cfg, session = db
+    moved = []
+    for i in range(3):
+        a, b = queued(session, cfg, f"A{i}", f"B{i}")
+        queue_move(session, b, 1)
+        record_reading(session, cfg, b, ReadStatus.read, at=MONDAY)
+        drop_from_queue(session, cfg, a, at=MONDAY)
+        moved.append(b)
+    ids = [p.id for p in moved]
+    events = session.exec(select(StatusEvent).where(StatusEvent.paper_id.in_(ids)))
+    assert not any(e.was_queue_top for e in events)
+    assert stats(session, MONDAY.date(), RULES)["cheeses"] == 0
+    assert session.get(Achievement, "first_bite") is None
+    for paper in queued(session, cfg, "C0", "C1", "C2"):
+        record_reading(session, cfg, paper, ReadStatus.read, at=MONDAY)
+    assert stats(session, MONDAY.date(), RULES)["cheeses"] == 3
+    assert "first_bite" in set(session.exec(select(Achievement.code)).all())

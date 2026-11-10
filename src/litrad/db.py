@@ -173,6 +173,9 @@ class QueueItem(SQLModel, table=True):
     # recommendation | manual | library
     source: str = "manual"
     added_at: NaiveDatetime = Field(default_factory=now)
+    # True once you placed this paper yourself (moved it, or added it as read
+    # next): it no longer earns the cheese bonus at the top of the queue
+    reordered: bool = False
 
 
 class XpEvent(SQLModel, table=True):

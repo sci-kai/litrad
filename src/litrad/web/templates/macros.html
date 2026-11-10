@@ -31,6 +31,15 @@
 </div>
 {%- endmacro %}
 
+{# the cheese bonus of the top paper: only by the queue's own order, not for a paper you placed #}
+{% macro cheese_title(item) -%}
+{{ "No cheese: you moved this paper or added it as read next" if item.reordered else "Top paper first: +" ~ ((rules.cheese_bonus * 100) | round | int) ~ " % XP" }}
+{%- endmacro %}
+
+{% macro cheese_chip(item) -%}
+{% if item.reordered %}<span class="chip" title="{{ cheese_title(item) }}">🧀 no cheese: moved</span>{% else %}<span class="chip queued" title="{{ cheese_title(item) }}">🧀 +{{ (rules.cheese_bonus * 100) | round | int }} % XP</span>{% endif %}
+{%- endmacro %}
+
 {% macro read_form(paper, next_url, id, note_base="") -%}
 <form class="read-form" method="post" action="/papers/{{ paper.id }}/read" id="{{ id }}" hidden>
   <input type="hidden" name="next_url" value="{{ next_url }}">

@@ -246,10 +246,20 @@ def test_move_and_read_with_celebration(app_env):
     post(client, "/queue/add", {"ref": "Cheung2016-vl"})
     post(client, "/queue/add", {"ref": "Barkley2022-ri"})
     barkley = paper_id(path, bibtex_key="Barkley2022-ri")
+    cheung = paper_id(path, bibtex_key="Cheung2016-vl")
+    queue = client.get("/queue").text
+    assert "🧀 q1 first gets the cheese: +20 % XP" in queue and "no cheese" not in queue
+    assert 'title="Top paper first: +20 % XP"' in client.get("/").text
+    assert "🧀 +20 % XP" in client.get(f"/papers/{cheung}").text
     post(client, f"/queue/{barkley}/move", {"position": "1"})
-    assert client.get("/queue").text.index("Cancer cell states") < client.get("/queue").text.index(
-        "A collective route"
-    )
+    queue = client.get("/queue").text
+    assert queue.index("Cancer cell states") < queue.index("A collective route")
+    # moved to the top by you: no cheese, and every page says so instead of the bonus
+    assert "🧀 no cheese: moved" in queue and "q1 first gets the cheese" not in queue
+    dashboard = client.get("/").text
+    assert "🧀 no cheese: moved" in dashboard and "Top paper first" not in dashboard
+    paper_page = client.get(f"/papers/{barkley}").text
+    assert "🧀 no cheese: moved" in paper_page and "🧀 +20 % XP" not in paper_page
     response = post(
         client,
         f"/papers/{barkley}/read",
@@ -257,15 +267,36 @@ def test_move_and_read_with_celebration(app_env):
     )
     payload = celebration(response)
     kinds = [e["kind"] for e in payload["events"]]
-    assert "cheese" in kinds and payload["badges"][0]["name"] == "First Steps"
+    assert "cheese" not in kinds and payload["badges"][0]["name"] == "First Steps"
     assert payload["points"] > 40
     # the token is used once: a reload shows no celebration
     assert celebration(client.get("/")) is None
     assert "Marked as read" in payload["message"]
     page = client.get(f"/papers/{barkley}").text
-    assert "great" in page and "★★★★★" in page
+    assert "great" in page and "★★★★★" in page and "Got the cheese" not in page
+    # the paper that rose to q1 by the queue's order keeps the cheese
+    assert "q1 first gets the cheese" in client.get("/queue").text
+    payload = celebration(
+        post(client, f"/papers/{cheung}/read", {"level": "read", "next_url": "/queue"})
+    )
+    assert "cheese" in [e["kind"] for e in payload["events"]]
     # "XP from this paper": base points and the cheese bonus (20 % of 40)
+    page = client.get(f"/papers/{cheung}").text
     assert "Got the cheese" in page and "+40" in page and "+8" in page
+
+
+def test_added_as_read_next_gets_no_cheese(app_env):
+    client, path, _ = app_env
+    post(client, "/queue/add", {"ref": "Cheung2016-vl"})
+    post(client, "/queue/add", {"ref": "Barkley2022-ri", "top": "true"})
+    barkley = paper_id(path, bibtex_key="Barkley2022-ri")
+    engine = db(path)
+    with Session(engine) as session:
+        assert {q.paper_id: q.reordered for q in session.exec(select(QueueItem))}[barkley]
+    engine.dispose()
+    assert "🧀 no cheese: moved" in client.get("/queue").text
+    payload = celebration(post(client, f"/papers/{barkley}/read", {"level": "read"}))
+    assert "cheese" not in [e["kind"] for e in payload["events"]]
 
 
 def test_invalid_read_and_note(app_env):

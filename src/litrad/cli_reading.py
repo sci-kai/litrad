@@ -113,11 +113,16 @@ def show_award(session: Session, award: Award) -> None:
         )
 
 
+def _no_cheese(item) -> str:
+    """Hint for a top paper you placed yourself: it earns no cheese bonus."""
+    return "  [dim]🧀 no cheese: moved[/dim]" if item.reordered else ""
+
+
 def show_next(session: Session) -> None:
     items = queue_items(session)
     if items:
-        _, paper = items[0]
-        console.print(f"Up next: [bold]q1[/bold] {paper.title}")
+        item, paper = items[0]
+        console.print(f"Up next: [bold]q1[/bold] {paper.title}{_no_cheese(item)}")
     else:
         console.print("Your queue is empty. Pick something: [bold]litrad recommend[/bold]")
 
@@ -140,6 +145,7 @@ def queue_show(ctx: typer.Context, config: Path = ConfigOpt):
             waiting = (date.today() - item.added_at.date()).days
             console.print(
                 f"[bold cyan]q{item.position}[/bold cyan]  {marker}[bold]{paper.title}[/bold]"
+                + (_no_cheese(item) if item.position == 1 else "")
             )
             console.print(
                 f"     {paper_line(paper)}  [dim]· {item.source}, waiting {waiting} d[/dim]"
@@ -157,7 +163,7 @@ def queue_add_cmd(
     ref: str = typer.Argument(None, help=REF_HELP),
     title: str = typer.Option(None, help="Add a paper by title only (no DOI)"),
     url: str = typer.Option(None, help="Link for a paper added by title"),
-    top: bool = typer.Option(False, "--top", help="Put it at position 1"),
+    top: bool = typer.Option(False, "--top", help="Put it at position 1 (no cheese bonus for it)"),
     at: int = typer.Option(None, "--at", help="Insert at this position"),
     config: Path = ConfigOpt,
 ):

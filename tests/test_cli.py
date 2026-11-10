@@ -120,12 +120,14 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
     assert code == 0 and "q1" in out
     code, out = invoke("queue", "-c", config)
     assert "▶ UP NEXT" in out and out.index("Paper from a colleague") < out.index("A collective")
+    # put ahead of the queue by you: no cheese for it
+    assert "▶ UP NEXT Paper from a colleague  🧀 no cheese: moved" in out
 
     code, out = invoke("next", "-c", config)
     assert code == 0 and "Paper from a colleague" in out and "litrad read q1" in out
 
     code, out = invoke("read", "q1", "read", "--rating", "4", "--note", "useful", "-c", config)
-    assert code == 0 and "Got the cheese" in out
+    assert code == 0 and "Got the cheese" not in out
     assert re.search(r"LEVEL UP! You are now an? \w", out)
     assert "Badge unlocked: First Steps" in out and "Up next: q1 A collective" in out
 
@@ -148,6 +150,22 @@ def test_reading_workflow(tmp_path, monkeypatch, make_http):
 
     code, out = invoke("history", "-c", config)
     assert "abstract" in out and "read" in out
+
+
+def test_moved_papers_get_no_cheese(tmp_path, monkeypatch, make_http):
+    config, _ = ingested(tmp_path, monkeypatch, make_http)
+    for ref in ("Cheung2016-vl", "Barkley2022-ri"):
+        invoke("queue", "add", ref, "-c", config)
+    code, out = invoke("queue", "-c", config)
+    assert "no cheese" not in out
+    code, out = invoke("queue", "move", "q1", "2", "-c", config)  # down
+    assert code == 0 and "Up next: q1 Cancer cell states" in out and "no cheese" not in out
+    code, out = invoke("queue", "move", "q2", "1", "-c", config)  # back up to the top
+    assert re.search(r"Up next: q1 A collective .*  🧀 no cheese: moved", out)
+    code, out = invoke("read", "q1", "read", "-c", config)
+    assert code == 0 and "Got the cheese" not in out
+    code, out = invoke("read", "q1", "read", "-c", config)  # not moved by you
+    assert code == 0 and "Got the cheese" in out
 
 
 def test_queue_errors_and_limits(tmp_path, monkeypatch, make_http):

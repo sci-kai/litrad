@@ -146,7 +146,11 @@ def queue_add(
     source: str = "manual",
     position: int | None = None,
 ) -> QueueItem:
-    """Put a paper on the queue (at ``position``, default last); enforces the limit."""
+    """Put a paper on the queue (at ``position``, default last); enforces the limit.
+
+    A paper placed ahead of the end (``--top``, "read next") is ``reordered``:
+    it gets no cheese bonus when you read it at the top.
+    """
     items = [item for item, _ in queue_items(session)]
     if any(item.paper_id == paper.id for item in items):
         raise ReadingError("Already on the queue")
@@ -158,8 +162,9 @@ def queue_add(
             f"Queue is full ({len(items)}/{cfg.queue.max_size}). Read or drop a paper first: "
             "a short queue gets read, a long one gets ignored."
         )
-    new = QueueItem(paper_id=paper.id, position=0, source=source)
     index = len(items) if position is None else max(0, min(position - 1, len(items)))
+    # placed ahead of the end (e.g. "read next"): your choice, not the queue's order
+    new = QueueItem(paper_id=paper.id, position=0, source=source, reordered=index < len(items))
     items.insert(index, new)
     _renumber(items)
     for item in items:
@@ -306,12 +311,22 @@ def _because(problems: list[str]) -> str:
 
 
 def queue_move(session: Session, paper: Paper, position: int) -> None:
+    """Move a queued paper to ``position``; a real move marks it ``reordered``.
+
+    Every reorder (web buttons, ``litrad queue move``) goes through here. Only
+    the moved paper loses the cheese; the papers it passes keep theirs.
+    """
     items = [item for item, _ in queue_items(session)]
     item = next((i for i in items if i.paper_id == paper.id), None)
     if item is None:
         raise ReadingError("Not on the queue")
+    before = items.index(item)
     items.remove(item)
-    items.insert(max(0, min(position - 1, len(items))), item)
+    index = max(0, min(position - 1, len(items)))
+    items.insert(index, item)
+    if index != before:
+        # moved by you: no cheese for this paper at the top of the queue
+        item.reordered = True
     _renumber(items)
     for entry in items:
         session.add(entry)
@@ -408,7 +423,13 @@ def record_reading(
     if read_on is not None and read_on > at.date():
         raise ReadingError(f"'Read earlier' needs a date in the past, not {read_on.isoformat()}")
     items = queue_items(session)
-    was_top = not earlier and bool(items) and items[0][0].paper_id == paper.id
+    # the cheese: the top paper, if it got there by the queue's order (not moved by you)
+    was_top = (
+        not earlier
+        and bool(items)
+        and items[0][0].paper_id == paper.id
+        and not items[0][0].reordered
+    )
     previous_depth = deepest_depth(session, paper.id)
 
     reading = session.get(Reading, paper.id)

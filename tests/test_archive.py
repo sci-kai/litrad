@@ -33,7 +33,7 @@ from litrad.db import (
     XpEvent,
     init_db,
 )
-from litrad.reading import queue_add, record_reading
+from litrad.reading import queue_add, queue_move, record_reading
 
 runner = CliRunner()
 AT = datetime(2026, 9, 7, 9, 0, 0)
@@ -336,6 +336,67 @@ def test_round_trip_new_profile(base, exported, tmp_path):
     engine.dispose()
     settings = yaml.safe_load((cfg.paths.database.parent / "settings.yaml").read_text())
     assert settings["topics"][0]["name"] == "evo"
+
+
+def queue_flags(base, slug) -> dict[str, bool]:
+    cfg = profiles.profile_config(base, slug)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        flags = {
+            session.get(Paper, q.paper_id).title: q.reordered
+            for q in session.exec(select(QueueItem).order_by(QueueItem.position))
+        }
+    engine.dispose()
+    return flags
+
+
+def test_reordered_queue_items_round_trip(base, tmp_path):
+    from jsonschema import Draft202012Validator
+
+    slug = build_profile(base)
+    cfg = profiles.profile_config(base, slug)
+    engine = init_db(cfg.paths.database)
+    with Session(engine) as session:
+        moved = session.exec(select(Paper).where(Paper.title.startswith("Paper 3 "))).one()
+        queue_move(session, moved, 1)
+    engine.dispose()
+    flags = {"Paper 3 on clonal evolution": True, "Paper 5 on clonal evolution": False}
+    assert queue_flags(base, slug) == flags
+    path = export(base, slug, tmp_path / "moved.zip")
+    queue = json.loads(members(path)["queue.json"])
+    Draft202012Validator(load_schema("queue")).validate(queue)
+    assert [q["reordered"] for q in queue["queue"]] == [True, False]
+    result = import_new(base, path, "Moved copy")
+    assert result.report.ok and not any("reordered" in str(n) for n in result.report.notes)
+    assert queue_flags(base, result.slug) == flags
+
+
+def test_queue_without_reordered_is_valid_and_keeps_the_cheese(base, exported):
+    from jsonschema import Draft202012Validator
+
+    _, path = exported
+    old_shape = rewrite(
+        path,
+        path.with_name("old-shape.zip"),
+        edit_json("queue.json", lambda d: [q.pop("reordered") for q in d["queue"]]),
+    )
+    queue = json.loads(members(old_shape)["queue.json"])
+    assert queue["queue"] and not any("reordered" in q for q in queue["queue"])
+    Draft202012Validator(load_schema("queue")).validate(queue)
+    result = import_new(base, old_shape, "Old shape")
+    assert result.report.ok and not any("queue" in str(n) for n in result.report.notes)
+    assert not any(queue_flags(base, result.slug).values())
+
+
+def test_reordered_must_be_a_boolean(base, exported):
+    _, path = exported
+    broken = rewrite(
+        path,
+        path.with_name("not-bool.zip"),
+        edit_json("queue.json", lambda d: d["queue"][0].update(reordered="yes")),
+    )
+    with pytest.raises(ArchiveError, match="queue.json"):
+        import_new(base, broken, "Broken")
 
 
 def test_import_into_is_idempotent(base, exported, tmp_path):
